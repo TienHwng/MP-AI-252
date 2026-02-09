@@ -9,9 +9,6 @@ build/
 out/
 
 # Environment Variables / Secrets
-.env
-.env.local
-.env.*.local
 
 # Debug Logs
 npm-debug.log*
