@@ -1,3 +1,11 @@
+#include "global.h"
+
+
+
+
+
+
+
 #include <Arduino.h>
 // #include <WiFi.h>
 // #include <WiFiClientSecure.h>

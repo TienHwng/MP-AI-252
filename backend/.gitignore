@@ -1,0 +1,11 @@
+# --- Backend .gitignore ---
+
+# Python Virtual Environments
+.venv/
+__pycache__/
+*.py[cod]
+
+# Environment Variables / Secrets
+.env
+.env.local
+.env.*.local

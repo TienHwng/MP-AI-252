@@ -1,15 +1,16 @@
+# --- Global .gitignore ---
+
+# Operating System (OS) Files
+.DS_Store
+
 # PlatformIO
 .pio/
 
 # NodeJS Modules Folder
-node_modules/
 
 # Python Virtual Environment Folder
-.venv/
-__pycache__/
-*.py[cod]
 
-# VS Code Folder
+# IDE / Editor Configuration
 .vscode/
 # .vscode/*
 # !.vscode/extensions.json
@@ -21,8 +22,10 @@ __pycache__/
 # .vscode/launch.json
 # .vscode/ipch
 
-# Unit Test Folder
-temp/
+*.code-workspace
+.idea/
 
-# Ignored files
-.clang-format
+# General Logs and Temporary Files
+*.log
+temp/
+tmp/

@@ -1,0 +1,4 @@
+# --- Firmware .gitignore ---
+
+# Ignored files
+.clang-format

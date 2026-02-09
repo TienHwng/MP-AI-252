@@ -1,0 +1,26 @@
+# --- Frontend .gitignore ---
+
+# Dependencies (Very heavy - Do not commit)
+node_modules/
+
+# Build Outputs (Generated automatically)
+dist/
+build/
+out/
+
+# Environment Variables / Secrets
+.env
+.env.local
+.env.*.local
+
+# Debug Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temp Files
+.prettierrc
+eslint.config.js
+package-lock.json
+package.json
