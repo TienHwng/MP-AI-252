@@ -384,6 +384,45 @@ HERA is an AI-powered Telegram bot that supports **dual LLM providers**:
 
 The bot uses **advanced tool calling** with 6 specialized tools to control a **dual LED system** (white indicator + RGB NeoPixel) via natural language in Telegram.
 
+### HERA Architecture — Two Deployment Modes
+
+```mermaid
+flowchart TD
+  subgraph CMD["🎯 DECISION LAYER"]
+    TEL["📱 Telegram Bot"]
+    LLM["🧠 AI Engine<br/>(Ollama / OpenRouter)"]
+    TEL --> LLM
+  end
+
+  CMD -->|"natural language"| TOOLS["🔧 TOOL CALLING<br/>─────────────────<br/>1️⃣ Intent Recognition<br/>2️⃣ Select Best Tool<br/>3️⃣ Execute RPC"]
+
+  TOOLS -->|"RPC commands"| BUS["🔗 MQTT Message Bus<br/>(Mosquitto)<br/>Telemetry | Commands"]
+
+  BUS -->|"Dev"| SIM["📝 DEV STAGE<br/>────────────<br/>🖥️ Device Simulator<br/>(Python<br/>Testing Only)"]
+
+  BUS -->|"Production"| PROD["🚀 PRODUCTION STAGE<br/>────────────"]
+
+  PROD -->|"Real World"| REAL["🌍 Real Hardware<br/>⚙️ ESP32<br/>📊 DHT20 Sensor<br/>💡 Real LEDs"]
+
+  PROD -->|"Digital Twin"| VIRTUAL["🎮 Omniverse<br/>🌐 Omniverse Connector<br/>💡 Virtual LEDs<br/>(SphereLight prims)"]
+
+  REAL -.->|"same telemetry<br/>stream"| VIRTUAL
+
+  style CMD fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+  style TOOLS fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+  style BUS fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+  style SIM fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+  style PROD fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+  style REAL fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+  style VIRTUAL fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+```
+
+**Chart Flow:**
+1. **Decision Layer:** User message → AI Engine analyzes intent
+2. **Tool Calling:** LLM recognizes what tool to use → Executes RPC command
+3. **MQTT Bus:** Routes command to devices
+4. **Dev/Production:** Simulator for testing OR Real hardware + Omniverse twin synced
+
 ### Step 1: Choose your LLM provider
 
 **Option A - Ollama (Local, Free):**
@@ -469,6 +508,85 @@ After selection, you should see:
 [HERA] MQTT connected (localhost:1883)
 [HERA] Starting Telegram bot...
 [HERA] Send /start to your bot in Telegram!
+```
+
+### Tool Calling System & Intent Recognition
+
+HERA uses **advanced LLM tool calling** to intelligently interpret natural language and execute actions.
+
+#### How Tool Calling Works
+
+```mermaid
+flowchart LR
+  A["👤 User Message<br/>'Turn on all lights'"] --> B["🧠 LLM Analysis<br/>(Ollama/OpenRouter)"]
+  B --> C{"Does user intent<br/>match a tool?"}
+  C -->|Yes| D["🔧 Select Best Tool<br/>turn_on_all_lights"]
+  C -->|No| E["💬 Respond in<br/>natural language"]
+  D --> F["⚡ Execute Tool<br/>Publish RPC to MQTT"]
+  F --> G["📦 Get Tool Result<br/>(success/failure)"]
+  G --> H["💬 Generate Reply<br/>with context"]
+  H --> I["✅ Send to user<br/>in Telegram"]
+  E --> I
+
+  style A fill:#e3f2fd
+  style B fill:#fff3e0
+  style D fill:#e8f5e9
+  style F fill:#f3e5f5
+  style I fill:#c8e6c9
+```
+
+#### Available Tools (6 Specialized Functions)
+
+The LLM can intelligently select from these tools based on user intent:
+
+| Tool Name | Triggered By | Action | Example |
+|-----------|--------------|--------|---------|
+| `turn_on_led` | "turn on white", "turn on indicator" | Control main LED | User: "Turn on the white light" |
+| `turn_off_led` | "turn off white", "turn off indicator" | Control main LED | User: "Turn off indicator" |
+| `turn_on_neo_led` | "turn on rgb", "color on", "glow" | Control RGB NeoPixel | User: "Turn on the colorful light" |
+| `turn_off_neo_led` | "turn off rgb", "color off" | Control RGB NeoPixel | User: "Turn off the glow" |
+| `turn_on_all_lights` | "turn on all", "light on", "lights on" | Both LEDs ON | User: "Turn on all lights" |
+| `turn_off_all_lights` | "turn off all", "lights off", "turn off everything" | Both LEDs OFF | User: "Turn everything off" |
+
+#### Example Conversation Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ USER: "Hey HERA, can you turn on the colorful light?"       │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ HERA BOT (Internal Processing):                              │
+│ 1. Receive: "turn on the colorful light"                    │
+│ 2. Send to LLM: Extract intent + available tools            │
+│ 3. LLM Analysis: "colorful" → matches neo LED               │
+│ 4. LLM Decision: Select tool "turn_on_neo_led"              │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ MQTT COMMAND (via MQTT Broker):                             │
+│ Topic: v1/devices/me/rpc/request/led_control                │
+│ Payload: {"method":"turn_on_neo_led", "params":{...}}       │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ DEVICE (Simulator / ESP32):                                  │
+│ 1. Receive RPC command                                      │
+│ 2. Turn on NeoPixel RGB LED                                 │
+│ 3. Publish telemetry: {"neo_led_state": true}               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ OMNIVERSE (Digital Twin):                                    │
+│ 1. Receive telemetry via MQTT                               │
+│ 2. Detect neo_led_state change                              │
+│ 3. Update SphereLight2 prim → glow                           │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ HERA TELEGRAM REPLY:                                         │
+│ "🎉 RGB light is now ON! Have fun with the colors!"         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Step 5: Test in Telegram
