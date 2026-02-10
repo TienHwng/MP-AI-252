@@ -408,13 +408,13 @@ flowchart TD
 
   REAL -.->|"same telemetry<br/>stream"| VIRTUAL
 
-  style CMD fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-  style TOOLS fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-  style BUS fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
-  style SIM fill:#fff9c4,stroke:#f57f17,stroke-width:2px
-  style PROD fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-  style REAL fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
-  style VIRTUAL fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+  style CMD fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+  style TOOLS fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
+  style BUS fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000
+  style SIM fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+  style PROD fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+  style REAL fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+  style VIRTUAL fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
 ```
 
 **Chart Flow:**
@@ -528,11 +528,11 @@ flowchart LR
   H --> I["✅ Send to user<br/>in Telegram"]
   E --> I
 
-  style A fill:#e3f2fd
-  style B fill:#fff3e0
-  style D fill:#e8f5e9
-  style F fill:#f3e5f5
-  style I fill:#c8e6c9
+  style A fill:#e3f2fd,color:#000
+  style B fill:#fff3e0,color:#000
+  style D fill:#e8f5e9,color:#000
+  style F fill:#f3e5f5,color:#000
+  style I fill:#c8e6c9,color:#000
 ```
 
 #### Available Tools (6 Specialized Functions)
