@@ -12,7 +12,7 @@ The evolution of the "Smart Home" has transitioned from simple connectivity to t
 Despite the ubiquity of connected hardware, several critical architectural and functional deficiencies persist in residential deployments:
 
 \begin{itemize}
-\item \textbf{Data Silos \& Fragmentation:} Devices from different manufacturers often operate on proprietary protocols. This fragmentation prevents the aggregation of data into a single Unified Source of Truth, making holistic analytics and cross-device correlation impossible.
+\item \textbf{Data Silos \& Fragmentation:} Devices from different manufacturers often operate on proprietary protocols. This fragmentation prevents the aggregation of data into a single Unified Source of Truth, making holistic analytics and cross-device correlation impossible.\cite{nxp_matter_standard_2021}
 \item \textbf{Deterministic vs. Probabilistic Limitations:} Current systems rely on rigid, rule-based automation (e.g., "turn on lights at 6 PM"). They lack the probabilistic reasoning needed to adapt to dynamic human routines or distinguish between a human and a pet triggering a motion sensor.
 \item \textbf{Data Rich, Information Poor (DRIP):} IoT devices generate high-velocity telemetry daily. Without robust Data Engineering pipelines (ETL processes) to filter noise, users are overwhelmed with raw notifications rather than actionable insights regarding energy anomalies.
 \item \textbf{Reactive Operation \& Energy Inefficiency:} Systems operate reactively (e.g., cooling a room only after it gets hot). This lag degrades user comfort and leads to significant energy waste, as the system cannot pre-emptively optimize resources.
