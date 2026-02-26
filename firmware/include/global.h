@@ -20,6 +20,8 @@ extern SemaphoreHandle_t xInferenceResultSemaphore;
 extern SemaphoreHandle_t xLedStateSemaphore;
 extern SemaphoreHandle_t xNeoLedStateSemaphore;
 extern SemaphoreHandle_t xDHT20Semaphore;
+extern SemaphoreHandle_t xI2CMutex;
+extern SemaphoreHandle_t xSensorDataMutex;
 
 extern String WIFI_SSID;
 extern String WIFI_PASS;
@@ -36,7 +38,7 @@ extern boolean is_NeoLED_on;
 
 extern float glob_inference_result;
 
-extern void dht20_reader(void *pvParameters);
+extern void sensor_dht20(void *pvParameters);
 
 extern SensorData sensorData;
 

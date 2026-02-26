@@ -18,6 +18,8 @@ float glob_inference_result;
 SensorData sensorData;
 
 SemaphoreHandle_t xDHT20Semaphore           = NULL;
+SemaphoreHandle_t xI2CMutex		            = NULL;
+SemaphoreHandle_t xSensorDataMutex          = NULL;
 
 SemaphoreHandle_t xBinarySemaphoreInternet  = NULL;
 

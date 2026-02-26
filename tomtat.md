@@ -32,15 +32,17 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 **Phụ trách:** T. Hưng, K. Vy
 
 - Nhận & gửi dữ liệu:
-  - Trạng thái đèn
-  - Nhiệt độ, độ ẩm
+  - Trạng thái đèn                  (xong phần nhận dữ liệu)
+  - Nhiệt độ, độ ẩm                 (xong phần nhận dữ liệu)
   - ...
 - Điều khiển thiết bị:
-  - Bật / tắt đèn
-  - Quạt
+  - Bật / tắt đèn                   (đã xong)
+  - Quạt                            (T7 t lên trường lấy cái quạt xong mới làm được)
+  - Dùng Relay để làm gì đó         (T7 t test)
 - Hiển thị:
-  - LCD
-- (Optional) Hồng ngoại / Servo
+  - LCD                             (đã xong)
+- (Optional) Hồng ngoại / Servo     (mua thêm đầu phát hồng ngoại thì xong, hoặc có thể đổi lại thành dùng remote của thầy để điều khiển thiết bị 
+                                    (cách sau khi đổi không hay!))
 
 **Đầu ra:**  
 - Điều khiển được thiết bị

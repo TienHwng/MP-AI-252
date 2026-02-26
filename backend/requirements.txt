@@ -1,0 +1,8 @@
+docopt==0.6.2
+hbmqtt==0.9.6
+paho-mqtt==1.6.1
+passlib==1.7.4
+PyYAML==6.0.3
+six==1.17.0
+transitions==0.9.3
+websockets==8.1
