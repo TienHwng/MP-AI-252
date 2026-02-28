@@ -6,12 +6,14 @@ static LiquidCrystal_I2C lcd(33, 16, 2);
 // HShop LCD I2C address 0x27 == 39
 // static LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-extern AsyncWebSocket ws;
+// Will add later
+// extern AsyncWebSocket ws;
 
 // ====== Button config ======
 #ifndef LCD_BTN_PIN
 #define LCD_BTN_PIN 0
 #endif
+
 #ifndef LCD_BTN_ACTIVE_LOW
 #define LCD_BTN_ACTIVE_LOW 1
 #endif

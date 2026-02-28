@@ -40,8 +40,10 @@
 
 #include "sensor_dht20.h"
 #include "led_display.h"
-#include "neo_blinky.h"
+#include "neo_display.h"
 #include "LCD_display.h"
+#include "digital_manager.h"
+#include "ir_receiver.h"
 
 void system_init();
 void semaphore_init();

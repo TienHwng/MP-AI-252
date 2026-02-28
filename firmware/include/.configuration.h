@@ -21,7 +21,7 @@
 
 // Time Delays (in milliseconds)
 #define LED_BLINKY_DELAY_MS         1000
-#define NEO_BLINKY_DELAY_MS         1000
+#define NEO_DISPLAY_DELAY_MS        1000
 #define TEMP_HUMI_DELAY_MS          1000
 #define MAIN_SERVER_DELAY_MS        1000
 #define TINY_ML_DELAY_MS            5000
@@ -41,9 +41,17 @@
 
 // GPIO Pins Definitions
 #define BOOT_PIN                    0
+#define BUTTON_PIN                  47
+#define OUTPUT_GPIO_1               18
+#define OUTPUT_GPIO_2               6
+#define OUTPUT_GPIO_3               8
+
 #define LED_PIN                     48
+
 #define NEO_LED_PIN                 45
 #define NEO_LED_NUMBER              8
+
+#define IR_RECEIVE_PIN              10
 
 // I2C Pins
 #define I2C_SDA_PIN                 11

@@ -37,12 +37,19 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
   - ...
 - Điều khiển thiết bị:
   - Bật / tắt đèn                   (đã xong)
-  - Quạt                            (T7 t lên trường lấy cái quạt xong mới làm được)
-  - Dùng Relay để làm gì đó         (T7 t test)
+  - Quạt                            (đã xong)
+  - Dùng Relay để làm gì đó         (đã xong, có thể nối thẳng với dòng 3A 250V AC)
 - Hiển thị:
   - LCD                             (đã xong)
-- (Optional) Hồng ngoại / Servo     (mua thêm đầu phát hồng ngoại thì xong, hoặc có thể đổi lại thành dùng remote của thầy để điều khiển thiết bị 
-                                    (cách sau khi đổi không hay!))
+- (Optional) Servo                  (làm thì cũng được nhưng chưa biết làm gì)
+- (Optional) Hồng ngoại             (đã xong)     (mua thêm đầu phát hồng ngoại thì xong, hoặc có thể đổi lại thành dùng remote của thầy để điều khiển thiết bị (cách sau khi đổi không hay!))
+
+> [!NOTE]
+> Phần code của đầu đọc hồng ngoại đã xong, giờ T.Hưng sẽ test coi khi gắn sensor vô nó có đọc được không, và tối ưu lại code, để có thể điều khiển được tất cả thiết bị thật sự chứ không dùng nút để test nữa
+
+> [!IMPORTANT]
+> @{Khánh Vy} Sẽ làm phần gửi tín hiệu ra ngoài qua MQTT, dữ liệu gửi sẽ ở dạng json, eg: {temp:50,humi:70}
+> @{Tiến Hưng} Finetune lại code
 
 **Đầu ra:**  
 - Điều khiển được thiết bị

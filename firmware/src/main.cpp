@@ -9,10 +9,13 @@ void setup() {
 
 	Serial.println("\n======= System initializing... =======\n");
 
+	xTaskCreate(digital_manager,   "Digital IO", 2048, NULL, PRIO_INPUT, NULL);
+	xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
+
 	xTaskCreate(sensor_dht20,      	"DHT20",   4096, NULL, PRIO_SENSOR, NULL);
 	xTaskCreate(LCD_display, 	 	"LCD",     4096, NULL, PRIO_UI,     NULL);
 	xTaskCreate(led_display, 		"LED Display",     4096, NULL, PRIO_UI,     NULL);
-	xTaskCreate(neo_blinky, 		"Neo Display",  4096, NULL, PRIO_UI,     NULL);
+	xTaskCreate(neo_display, 		"Neo Display",  4096, NULL, PRIO_UI,     NULL);
 
 	// --- Core 1: sensor + input + ML + UI ---
 	// xTaskCreatePinnedToCore(sensor_dht20,        "DHT20",   4096, NULL, PRIO_SENSOR, NULL, 1);
@@ -63,5 +66,9 @@ void system_init() {
 
 	// lcd.begin();
 	// lcd.backlight();
+
+
+	
+    delay(1000); // Wait for Serial to be ready
 }
 
