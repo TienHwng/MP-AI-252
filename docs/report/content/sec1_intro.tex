@@ -36,8 +36,36 @@ There is an urgent need for a comprehensive AIoT (AI + IoT) platform that bridge
 \item \textbf{Frictionless Interaction:} Leveraging Natural Language Processing (NLP) to allow residents to control their environment intuitively, effectively shifting the paradigm from manual "Smart Control" to autonomous "Smart Living."
 \end{enumerate}
 
-\subsection{Project Overview}
-H.E.R.A (Home Environment \& Response Assistant) is a comprehensive AI-powered virtual assistant system designed to revolutionize residential living. Unlike traditional passive smart homes, H.E.R.A integrates a robust IoT infrastructure with advanced Natural Language Processing (NLP) and Data Analytics. This fusion allows the system to not only continuously monitor environmental conditions but also understand and execute complex user commands via voice or text. By bridging the gap between raw telemetry and human intent, H.E.R.A delivers a living environment that is proactively energy-efficient, secure, and deeply personalized.
+\subsection{Stakeholders and Key Users}
+To ensure the H.E.R.A system is designed with practical applicability, the project identifies two core user groups with distinct roles:
+
+\begin{itemize}
+    \item \textbf{Primary Key Users (Residents/Family Members):} These are the end-users who reside in and interact daily with the smart home environment. Their primary concerns are comfort, convenience, and health.
+    \item \textbf{Secondary Key Users (System's Administrator/Homeowner):} This is the decision-maker responsible for property maintenance, security assurance, and managing the operational costs of the household.
+\end{itemize}
+
+\subsection{Business Requirements}
+Derived from the analysis of Key Users, the project establishes the core business requirements that the H.E.R.A system must fulfill:
+
+\noindent \textbf{BR1: For Residents (Primary Key Users)}
+\begin{itemize}
+    \item Business Objective: To enhance the quality of life, convenience, and health protection through an automated living environment that proactively understands the user.
+    \item Pain Points: Users are fatigued by manually adjusting multiple applications for different devices; they desire a system that intuitively ``understands'' their preferences and routines.
+    \item Needs: A truly hands-free experience where the home autonomously adjusts temperature and lighting based on occupancy and habits, alongside health monitoring via environmental sensors.
+    \item Success Criteria: The system accurately processes unstructured language commands (via NLP) and autonomously executes environmental adjustments (e.g., lighting, HVAC) according to the context, completely eliminating the need for manual smartphone app interactions.
+\end{itemize}
+
+
+\noindent \textbf{BR2: For the System's Administrator (Secondary Key Users)}
+\begin{itemize}
+    \item Business Objective: To optimize operational costs (specifically electricity consumption) and ensure robust, reliable security for the property.
+    \item Pain Points: Persistent anxiety regarding rising electricity bills, potential security breaches, or fire hazards when away from home. Furthermore, the constant nuisance of false security alarms is a significant concern.
+    \item Needs: Detailed analytical reports on energy consumption to identify waste, coupled with real-time, AI-filtered security alerts that accurately distinguish between false alarms (e.g., a pet moving) and genuine threats.
+    \item Success Criteria: The provision of an interactive Dashboard displaying energy consumption metrics and forecasts; and the successful deployment of a Classification Model to differentiate human from pet movements, thereby significantly minimizing the rate of false alarm notifications.
+\end{itemize}
+
+\subsection{Solution}
+To fulfill the aforementioned business requirements (BR1 \& BR2), the H.E.R.A (Home Environment \& Response Assistant) is a comprehensive AI-powered virtual assistant system designed to revolutionize residential living. Unlike traditional passive smart homes, H.E.R.A integrates a robust IoT infrastructure with advanced Natural Language Processing (NLP) and Data Analytics. This fusion allows the system to not only continuously monitor environmental conditions but also understand and execute complex user commands via voice or text. By bridging the gap between raw telemetry and human intent, H.E.R.A delivers a living environment that is proactively energy-efficient, secure, and deeply personalized.
 
 \subsubsection*{System Workflow} 
 The system operates on a dual-stream data pipeline, integrating both automated environmental monitoring and user-centric interaction into a unified architecture:
@@ -96,21 +124,7 @@ To ensure scalability, maintainability, and a clear separation of concerns, the 
 
 The interaction between these two layers creates a seamless feedback loop: the Lower Layer provides the context (data), while the Upper Layer provides the intelligence (actionable decisions).
 
-\subsection{Stakeholders of the Project}
 
-\subsubsection{Residents (Family Members)}
-Residents are the end-users who interact with the smart home environment daily. Their primary concern is comfort, convenience, and health.
-\begin{itemize}
-    \item \textbf{Pain Point:} They are tired of manually adjusting multiple apps for different devices and want a system that "just understands" their preferences.
-    \item \textbf{Benefit:} They gain a hands-free experience where the home adjusts temperature and lighting based on their presence and habits, along with health monitoring through air quality sensors.
-\end{itemize}
-
-\subsubsection{System's Administrator}
-The System's Administrator is the decision-maker responsible for the property's maintenance, security, and operational costs.
-\begin{itemize}
-    \item \textbf{Pain Point:} They struggle with rising electricity bills and the anxiety of potential security breaches or fire hazards when away from home.
-    \item \textbf{Benefit:} They receive detailed analytics on energy consumption to identify waste, along with real-time, AI-filtered security alerts that distinguish between false alarms (e.g., a pet) and genuine threats.
-\end{itemize}
 
 % \subsubsection{System \& Security Monitor (Automated/External)}
 % This represents the technical backbone or potentially a third-party monitoring service that ensures system integrity.
@@ -154,4 +168,12 @@ The System's Administrator is the decision-maker responsible for the property's 
         \item Scenario Simulation: Creating "What-if" scenarios, such as fire outbreaks, gas leaks, or security breaches, to validate the responsiveness and accuracy of the system's emergency protocols without risking physical assets.
         \item Sim2Real Framework: Ensuring that the control logic and AI models developed in the simulation can be seamlessly transitioned to physical hardware with minimal reconfiguration, facilitating robust testing and reducing the risk of equipment failure during deployment.
     \end{itemize}
+
+    \item Hardware \& Architecture Scope: To establish precise physical boundaries and fulfill the required minimum number of input/output (I/O) interfaces, the system's hardware is distributed across two primary computational nodes:
+    \begin{itemize}
+        \item Input Sensors: Integrates a Temperature/Humidity Sensor and a Light Sensor to continuously capture multi-modal environmental telemetry.
+        \item Output Actuators \& Displays: Utilizes an LCD screen for real-time state visualization, alongside physical actuators including LED lights, a Mini Fan, and a Relay module to execute environmental adjustments and simulate appliance control.
+    \end{itemize}
+
+    \item The Central Processing Node (PC): Serving as the cognitive intelligence hub (Layer 2), a computer system integrates a Microphone (Sound Sensor) as its primary input. This node is strictly dedicated to intensive audio acquisition and Speech-to-Text (STT) processing , subsequently feeding the Natural Language Understanding (NLU) pipeline before dispatching execution commands to the Edge Node via MQTT. 
 \end{itemize}
