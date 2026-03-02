@@ -12,29 +12,45 @@ The evolution of the "Smart Home" has transitioned from simple connectivity to t
 Despite the ubiquity of connected hardware, several critical architectural and functional deficiencies persist in residential deployments:
 
 \begin{itemize}
-\item \textbf{Data Silos \& Fragmentation:} Devices from different manufacturers often operate on proprietary protocols. This fragmentation prevents the aggregation of data into a single Unified Source of Truth, making holistic analytics and cross-device correlation impossible.\cite{nxp_matter_standard_2021}
-\item \textbf{Deterministic vs. Probabilistic Limitations:} Current systems rely on rigid, rule-based automation (e.g., "turn on lights at 6 PM"). They lack the probabilistic reasoning needed to adapt to dynamic human routines or distinguish between a human and a pet triggering a motion sensor.
-\item \textbf{Data Rich, Information Poor (DRIP):} IoT devices generate high-velocity telemetry daily. Without robust Data Engineering pipelines (ETL processes) to filter noise, users are overwhelmed with raw notifications rather than actionable insights regarding energy anomalies.
-\item \textbf{Reactive Operation \& Energy Inefficiency:} Systems operate reactively (e.g., cooling a room only after it gets hot). This lag degrades user comfort and leads to significant energy waste, as the system cannot pre-emptively optimize resources.
+    \item \textbf{Data Silos \& Fragmentation:} Devices from different manufacturers often operate on proprietary protocols. This fragmentation prevents the aggregation of data into a single Unified Source of Truth, making holistic analytics and cross-device correlation impossible.\cite{nxp_matter_standard_2021}
+    \item \textbf{Deterministic vs. Probabilistic Limitations:} Current systems rely on rigid, rule-based automation (e.g., "turn on lights at 6 PM"). They lack the probabilistic reasoning needed to adapt to dynamic human routines or distinguish between a human and a pet triggering a motion sensor.
+    \item \textbf{Data Rich, Information Poor (DRIP):} IoT devices generate high-velocity telemetry daily. Without robust Data Engineering pipelines (ETL processes) to filter noise, users are overwhelmed with raw notifications rather than actionable insights regarding energy anomalies.
+    \item \textbf{Reactive Operation \& Energy Inefficiency:} Systems operate reactively (e.g., cooling a room only after it gets hot). This lag degrades user comfort and leads to significant energy waste, as the system cannot pre-emptively optimize resources.
 \end{itemize}
 
 \subsubsection*{Operational Assumptions \& Constraints}
 To effectively address these challenges, the H.E.R.A system is designed with the following bounded parameters:
 
 \begin{itemize}
-\item \textbf{Physical Scope:} The system is optimized for a single enclosed residential room (approximately 15--30 square meters), such as a bedroom or living room. The spatial model focuses on localized environmental monitoring and occupant interaction within this bounded area to ensure precise sensor calibration, accurate spatial tracking, and simplified Digital Twin representation.
-\item \textbf{Infrastructure Compatibility:} The architecture assumes the presence of a stable Wi-Fi network for cloud-based AI processing (such as NLP and heavy predictive modeling). However, it requires local Edge processing capabilities (e.g., via ESP32) to maintain critical deterministic operations and sensor readings if internet connectivity drops.
-\item \textbf{Privacy \& Security:} Given the continuous ingestion of environmental telemetry and voice commands, the system is constrained by strict data privacy requirements, ensuring that behavioral data and audio inputs are securely processed and shielded from unauthorized access.
+    \item \textbf{Physical Scope:} The system is optimized for a single enclosed residential room (approximately 15--30 square meters), such as a bedroom or living room. The spatial model focuses on localized environmental monitoring and occupant interaction within this bounded area to ensure precise sensor calibration, accurate spatial tracking, and simplified Digital Twin representation.
+    \item \textbf{Infrastructure Compatibility:} The architecture assumes the presence of a stable Wi-Fi network for cloud-based AI processing (such as NLP and heavy predictive modeling). However, it requires local Edge processing capabilities (e.g., via ESP32) to maintain critical deterministic operations and sensor readings if internet connectivity drops.
+    \item \textbf{Privacy \& Security:} Given the continuous ingestion of environmental telemetry and voice commands, the system is constrained by strict data privacy requirements, ensuring that behavioral data and audio inputs are securely processed and shielded from unauthorized access.
 \end{itemize}
 
 \subsubsection*{The Need for a Solution and Scope of Intelligence}
 There is an urgent need for a comprehensive AIoT (AI + IoT) platform that bridges the gap between physical control and cognitive processing for urban homes. A truly intelligent system must transcend basic command execution to act as a proactive agent. H.E.R.A addresses this by narrowing its "smart" focus onto three prioritized pillars:
 
 \begin{enumerate}
-\item \textbf{AI-Enhanced Security:} Utilizing machine learning to differentiate between genuine human presence and pets, thereby eliminating false alarms and providing reliable monitoring.
-\item \textbf{Proactive Energy Management:} Deploying predictive analytics to optimize power consumption based on historical usage patterns and environmental forecasts.
-\item \textbf{Frictionless Interaction:} Leveraging Natural Language Processing (NLP) to allow residents to control their environment intuitively, effectively shifting the paradigm from manual "Smart Control" to autonomous "Smart Living."
+    \item \textbf{AI-Enhanced Security:} Utilizing machine learning to differentiate between genuine human presence and pets, thereby eliminating false alarms and providing reliable monitoring.
+    \item \textbf{Proactive Energy Management:} Deploying predictive analytics to optimize power consumption based on historical usage patterns and environmental forecasts.
+    \item \textbf{Frictionless Interaction:} Leveraging Natural Language Processing (NLP) to allow residents to control their environment intuitively, effectively shifting the paradigm from manual "Smart Control" to autonomous "Smart Living."
 \end{enumerate}
+
+% \subsection{Stakeholders of the Project}
+
+% \subsubsection{Residents (Family Members)}
+% Residents are the end-users who interact with the smart home environment daily. Their primary concern is comfort, convenience, and health.
+% \begin{itemize}
+%     \item \textbf{Pain Point:} They are tired of manually adjusting multiple apps for different devices and want a system that "just understands" their preferences.
+%     \item \textbf{Benefit:} They gain a hands-free experience where the home adjusts temperature and lighting based on their presence and habits, along with health monitoring through air quality sensors.
+% \end{itemize}
+
+% \subsubsection{System's Administrator}
+% The System's Administrator is the decision-maker responsible for the property's maintenance, security, and operational costs.
+% \begin{itemize}
+%     \item \textbf{Pain Point:} They struggle with rising electricity bills and the anxiety of potential security breaches or fire hazards when away from home.
+%     \item \textbf{Benefit:} They receive detailed analytics on energy consumption to identify waste, along with real-time, AI-filtered security alerts that distinguish between false alarms (e.g., a pet) and genuine threats.
+% \end{itemize}
 
 \subsection{Stakeholders and Key Users}
 To ensure the H.E.R.A system is designed with practical applicability, the project identifies two core user groups with distinct roles:
