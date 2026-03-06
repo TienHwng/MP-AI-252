@@ -99,6 +99,7 @@ def on_message(client, userdata, msg):
     client.publish(f"{TOPIC_RPC_RESPONSE}{request_id}", feedback)
     client.publish(TOPIC_ATTRIBUTES, feedback)
 
+#
 
 # ==================== TELEMETRY ====================
 
