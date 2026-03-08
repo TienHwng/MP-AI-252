@@ -48,7 +48,7 @@
 #define OUTPUT_GPIO_3               8
 #define OUTPUT_GPIO_4               6
 
-#define ANALOG_GPIO_PIN             12
+#define ANALOG_GPIO_PIN             3
 #define ANALOG_READ_DELAY_MS        10
 #define ANALOG_DEBOUNCE_MS          80
 

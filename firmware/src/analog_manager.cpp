@@ -39,7 +39,7 @@ void setup_analog_manager() {
     lastInstantLevel = lastStableLevel;
     lastChange = xTaskGetTickCount();
 
-    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+    if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
         Serial.printf("[ANALOG] GPIO %d init raw=%u level=%d\n", ANALOG_GPIO_PIN, bootRead, (int)lastStableLevel);
     }
 }
@@ -60,7 +60,7 @@ void analog_manager(void *pvParameters) {
             if (level != lastStableLevel) {
                 lastStableLevel = level;
 
-                if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+                if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
                     const float voltage = (3.3f * (float)rawValue) / 4095.0f;
                     Serial.printf("[ANALOG] GPIO %d raw=%u voltage=%.2fV decoded=%d\n",
                                   ANALOG_GPIO_PIN,

@@ -9,8 +9,8 @@ void setup() {
 
 	Serial.println("\n======= System initializing... =======\n");
 
-	xTaskCreate(digital_manager,   "Digital IO", 2048, NULL, PRIO_INPUT, NULL);
-	xTaskCreate(analog_manager,    "Analog IO",  2048, NULL, PRIO_INPUT, NULL);
+	xTaskCreate(digital_manager,   "Digital IO", 4096, NULL, PRIO_INPUT, NULL);
+	xTaskCreate(analog_manager,    "Analog IO",  4096, NULL, PRIO_INPUT, NULL);
 	// xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
 
 	xTaskCreate(sensor_dht20,      	"DHT20",   4096, NULL, PRIO_SENSOR, NULL);
@@ -39,6 +39,10 @@ void setup() {
 
 void loop() {
 	// put your main code here, to run repeatedly:
+	// uint16_t raw = analogRead(ANALOG_GPIO_PIN);
+    // float voltage = 3.3f * raw / 4095.0f;
+    // Serial.printf("pin=%d raw=%u voltage=%.2fV\n", ANALOG_GPIO_PIN, raw, voltage);
+    // delay(300);
 }
 
 void semaphore_init() {
@@ -68,6 +72,9 @@ void system_init() {
 	// lcd.begin();
 	// lcd.backlight();
 
+	// analogReadResolution(12);
+    // analogSetPinAttenuation(ANALOG_GPIO_PIN, ADC_11db);
+    // pinMode(ANALOG_GPIO_PIN, INPUT);
 
 	
     delay(1000); // Wait for Serial to be ready
