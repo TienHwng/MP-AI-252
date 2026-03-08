@@ -10,7 +10,7 @@ void setup() {
 	Serial.println("\n======= System initializing... =======\n");
 
 	xTaskCreate(digital_manager,   "Digital IO", 2048, NULL, PRIO_INPUT, NULL);
-	xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
+	// xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
 
 	xTaskCreate(sensor_dht20,      	"DHT20",   4096, NULL, PRIO_SENSOR, NULL);
 	xTaskCreate(LCD_display, 	 	"LCD",     4096, NULL, PRIO_UI,     NULL);

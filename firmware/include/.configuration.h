@@ -9,9 +9,9 @@
 
 // Mode Settings
 #define IS_DEBUG_MODE               false
-#define IS_SHOW_DHT20_STATUS        false
-#define IS_SHOW_LED_STATUS          false
-#define IS_SHOW_NEO_STATUS          false
+#define IS_SHOW_DHT20_STATUS        true
+#define IS_SHOW_LED_STATUS          true
+#define IS_SHOW_NEO_STATUS          true
 #define IS_SHOW_LCD_STATUS          false
 #define IS_SHOW_PAYLOAD             false
 #define IS_SHOW_INFERENCE_RESULT    false
@@ -43,8 +43,9 @@
 #define BOOT_PIN                    0
 #define BUTTON_PIN                  47
 #define OUTPUT_GPIO_1               18
-#define OUTPUT_GPIO_2               6
+#define OUTPUT_GPIO_2               10
 #define OUTPUT_GPIO_3               8
+#define OUTPUT_GPIO_4               6
 
 #define LED_PIN                     48
 

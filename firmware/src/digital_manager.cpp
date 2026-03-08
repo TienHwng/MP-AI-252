@@ -4,6 +4,7 @@
 static bool output1State = false;
 static bool output2State = false;
 static bool output3State = false;
+static bool output4State = false;
 
 static bool lastStableRead   = HIGH;
 static bool lastInstantRead  = HIGH;
@@ -16,10 +17,12 @@ void setup_digital_manager() {
 	pinMode(OUTPUT_GPIO_1, OUTPUT);
 	pinMode(OUTPUT_GPIO_2, OUTPUT);
 	pinMode(OUTPUT_GPIO_3, OUTPUT);
+	pinMode(OUTPUT_GPIO_4, OUTPUT);
 
 	digitalWrite(OUTPUT_GPIO_1, LOW);
 	digitalWrite(OUTPUT_GPIO_2, LOW);
 	digitalWrite(OUTPUT_GPIO_3, LOW);
+	digitalWrite(OUTPUT_GPIO_4, LOW);
 
 	lastStableRead  = digitalRead(BUTTON_PIN);
 	lastInstantRead = lastStableRead;
@@ -45,20 +48,21 @@ void digital_manager(void *pvParameters) {
 					output1State = !output1State;
 					output2State = !output2State;
 					output3State = !output3State;
-
-					digitalWrite(OUTPUT_GPIO_1, output1State ? HIGH : LOW);
-					// digitalWrite(OUTPUT_GPIO_2, output2State ? HIGH : LOW);
+					output4State = !output4State;
 
                     ws2812_toggle();
-
+					// digitalWrite(OUTPUT_GPIO_1, output1State ? HIGH : LOW);
+					digitalWrite(OUTPUT_GPIO_2, output2State ? HIGH : LOW);
 					digitalWrite(OUTPUT_GPIO_3, output3State ? HIGH : LOW);
+					digitalWrite(OUTPUT_GPIO_4, output4State ? HIGH : LOW);
 
 
 					if (IS_DEBUG_MODE) {
-						Serial.printf("[BUTTON] GPIO %d -> %s, GPIO %d -> %s, GPIO %d -> %s\n",
+						Serial.printf("[BUTTON] GPIO %d -> %s, GPIO %d -> %s, GPIO %d -> %s, GPIO %d -> %s\n",
 									 OUTPUT_GPIO_1, output1State ? "ON" : "OFF",
 									 OUTPUT_GPIO_2, output2State ? "ON" : "OFF",
-									 OUTPUT_GPIO_3, output3State ? "ON" : "OFF");
+									 OUTPUT_GPIO_3, output3State ? "ON" : "OFF",
+									 OUTPUT_GPIO_4, output4State ? "ON" : "OFF");
 					}
 				}
 			}

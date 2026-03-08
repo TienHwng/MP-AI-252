@@ -117,12 +117,7 @@ static void render_screen(LcdScreen screen, bool manualMode) {
 
     if (IS_DEBUG_MODE || IS_SHOW_LCD_STATUS) {
         Serial.printf("[LCD] %s | T:%.1f H:%.1f | L1:%s L2:%s | mode:%c\n",
-                      l0,
-                      t,
-                      h,
-                      onoff(l1),
-                      onoff(l2),
-                      modeChar);
+                            l0, t, h, onoff(l1), onoff(l2), modeChar);
     }
 }
 
