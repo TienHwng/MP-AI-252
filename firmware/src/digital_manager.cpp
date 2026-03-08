@@ -57,7 +57,7 @@ void digital_manager(void *pvParameters) {
 					digitalWrite(OUTPUT_GPIO_4, output4State ? HIGH : LOW);
 
 
-					if (IS_DEBUG_MODE) {
+					if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
 						Serial.printf("[BUTTON] GPIO %d -> %s, GPIO %d -> %s, GPIO %d -> %s, GPIO %d -> %s\n",
 									 OUTPUT_GPIO_1, output1State ? "ON" : "OFF",
 									 OUTPUT_GPIO_2, output2State ? "ON" : "OFF",

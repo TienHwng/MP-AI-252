@@ -9,9 +9,10 @@
 
 // Mode Settings
 #define IS_DEBUG_MODE               false
+#define IS_MONITOR_MODE             true
 #define IS_SHOW_DHT20_STATUS        true
-#define IS_SHOW_LED_STATUS          true
-#define IS_SHOW_NEO_STATUS          true
+#define IS_SHOW_LED_STATUS          false
+#define IS_SHOW_NEO_STATUS          false
 #define IS_SHOW_LCD_STATUS          false
 #define IS_SHOW_PAYLOAD             false
 #define IS_SHOW_INFERENCE_RESULT    false
@@ -46,6 +47,14 @@
 #define OUTPUT_GPIO_2               10
 #define OUTPUT_GPIO_3               8
 #define OUTPUT_GPIO_4               6
+
+#define ANALOG_GPIO_PIN             12
+#define ANALOG_READ_DELAY_MS        10
+#define ANALOG_DEBOUNCE_MS          80
+
+#define ANALOG_LEVEL_0_MAX          900
+#define ANALOG_LEVEL_1_MAX          1900
+#define ANALOG_LEVEL_2_MAX          3000
 
 #define LED_PIN                     48
 
