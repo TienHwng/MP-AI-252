@@ -1,7 +1,7 @@
 #include "neo_display.h"
 
 Adafruit_NeoPixel strip(NEO_LED_NUMBER, NEO_LED_PIN, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel WS2812(4, OUTPUT_GPIO_1, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel WS2812(4, RELAY_1_PIN, NEO_GRB + NEO_KHZ800);
 
 static boolean neoLedStateLocal = true;
 static boolean ws2812StateLocal = false;
