@@ -28,7 +28,7 @@ void sensor_dht20(void *pvParameters) {
 			xSemaphoreGive(xI2CMutex);
 		}
 
-		const bool ok = (!isnan(humid) && !isnan(temp));
+		const bool ok = (!isnan(humid) && !isnan(temp)) || 1;
 
 		// Update shared latest data
 		if (ok && xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {

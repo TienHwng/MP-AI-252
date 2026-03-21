@@ -14,6 +14,14 @@ typedef struct {
     float humidity;
 } SensorData;
 
+enum LcdScreen {
+    SCREEN_ENV = 0,
+    SCREEN_ACTUATORS,
+    SCREEN_COUNT
+};
+
+extern LcdScreen current_lcd_screen;
+
 extern SemaphoreHandle_t xBinarySemaphoreInternet;
 
 extern SemaphoreHandle_t xInferenceResultSemaphore;

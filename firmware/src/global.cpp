@@ -13,6 +13,8 @@ boolean isWifiConnected = false;
 boolean is_LED_on		= true;
 boolean is_NeoLED_on	= true;
 
+LcdScreen current_lcd_screen = SCREEN_ENV;
+
 float glob_inference_result;
 
 SensorData sensorData;

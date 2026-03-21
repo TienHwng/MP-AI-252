@@ -40,11 +40,11 @@ String stringBlinkState[TEMP_STATE_COUNT] = {
 };
 
 int loopTimes[TEMP_STATE_COUNT] = {
-	1,			// TEMP_COLD
-	1,			// TEMP_IDEAL
-	1,			// TEMP_NORMAL
-	2,			// TEMP_HOT
-	3   		// TEMP_WARNING
+	1,				// TEMP_COLD
+	1,				// TEMP_IDEAL
+	1,				// TEMP_NORMAL
+	2,				// TEMP_HOT
+	3   			// TEMP_WARNING
 };
 // clang-format on
 
