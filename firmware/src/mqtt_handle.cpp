@@ -1,7 +1,7 @@
 #include "mqtt_handle.h"
 
-const char* mqtt_server = "172.0.0.1"; //IP cua may chay Mosquitto
-const int mqtt_port = 1883;
+const char* mqtt_server = "172.0.0.1"; // fix theo IP cua may chay Mosquitto
+const int mqtt_port = 1884;
 const char *coreIOT_Token  = "ehehehe"; //device access Token
 
 const char* TOPIC_TELEMETRY = "v1/devices/me/telemetry";
@@ -31,7 +31,7 @@ void callback(char* topic, byte* payload, unsigned int length){
   DeserializationError error = deserializeJson(doc, message);
   
   if (error) {
-    Serial.println("[MQTT] Lỗi đọc JSON!");
+    Serial.println("[MQTT] Error reading JSON");
     return;
   }
 
@@ -61,7 +61,7 @@ void callback(char* topic, byte* payload, unsigned int length){
 		// 		xSemaphoreGive(xLedStateSemaphore);
 		//}
     
-    Serial.println(params ? "💡 Bật LED thường" : "💡 Tắt LED thường");
+    Serial.println(params ? "💡 Turn on LED" : "💡 Turn off LED");
     responseDoc["LedState"] = params;
   } 
   else if (method == method_neo_led.c_str()) {
@@ -72,7 +72,7 @@ void callback(char* topic, byte* payload, unsigned int length){
 		// 		xSemaphoreGive(xNeoLedStateSemaphore);
 		// }
 
-    Serial.println(params ? "🌈 Bật NeoPixel" : "🌈 Tắt NeoPixel");
+    Serial.println(params ? "🌈 Turn on NeoPixel" : "🌈 Turn off NeoPixel");
     responseDoc["NeoLedState"] = params;
   }
 
@@ -124,8 +124,8 @@ void publish_telemetry(float temp, float hum, float anomaly, bool led_state, boo
 
     StaticJsonDocument<256> doc;
     doc["temperature"] = temp;
-    doc["huminity"] = hum;
-    doc["ìnerence_result"] = anomaly;
+    doc["humidity"] = hum;
+    doc["inference_result"] = anomaly;
     doc["led_state"] = led_state;
     doc["neo_led_state"] = neo_state;
 
