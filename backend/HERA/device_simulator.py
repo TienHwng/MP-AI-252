@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 ESP32 IoT Device Simulator
 ===========================
@@ -17,23 +18,32 @@ import threading
 
 import paho.mqtt.client as mqtt
 
+from config import (
+    MQTT_BROKER,
+    MQTT_PORT,
+    TOPIC_TELEMETRY,
+    TOPIC_RPC_REQUEST,
+    TOPIC_RPC_RESPONSE,
+    TOPIC_ATTRIBUTES,
+    SIM_TELEMETRY_INTERVAL,
+    NORMAL_TEMP_MIN,
+    NORMAL_TEMP_MAX,
+    NORMAL_HUMI_MIN,
+    NORMAL_HUMI_MAX,
+    SIM_TEMP_MIN,
+    SIM_TEMP_MAX,
+    SIM_HUMI_MIN,
+    SIM_HUMI_MAX,
+)
+
 
 # ==================== CẤU HÌNH ====================
 
-MQTT_BROKER = "localhost"
-MQTT_PORT = 1883
+TOPIC_RPC_REQUEST_SUB = f"{TOPIC_RPC_REQUEST}+"
 
-# MQTT topics — khớp với firmware ESP32 / ThingsBoard
-TOPIC_TELEMETRY = "v1/devices/me/telemetry"
-TOPIC_RPC_REQUEST = "v1/devices/me/rpc/request/+"
-TOPIC_RPC_RESPONSE = "v1/devices/me/rpc/response/"
-TOPIC_ATTRIBUTES = "v1/devices/me/attributes"
-
-TELEMETRY_INTERVAL = 5  # Chu kỳ gửi telemetry (giây)
-
-# Ngưỡng bình thường — giống model TinyML thật
-TEMP_RANGE = (25.0, 35.0)
-HUMI_RANGE = (60.0, 80.0)
+# Ngưỡng bình thường — đồng bộ với pipeline AI
+TEMP_RANGE = (NORMAL_TEMP_MIN, NORMAL_TEMP_MAX)
+HUMI_RANGE = (NORMAL_HUMI_MIN, NORMAL_HUMI_MAX)
 
 
 # ==================== TRẠNG THÁI THIẾT BỊ ====================
@@ -61,7 +71,7 @@ def simulate_anomaly_score(temp: float, humi: float) -> float:
 
 def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
-        client.subscribe(TOPIC_RPC_REQUEST)
+        client.subscribe(TOPIC_RPC_REQUEST_SUB)
         print("[SIM] Đã kết nối broker, đang lắng nghe RPC")
     else:
         print(f"[SIM] Kết nối thất bại (rc={rc})")
@@ -112,10 +122,10 @@ def publish_telemetry(client):
 
         # Giới hạn trong khoảng vật lý hợp lý
         device_state["temperature"] = round(
-            max(15.0, min(45.0, device_state["temperature"])), 2
+            max(SIM_TEMP_MIN, min(SIM_TEMP_MAX, device_state["temperature"])), 2
         )
         device_state["humidity"] = round(
-            max(30.0, min(95.0, device_state["humidity"])), 2
+            max(SIM_HUMI_MIN, min(SIM_HUMI_MAX, device_state["humidity"])), 2
         )
         device_state["inference_result"] = simulate_anomaly_score(
             device_state["temperature"], device_state["humidity"]
@@ -137,7 +147,7 @@ def publish_telemetry(client):
             f"LED={'ON' if payload['led_state'] else 'OFF'}  "
             f"Neo={'ON' if payload['neo_led_state'] else 'OFF'}"
         )
-        time.sleep(TELEMETRY_INTERVAL)
+        time.sleep(SIM_TELEMETRY_INTERVAL)
 
 
 # ==================== MAIN ====================
@@ -146,7 +156,10 @@ def main():
     print("=" * 50)
     print("   ESP32 IoT Device Simulator")
     print("=" * 50)
-    print(f"Broker: {MQTT_BROKER}:{MQTT_PORT} | Interval: {TELEMETRY_INTERVAL}s\n")
+    print(
+        f"Broker: {MQTT_BROKER}:{MQTT_PORT} | "
+        f"Interval: {SIM_TELEMETRY_INTERVAL}s\n"
+    )
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "ESP32_Simulator")
     client.on_connect = on_connect

@@ -1,0 +1,35 @@
+% --- Page style
+\newpage
+\setlength{\headheight}{40pt}
+\pagestyle{fancy}
+
+% --- Header
+\fancyhead{}
+\fancyhead[L]{
+    \begin{tabular}{r l}
+        \begin{picture}(25,15)(0,0)
+            \put(0,-8){
+                \includegraphics[width=8mm,height=8mm]{image/assets/hcmut.png}
+            }
+        \end{picture}
+        &
+        \begin{tabular}{l}
+            \textbf{\ttfamily University of Technology, Ho Chi Minh City}\\
+        \end{tabular}
+    \end{tabular}
+}
+
+\fancyhead[R]{
+    \begin{tabular}{l}
+        \tiny\bfseries \\
+        \tiny\bfseries
+    \end{tabular}
+}
+
+% --- Footer
+\fancyfoot{}
+\fancyfoot[L]{\scriptsize\ttfamily Multidisciplinary Project, Semester 252}
+\fancyfoot[R]{\scriptsize\ttfamily Page \thepage/\pageref{LastPage}}
+
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
