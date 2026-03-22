@@ -2,22 +2,22 @@
 
 **A next-generation AIoT system that bridges the gap between Natural Language Processing (NLP) and Physical Computing.**
 
-This project implements a **Virtual Voice Assistant** capable of understanding human speech and controlling smart home devices via the **YOLO UNO ESP32-S3** (or YoLo:Bit) board. Unlike traditional IoT systems that rely on rigid app buttons, this assistant uses a "Brain" (High-Level AI) to interpret intent and a "Body" (Low-Level Firmware) to execute actions.
+This project implements a **Virtual Voice Assistant** capable of understanding human speech and controlling smart home devices via the **YOLO UNO ESP32-S3** (or YoLo:Bit) board. Unlike traditional IoT systems that rely on rigid app buttons, this architecture separates high-level AI reasoning from low-level firmware execution.
 
 ---
 
 ## Table of Contents
 
 - [System Architecture](#system-architecture)
+- [AI Runtime Pipeline](#ai-runtime-pipeline)
 - [Project Structure](#project-structure)
 - [Development Roadmap](#development-roadmap)
 - [Hardware Setup](#hardware-setup)
 - [Communication Protocol](#communication-protocol)
 - [Tech Stack](#tech-stack)
-- [Full End-to-End Guide: Two Paths](#full-end-to-end-guide-two-paths)
+- [Deployment Guide](#deployment-guide)
   - [Path A — With Real ESP32 Hardware](#path-a--with-real-esp32-hardware)
   - [Path B — Simulator Only (No Board)](#path-b--simulator-only-no-board)
-- [HERA Bot Setup (LLM + Telegram)](#hera-bot-setup-llm--telegram)
 - [NVIDIA Omniverse Digital Twin](#nvidia-omniverse-digital-twin)
 - [TinyML Anomaly Detection Model](#tinyml-anomaly-detection-model)
 - [Troubleshooting](#troubleshooting)
@@ -28,7 +28,7 @@ This project implements a **Virtual Voice Assistant** capable of understanding h
 
 The system is divided into **three layers**, communicating via **MQTT**.
 
-### 1. High-Level Layer (The Brain) — `python/HERA/`
+### 1. High-Level Layer — `backend/HERA/`
 - **Role:** Perception & Decision Making
 - **Platform:** Python on PC / Raspberry Pi
 - **Core Functions:**
@@ -36,7 +36,80 @@ The system is divided into **three layers**, communicating via **MQTT**.
   - **Tool Calling:** LLM intelligently selects from 6 available tools to control dual LED system
   - **MQTT Client:** Subscribes to telemetry, publishes RPC commands for device control
 
-### 2. Low-Level Layer (The Body) — `src/` (PlatformIO firmware)
+---
+
+## AI Runtime Pipeline
+
+HERA uses a **multi-agent orchestrator pipeline** with provider-aware model routing and strict language policy enforcement.
+
+### End-to-End Flow
+
+1. **TelegramAdapter** receives user input and creates a `UserMessage`.
+2. **Orchestrator** classifies intent into one of:
+    - `device_control`
+    - `sensor_query`
+    - `anomaly_query`
+    - `general`
+3. Orchestrator routes to specialist agent:
+    - `device_control` -> `DeviceControlAgent`
+    - `sensor_query` -> `SensorAnalysisAgent`
+    - `anomaly_query` -> `AnomalyExpertAgent`
+    - `general` -> `ChatAgent`
+4. Specialist optionally executes tool calls through `ToolRegistry` (max bounded loop).
+5. `MQTTService` publishes RPC or reads telemetry/attributes state.
+6. Agent response returns to Telegram, with latency and intent metadata.
+
+### Runtime Modules
+
+- Entry point: `backend/HERA/main.py`
+- Adapter: `backend/HERA/adapters/telegram_adapter.py`
+- Router: `backend/HERA/agents/orchestrator.py`
+- Specialists:
+   - `backend/HERA/agents/device_agent.py`
+   - `backend/HERA/agents/sensor_agent.py`
+   - `backend/HERA/agents/anomaly_agent.py`
+   - `backend/HERA/agents/chat_agent.py`
+- Core services:
+   - `backend/HERA/core/llm_service.py`
+   - `backend/HERA/core/mqtt_service.py`
+   - `backend/HERA/core/tool_registry.py`
+   - `backend/HERA/core/language_policy.py`
+
+### Provider and Model Routing
+
+All provider/model selection is centralized in `backend/HERA/.env` and loaded by `backend/HERA/config.py`.
+
+- `LLM_PROVIDER` can lock provider (`ollama` or `openrouter`).
+- Orchestrator model keys:
+   - `ORCHESTRATOR_MODEL_OLLAMA`
+   - `ORCHESTRATOR_MODEL_OPENROUTER`
+- Specialist model keys (per provider):
+   - `DEVICE_AGENT_MODEL_*`
+   - `SENSOR_AGENT_MODEL_*`
+   - `ANOMALY_AGENT_MODEL_*`
+   - `CHAT_AGENT_MODEL_*`
+
+### Tool Execution Policy
+
+- Tool loop cap: `MAX_TOOL_ITERATIONS`
+- Conversation memory cap: `MAX_HISTORY`
+- History resets after tool usage to reduce context pollution
+
+### Minimal run sequence
+
+```bash
+# Terminal 1
+cd backend/HERA
+python device_simulator.py
+
+# Terminal 2
+cd backend/HERA
+python main.py
+```
+
+Use `main.py` as the active bot runtime. Do not run multiple bot runtimes in parallel.
+
+### 2. Low-Level Layer — `firmware/src/` (PlatformIO firmware)
 - **Role:** Execution & Sensing
 - **Platform:** ESP32-S3 (Yolo UNO)
 - **Core Functions:**
@@ -58,33 +131,22 @@ The system is divided into **three layers**, communicating via **MQTT**.
 
 ```
 MP-AI-252/
-├── src/                           # ESP32 firmware source (PlatformIO)
-├── include/                       # Firmware headers
-├── lib/                           # Firmware libraries (DHT20, ArduinoJson, etc.)
-├── boards/                        # Custom board definitions (yolo_uno.json)
-├── data/                          # Filesystem upload folder (LittleFS)
-├── platformio.ini                 # PlatformIO build config
-│
-├── python/
-│   ├── HERA/                      # AI-powered Telegram bot + simulator
-│   │   ├── hera_bot.py            #    LLM bot (Ollama + OpenRouter dual provider)
-│   │   ├── device_simulator.py    #    ESP32 MQTT simulator (no board needed)
-│   │   ├── omniverse_connector.py #    Omniverse digital twin bridge
-│   │   └── requirements.txt       #    Python dependencies
-│   │
-│   ├── CoreIOT Simulator/         # CoreIOT/ThingsBoard simulator scripts
-│   ├── Telegram Bot/              # Standalone Telegram bot (no LLM)
-│   ├── Tiny ML/                   # TinyML anomaly detection model training
-│   │   ├── TFL_For_MCU.py         #    Train + export to TFLite + C header
-│   │   ├── data_cleaner.py        #    Label anomalies in dataset
-│   │   ├── data/                  #    Raw training CSV
-│   │   └── trained models/        #    Exported .keras, .tflite, .h files
-│   └── omniverse/
-│       └── official.usd           # 3D scene file for Omniverse
-│
-├── web/                           # (Planned) React + Tailwind dashboard
-├── tomtat.md                      # Vietnamese project planning document
-└── README.md                      # This file
+├── backend/
+│   ├── HERA/                      # AI runtime: main.py, agents, adapters, simulator
+│   ├── Tiny ML/                   # TinyML training and export pipeline
+│   ├── CoreIOT Simulator/         # MQTT/CoreIOT simulation scripts
+│   ├── MQTT Broker/               # Lightweight MQTT broker/client utilities
+│   ├── Telegram Bot/              # Standalone Telegram scripts
+│   └── omniverse/                 # Omniverse USD assets
+├── firmware/                      # ESP32 firmware (PlatformIO)
+│   ├── src/
+│   ├── include/
+│   ├── lib/
+│   └── boards/
+├── docs/
+├── frontend/
+├── platformio.ini
+└── README.md
 ```
 
 ---
@@ -163,7 +225,7 @@ ESP32 / Simulator  --publish-->  Mosquitto Broker  <--subscribe--  HERA Bot
 
 ---
 
-# Full End-to-End Guide: Two Paths
+## Deployment Guide
 
 Choose the path that matches your situation:
 
@@ -263,9 +325,9 @@ Keep this terminal open.
    ```
    You should see JSON payloads arriving from the board.
 
-### A4. Continue to HERA bot setup
+### A4. Continue to AI Runtime Pipeline
 
-Skip to [HERA Bot Setup](#hera-bot-setup-llm--telegram).
+Skip to [AI Runtime Pipeline](#ai-runtime-pipeline).
 
 ---
 
@@ -296,7 +358,7 @@ Keep this terminal open.
 Open a **new terminal**:
 
 ```bash
-cd python/HERA
+cd backend/HERA
 pip install -r requirements.txt
 ```
 
@@ -328,7 +390,7 @@ This installs:
    ollama pull qwen2.5:3b     # ~2 GB, less accurate
    ollama pull phi3:mini       # ~2.3 GB
    ```
-   If you use a different model, update the `.env` file in `python/HERA/`.
+   If you use a different model, update the `.env` file in `backend/HERA/`.
 
 4. Verify the model is ready:
    ```bash
@@ -341,7 +403,7 @@ This installs:
 Open a **new terminal** (keep Mosquitto running in the other one):
 
 ```bash
-cd python/HERA
+cd backend/HERA
 python device_simulator.py
 ```
 
@@ -370,264 +432,9 @@ The simulator:
 
 Keep this terminal open.
 
-### B6. Continue to HERA bot setup
+### B6. Continue to AI Runtime Pipeline
 
-Continue to the next section.
-
----
-
-## HERA Bot Setup (LLM + Telegram)
-
-HERA is an AI-powered Telegram bot that supports **dual LLM providers**: 
-- **Ollama** (local, free): qwen2.5:7b model running on your machine
-- **OpenRouter** (cloud, budget-friendly): Access to various models for ~$0.20/1M tokens
-
-The bot uses **advanced tool calling** with 6 specialized tools to control a **dual LED system** (white indicator + RGB NeoPixel) via natural language in Telegram.
-
-### HERA Architecture — Two Deployment Modes
-
-```mermaid
-flowchart TD
-  subgraph CMD["🎯 DECISION LAYER"]
-    TEL["📱 Telegram Bot"]
-    LLM["🧠 AI Engine<br/>(Ollama / OpenRouter)"]
-    TEL --> LLM
-  end
-
-  CMD -->|"natural language"| TOOLS["🔧 TOOL CALLING<br/>─────────────────<br/>1️⃣ Intent Recognition<br/>2️⃣ Select Best Tool<br/>3️⃣ Execute RPC"]
-
-  TOOLS -->|"RPC commands"| BUS["🔗 MQTT Message Bus<br/>(Mosquitto)<br/>Telemetry | Commands"]
-
-  BUS -->|"Dev"| SIM["📝 DEV STAGE<br/>────────────<br/>🖥️ Device Simulator<br/>(Python<br/>Testing Only)"]
-
-  BUS -->|"Production"| PROD["🚀 PRODUCTION STAGE<br/>────────────"]
-
-  PROD -->|"Real World"| REAL["🌍 Real Hardware<br/>⚙️ ESP32<br/>📊 DHT20 Sensor<br/>💡 Real LEDs"]
-
-  PROD -->|"Digital Twin"| VIRTUAL["🎮 Omniverse<br/>🌐 Omniverse Connector<br/>💡 Virtual LEDs<br/>(SphereLight prims)"]
-
-  REAL -.->|"same telemetry<br/>stream"| VIRTUAL
-
-  style CMD fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-  style TOOLS fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
-  style BUS fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000
-  style SIM fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
-  style PROD fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
-  style REAL fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-  style VIRTUAL fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
-```
-
-**Chart Flow:**
-1. **Decision Layer:** User message → AI Engine analyzes intent
-2. **Tool Calling:** LLM recognizes what tool to use → Executes RPC command
-3. **MQTT Bus:** Routes command to devices
-4. **Dev/Production:** Simulator for testing OR Real hardware + Omniverse twin synced
-
-### Step 1: Choose your LLM provider
-
-**Option A - Ollama (Local, Free):**
-```bash
-# Install from https://ollama.com/download
-ollama pull qwen2.5:7b
-ollama list    # verify qwen2.5:7b appears
-```
-
-**Option B - OpenRouter (Cloud, Budget):**
-1. Sign up at [openrouter.ai](https://openrouter.ai)
-2. Get your API key from the keys section
-3. Create `.env` file in `python/HERA/` folder:
-```bash
-OPENROUTER_API_KEY=sk-or-v1-your-api-key-here
-OPENROUTER_MODEL=qwen/qwen-2.5-7b-instruct  # Budget-friendly option
-```
-
-### Step 2: Create a Telegram bot
-
-1. Open Telegram on your phone or desktop
-2. Search for **@BotFather** and open a chat with it
-3. Send the command: `/newbot`
-4. BotFather will ask for a **name** — type anything, e.g.: `HERA IoT Assistant`
-5. BotFather will ask for a **username** — must end in "bot", e.g.: `hera_iot_252_bot`
-6. BotFather will reply with your **bot token** — it looks like:
-   ```
-   1234567890:ABCdefGhIjKlMnOpQrStUvWxYz
-   ```
-7. **Copy this token** — you'll need it in the next step
-
-### Step 3: Configure the environment
-
-Create a `.env` file in the `python/HERA/` directory:
-
-```bash
-# Required for both providers
-TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
-
-# For Ollama (local)
-OLLAMA_MODEL=qwen2.5:7b
-
-# For OpenRouter (cloud) - only needed if using OpenRouter
-OPENROUTER_API_KEY=sk-or-v1-your-api-key-here
-OPENROUTER_MODEL=qwen/qwen-2.5-7b-instruct
-
-# MQTT Configuration (optional, defaults shown)
-MQTT_BROKER=localhost
-MQTT_PORT=1883
-```
-
-**Quick setup with team's bot token:**
-```bash
-TELEGRAM_BOT_TOKEN=8452424681:AAEtG3OeO1KP48OwC_zG0b8QapaeX1htmzU
-```
-
-### Step 4: Start HERA and select provider
-
-Open a **new terminal** (keep Mosquitto and simulator/board running):
-
-```bash
-cd python/HERA
-python hera_bot.py
-```
-
-The bot will prompt you to select a provider:
-```
-🤖 HERA - LLM Provider Selection
-═══════════════════════════════════════
-Choose your LLM provider:
-1. 🏠 Ollama (Local) - Free
-2. ☁️  OpenRouter (Cloud) - Budget models (~$0.20/1M tokens)
-3. ❓ Help me decide
-
-Enter your choice (1-3): 1
-```
-
-After selection, you should see:
-```
-[HERA] Selected provider: ollama
-[HERA] 🏠 LLM Provider: Ollama (Local)  
-[HERA] 🤖 Model: qwen2.5:7b
-[HERA] MQTT connected (localhost:1883)
-[HERA] Starting Telegram bot...
-[HERA] Send /start to your bot in Telegram!
-```
-
-### Tool Calling System & Intent Recognition
-
-HERA uses **advanced LLM tool calling** to intelligently interpret natural language and execute actions.
-
-#### How Tool Calling Works
-
-```mermaid
-flowchart LR
-  A["👤 User Message<br/>'Turn on all lights'"] --> B["🧠 LLM Analysis<br/>(Ollama/OpenRouter)"]
-  B --> C{"Does user intent<br/>match a tool?"}
-  C -->|Yes| D["🔧 Select Best Tool<br/>turn_on_all_lights"]
-  C -->|No| E["💬 Respond in<br/>natural language"]
-  D --> F["⚡ Execute Tool<br/>Publish RPC to MQTT"]
-  F --> G["📦 Get Tool Result<br/>(success/failure)"]
-  G --> H["💬 Generate Reply<br/>with context"]
-  H --> I["✅ Send to user<br/>in Telegram"]
-  E --> I
-
-  style A fill:#e3f2fd,color:#000
-  style B fill:#fff3e0,color:#000
-  style D fill:#e8f5e9,color:#000
-  style F fill:#f3e5f5,color:#000
-  style I fill:#c8e6c9,color:#000
-```
-
-#### Available Tools (6 Specialized Functions)
-
-The LLM can intelligently select from these tools based on user intent:
-
-| Tool Name | Triggered By | Action | Example |
-|-----------|--------------|--------|---------|
-| `turn_on_led` | "turn on white", "turn on indicator" | Control main LED | User: "Turn on the white light" |
-| `turn_off_led` | "turn off white", "turn off indicator" | Control main LED | User: "Turn off indicator" |
-| `turn_on_neo_led` | "turn on rgb", "color on", "glow" | Control RGB NeoPixel | User: "Turn on the colorful light" |
-| `turn_off_neo_led` | "turn off rgb", "color off" | Control RGB NeoPixel | User: "Turn off the glow" |
-| `turn_on_all_lights` | "turn on all", "light on", "lights on" | Both LEDs ON | User: "Turn on all lights" |
-| `turn_off_all_lights` | "turn off all", "lights off", "turn off everything" | Both LEDs OFF | User: "Turn everything off" |
-
-#### Example Conversation Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ USER: "Hey HERA, can you turn on the colorful light?"       │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ HERA BOT (Internal Processing):                              │
-│ 1. Receive: "turn on the colorful light"                    │
-│ 2. Send to LLM: Extract intent + available tools            │
-│ 3. LLM Analysis: "colorful" → matches neo LED               │
-│ 4. LLM Decision: Select tool "turn_on_neo_led"              │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ MQTT COMMAND (via MQTT Broker):                             │
-│ Topic: v1/devices/me/rpc/request/led_control                │
-│ Payload: {"method":"turn_on_neo_led", "params":{...}}       │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ DEVICE (Simulator / ESP32):                                  │
-│ 1. Receive RPC command                                      │
-│ 2. Turn on NeoPixel RGB LED                                 │
-│ 3. Publish telemetry: {"neo_led_state": true}               │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ OMNIVERSE (Digital Twin):                                    │
-│ 1. Receive telemetry via MQTT                               │
-│ 2. Detect neo_led_state change                              │
-│ 3. Update SphereLight2 prim → glow                           │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ HERA TELEGRAM REPLY:                                         │
-│ "🎉 RGB light is now ON! Have fun with the colors!"         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Step 5: Test in Telegram
-
-Open Telegram and find your bot (search for the username you chose). HERA now supports **6 specialized tools** for controlling a **dual LED system**:
-
-| You type | HERA's tools & actions |
-|----------|----------------------|
-| `/start` | Greets you with instructions |
-| "What's the temperature?" | `get_sensor_status` → displays temp/humidity/anomaly data |
-| "Turn on the white LED" | `turn_on_led` → controls white indicator LED only |
-| "Turn on the colorful LED" | `turn_on_neo_led` → controls RGB NeoPixel only |
-| "Turn on all lights" | `turn_on_all_lights` → controls both LEDs simultaneously |
-| "Turn off the white LED" | `turn_off_led` → turns off indicator LED |
-| "Turn off the colorful LED" | `turn_off_neo_led` → turns off NeoPixel |
-| "Turn off all lights" | `turn_off_all_lights` → turns off both LEDs |
-| "Is everything normal?" | `get_sensor_status` + AI analysis of anomaly scores |
-| `/status` | Raw sensor data (no LLM, instant response) |
-| `/reset` | Clears conversation history |
-
-**Dual LED System:**
-- **White Indicator LED:** Basic on/off control for status indication
-- **RGB NeoPixel LED:** Programmable color LED for visual feedback
-
-**How it works internally:**
-
-```
-You: "Turn on all lights"
-    ↓
-hera_bot.py receives message  
-    ↓
-LLM analyzes intent → selects turn_on_all_lights tool
-    ↓
-Tool executes: publishes 2 MQTT RPC commands
-    ↓
-Simulator/ESP32 receives RPCs → toggles both LEDs
-    ↓
-LLM receives tool result → generates natural reply
-    ↓  
-You receive: "Both lights have been turned on."
-```
+Continue with [AI Runtime Pipeline](#ai-runtime-pipeline) and use the **Minimal run sequence**.
 
 ---
 
@@ -661,7 +468,7 @@ This section guides you through connecting the MQTT data stream to a **3D scene 
 1. In the Omniverse app, go to **File -> Open**
 2. Navigate to this repo's folder and open:
    ```
-   python/omniverse/official.usd
+   backend/omniverse/official.usd
    ```
 3. The 3D smarthome scene will load in the viewport
 
@@ -721,7 +528,7 @@ Omniverse has its **own built-in Python** interpreter (separate from your system
 
 ### OV-Step 7: Configure and paste the connector script
 
-1. Open the file `python/HERA/omniverse_connector.py` on your computer in any text editor (VS Code, Notepad, etc.)
+1. Open the file `backend/HERA/omniverse_connector.py` on your computer in any text editor (VS Code, Notepad, etc.)
 
 2. Check these lines near the top and make sure they match your setup:
 
@@ -766,8 +573,8 @@ At this point you should have **4 things running simultaneously**:
 | # | Where | What | Command / Action |
 |---|-------|------|-----------------|
 | 1 | Terminal 1 | Mosquitto broker | `mosquitto -v` |
-| 2 | Terminal 2 | Device simulator (Path B) or real ESP32 (Path A) | `cd python/HERA && python device_simulator.py` |
-| 3 | Terminal 3 | HERA Telegram bot | `cd python/HERA && python hera_bot.py` |
+| 2 | Terminal 2 | Device simulator (Path B) or real ESP32 (Path A) | `cd backend/HERA && python device_simulator.py` |
+| 3 | Terminal 3 | HERA Telegram bot runtime | `cd backend/HERA && python main.py` |
 | 4 | Omniverse | Connector script running in Script Editor | Paste + Run (Ctrl+Enter) |
 
 **Now test the full chain:**
@@ -782,7 +589,7 @@ At this point you should have **4 things running simultaneously**:
 
 ```
 Step 1: You type "turn on the LED" in Telegram
-Step 2: hera_bot.py → LLM (Ollama/OpenRouter) decides to call turn_on_led tool
+Step 2: main.py (orchestrator + specialists) decides to call turn_on_led tool
 Step 3: Tool publishes MQTT RPC: {"method":"setValueLedBlinky","params":true}
 Step 4: Mosquitto broker routes the message
 Step 5: device_simulator.py receives RPC → sets LED=ON → publishes telemetry with led_state=true
@@ -828,7 +635,7 @@ A lightweight neural network trained to detect abnormal temperature/humidity rea
 ### How to retrain
 
 ```bash
-cd python/Tiny\ ML
+cd backend/Tiny\ ML
 
 # Step 1: Clean and label the dataset
 python data_cleaner.py
@@ -837,7 +644,7 @@ python data_cleaner.py
 python TFL_For_MCU.py
 ```
 
-**Output files** (in `python/Tiny ML/trained models/`):
+**Output files** (in `backend/Tiny ML/trained models/`):
 - `dht_anomaly_model.keras` — Full Keras model
 - `dht_anomaly_model.tflite` — TFLite model (post-training quantized)
 - `dht_anomaly_model.h` — C header array for embedding in ESP32 firmware
@@ -855,7 +662,7 @@ Before debugging, make sure **all of these are true**:
 - [ ] Mosquitto is running (`mosquitto -v` shows "Opening socket on port 1883")
 - [ ] Simulator or ESP32 is publishing telemetry (check with `mosquitto_sub -h localhost -t "#" -v`)
 - [ ] Ollama is running (`ollama list` shows your model)
-- [ ] `.env` file in `python/HERA/` contains valid `TELEGRAM_BOT_TOKEN`
+- [ ] `.env` file in `backend/HERA/` contains valid `TELEGRAM_BOT_TOKEN`
 
 ### Common issues
 
@@ -901,7 +708,7 @@ Run these in order (each in a separate terminal):
 mosquitto -v
 
 # Terminal 2 — simulator
-cd python/HERA
+cd backend/HERA
 python device_simulator.py
 
 # Terminal 3 — verify MQTT
@@ -909,8 +716,8 @@ mosquitto_sub -h localhost -t "v1/devices/me/telemetry" -v
 # (you should see JSON payloads every 5 seconds)
 
 # Terminal 4 — bot
-cd python/HERA
-python hera_bot.py
+cd backend/HERA
+python main.py
 
 # Omniverse — paste omniverse_connector.py into Script Editor -> Run
 ```

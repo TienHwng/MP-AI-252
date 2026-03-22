@@ -1,0 +1,72 @@
+\begin{thebibliography}{10}
+
+\bibitem{nxp_matter_standard_2021}
+R.~Martino, ``It’s a matter of interoperability: The new standard makes smart
+  homes just work,'' Dec. 2021.
+
+\bibitem{wooldridge2009introduction}
+M.~Wooldridge, {\em An Introduction to MultiAgent Systems}.
+\newblock John Wiley \& Sons, 2nd~ed., 2009.
+
+\bibitem{liu2023lostinthemiddle}
+N.~F. Liu, K.~Lin, J.~Hewitt, A.~Paranjape, M.~Bevilacqua, F.~Petroni, and
+  P.~Liang, ``Lost in the middle: How language models use long contexts,'' {\em
+  Transactions of the Association for Computational Linguistics}, vol.~12,
+  pp.~157--173, 2024.
+
+\bibitem{wu2023autogen}
+Q.~Wu, G.~Bansal, J.~Zhang, Y.~Wu, B.~Li, E.~Zhu, L.~Jiang, X.~Zhang, S.~Zhang,
+  J.~Liu, {\em et~al.}, ``{AutoGen}: Enabling next-gen {LLM} applications via
+  multi-agent conversation,'' in {\em arXiv preprint arXiv:2308.08155}, 2023.
+
+\bibitem{touvron2023llama2}
+H.~Touvron, L.~Martin, K.~Stone, {\em et~al.}, ``{LLaMA~2}: Open foundation and
+  fine-tuned chat models,'' {\em arXiv preprint arXiv:2307.09288}, 2023.
+
+\bibitem{cockburn2005hexagonal}
+A.~Cockburn, ``Hexagonal architecture,'' 2005.
+
+\bibitem{gamma1994design}
+E.~Gamma, R.~Helm, R.~Johnson, and J.~Vlissides, {\em Design Patterns: Elements
+  of Reusable Object-Oriented Software}.
+\newblock Addison-Wesley, 1994.
+
+\bibitem{chandola2009anomaly}
+V.~Chandola, A.~Banerjee, and V.~Kumar, ``Anomaly detection: A survey,'' {\em
+  ACM Computing Surveys}, vol.~41, no.~3, pp.~1--58, 2009.
+
+\bibitem{breiman2001random}
+L.~Breiman, ``Random forests,'' {\em Machine Learning}, vol.~45, no.~1,
+  pp.~5--32, 2001.
+
+\bibitem{friedman2001greedy}
+J.~H. Friedman, ``Greedy function approximation: A gradient boosting machine,''
+  {\em Annals of Statistics}, vol.~29, no.~5, pp.~1189--1232, 2001.
+
+\bibitem{smola2004tutorial}
+A.~J. Smola and B.~Sch{\"o}lkopf, ``A tutorial on support vector regression,''
+  {\em Statistics and Computing}, vol.~14, no.~3, pp.~199--222, 2004.
+
+\bibitem{cover1967nearest}
+T.~Cover and P.~Hart, ``Nearest neighbor pattern classification,'' {\em IEEE
+  Transactions on Information Theory}, vol.~13, no.~1, pp.~21--27, 1967.
+
+\bibitem{grinsztajn2022tree}
+L.~Grinsztajn, E.~Oyallon, and G.~Varoquaux, ``Why do tree-based models still
+  outperform deep learning on typical tabular data?,'' in {\em Advances in
+  Neural Information Processing Systems (NeurIPS)}, vol.~35, 2022.
+
+\bibitem{jacob2018quantization}
+B.~Jacob, S.~Kligys, B.~Chen, M.~Zhu, M.~Tang, A.~Howard, H.~Adam, and
+  D.~Kalenichenko, ``Quantization and training of neural networks for efficient
+  integer-arithmetic-only inference,'' in {\em Proceedings of the IEEE
+  Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pp.~2704--2713, 2018.
+
+\bibitem{david2021tensorflow}
+R.~David, J.~Duke, A.~Jain, V.~Janapa~Reddi, N.~Jeffries, J.~Li, N.~Kreber,
+  I.~Nappier, M.~Natraj, T.~Wang, {\em et~al.}, ``{TensorFlow Lite Micro}:
+  Embedded machine learning for {TinyML} systems,'' {\em Proceedings of Machine
+  Learning and Systems}, vol.~3, pp.~800--811, 2021.
+
+\end{thebibliography}

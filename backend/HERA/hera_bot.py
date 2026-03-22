@@ -1,17 +1,17 @@
 """
-HERA — Trợ lý AI IoT trên Telegram
-====================================
-Bot Telegram dùng LLM (Ollama / OpenRouter) với tool calling để:
-  - Giám sát cảm biến ESP32 qua MQTT
-  - Điều khiển LED qua lệnh RPC
-  - Phản hồi bằng ngôn ngữ tự nhiên
+HERA — Trợ lý AI IoT trên Telegram (Legacy Entry Point)
+=========================================================
+This file is kept for backward compatibility.
+The canonical entry point is now ``main.py`` which uses the
+multi-agent architecture (see agents/, core/, adapters/).
 
-Cách dùng:
-    1. Khởi động Mosquitto broker
-    2. Chạy device_simulator.py
-    3. python hera_bot.py
-    4. Chọn Ollama hoặc OpenRouter
+Running ``python hera_bot.py`` delegates to ``main.main()``.
+
+For the original monolithic implementation, see git history.
 """
+
+# Re-export for anything that imported from hera_bot directly
+from main import main as _new_main  # noqa: F401
 
 import os
 import re
@@ -224,6 +224,7 @@ DO NOT ANSWER THE PROMPT USING CHINESE/CHINESE SIMPLIFIED/MANDARIN IN ANY CASE, 
 - Provider: {llm_provider} | Model: {model_name}
 
 ### Rules
+- DO NOT ANSWER CHINESE/CHINESE SIMPLIFIED/MANDARIN IN ANY CASE, NO EXCEPTION
 - ALWAYS respond in the SAME LANGUAGE as the user's input
 - Answer ONLY what was asked — no extra info
 - Be concise and direct
@@ -525,4 +526,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Delegate to multi-agent entry point
+    _new_main()
