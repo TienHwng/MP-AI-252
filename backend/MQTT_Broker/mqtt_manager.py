@@ -55,9 +55,9 @@ class MQTTManager:
 
     # --- Các hàm Callback của Client ---
     def on_connect(self, client, userdata, flags, rc):
-        print("🟢 Client Connected.")
-        # Vừa kết nối xong là đăng ký nhận (subscribe) tất cả các topic (#)
         client.subscribe("#", qos=0)
+        # Vừa kết nối xong là đăng ký nhận (subscribe) tất cả các topic (#)
+        print("🟢 Client Connected.")
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
         print("✅ Subscribed successfully.")

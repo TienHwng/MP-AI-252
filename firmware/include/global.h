@@ -8,6 +8,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include <Arduino.h>
+#include <WiFi.h>
 
 typedef struct {
     float temperature;
@@ -33,6 +34,7 @@ extern SemaphoreHandle_t xSensorDataMutex;
 
 extern String WIFI_SSID;
 extern String WIFI_PASS;
+extern WiFiClient espClient;
 
 extern DHT20 dht20;
 
