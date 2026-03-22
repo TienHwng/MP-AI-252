@@ -43,6 +43,7 @@
 #include "neo_display.h"
 #include "LCD_display.h"
 #include "digital_manager.h"
+#include "analog_manager.h"
 #include "ir_receiver.h"
 
 void system_init();

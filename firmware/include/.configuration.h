@@ -9,7 +9,8 @@
 
 // Mode Settings
 #define IS_DEBUG_MODE               false
-#define IS_SHOW_DHT20_STATUS        false
+#define IS_MONITOR_MODE             true
+#define IS_SHOW_DHT20_STATUS        true
 #define IS_SHOW_LED_STATUS          false
 #define IS_SHOW_NEO_STATUS          false
 #define IS_SHOW_LCD_STATUS          false
@@ -42,9 +43,28 @@
 // GPIO Pins Definitions
 #define BOOT_PIN                    0
 #define BUTTON_PIN                  47
-#define OUTPUT_GPIO_1               18
-#define OUTPUT_GPIO_2               6
-#define OUTPUT_GPIO_3               8
+
+#define RELAY_1_PIN                 18    //Replace Relay with actual devices(E.g. Light, Fan)
+#define RELAY_2_PIN                 10    
+#define RELAY_3_PIN                 8     
+#define RELAY_4_PIN                 6
+
+typedef enum {
+    DEV_RELAY_1 = 0,
+    DEV_RELAY_2,
+    DEV_RELAY_3,
+    DEV_RELAY_4,
+    
+    NUM_DEVICES 
+} DeviceID;
+
+#define ANALOG_GPIO_PIN             3
+#define ANALOG_READ_DELAY_MS        10
+#define ANALOG_DEBOUNCE_MS          80
+
+#define ANALOG_LEVEL_0_MAX          900
+#define ANALOG_LEVEL_1_MAX          1900
+#define ANALOG_LEVEL_2_MAX          3000
 
 #define LED_PIN                     48
 
