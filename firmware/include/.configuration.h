@@ -10,7 +10,7 @@
 // Mode Settings
 #define IS_DEBUG_MODE               false
 #define IS_MONITOR_MODE             true
-#define IS_SHOW_DHT20_STATUS        true
+#define IS_SHOW_DHT20_STATUS        false
 #define IS_SHOW_LED_STATUS          false
 #define IS_SHOW_NEO_STATUS          false
 #define IS_SHOW_LCD_STATUS          false

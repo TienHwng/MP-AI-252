@@ -9,11 +9,18 @@ const uint8_t DEVICE_PINS[NUM_DEVICES] = {
 };
 
 // 2. Mảng chứa trạng thái hiện tại của từng thiết bị
-static bool device_states[NUM_DEVICES] = {false, false, false, false}; // Mặc định tắt hết
+// Mặc định tắt hết
+static bool device_states[NUM_DEVICES] = {
+    false, 
+    false, 
+    false, 
+    false
+};
 
 // Hàm khởi tạo: Tự động lặp qua tất cả thiết bị để setup
 void actuator_init() {
     Serial.println("[INIT] Actuator Manager initializing...");
+    
     for (int i = 0; i < NUM_DEVICES; i++) {
         pinMode(DEVICE_PINS[i], OUTPUT);
         digitalWrite(DEVICE_PINS[i], LOW); // Tắt khi mới cấp nguồn

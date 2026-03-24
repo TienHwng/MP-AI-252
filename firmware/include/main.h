@@ -45,6 +45,7 @@
 #include "digital_manager.h"
 #include "analog_manager.h"
 #include "ir_receiver.h"
+#include "mqtt_handle.h"
 
 void system_init();
 void semaphore_init();

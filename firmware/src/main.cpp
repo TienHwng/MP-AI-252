@@ -12,6 +12,7 @@ void setup() {
 	xTaskCreate(digital_manager,   "Digital IO", 4096, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(analog_manager,    "Analog IO",  4096, NULL, PRIO_INPUT, NULL);
 	// xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
+	xTaskCreate(mqtt_task,    "MQTT Handler",  4096, NULL, 2, NULL);
 
 	xTaskCreate(sensor_dht20,      	"DHT20",   4096, NULL, PRIO_SENSOR, NULL);
 	xTaskCreate(LCD_display, 	 	"LCD",     4096, NULL, PRIO_UI,     NULL);

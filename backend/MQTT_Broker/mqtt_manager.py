@@ -9,7 +9,7 @@ import json
 import random
 
 class MQTTManager:
-    def __init__(self, broker_address="127.0.0.1", port=1884):
+    def __init__(self, broker_address="192.168.1.2", port=1883):
         self.broker_address = broker_address
         self.port = port
         
@@ -60,6 +60,7 @@ class MQTTManager:
         print("🟢 Client Connected.")
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
+        # Do smth ?
         print("✅ Subscribed successfully.")
 
     def on_message(self, client, userdata, msg):
@@ -67,12 +68,13 @@ class MQTTManager:
         payload = msg.payload.decode('utf-8')
 
         if "telemetry" in topic:
-            print(f"📊 [Sensor data] {payload}")
+            # Log dữ liệu cảm biến nhận được từ ESP32 (để debug)
+            # print(f"📊 [Sensor data] {payload}")
             try:
                 # Cập nhật dữ liệu mới nhất vào bộ nhớ
                 self.latest_sensor_data = json.loads(payload)
             except Exception as e:
-                print("Lỗi parse JSON:", e)
+                print("JSON parse error:", e)
         elif "response" in topic:
             print(f"✅ [Feedback circuit] Topic: {topic} | Data: {payload}")
         else:
@@ -119,54 +121,54 @@ if __name__ == "__main__":
     mqtt_system = MQTTManager()
     mqtt_system.start()
 
-    print("🎙️ HERA đã sẵn sàng. Hãy nhập lệnh (Gõ 'exit' để thoát):")
+    print("🎙️ HERA is ready. Enter a command (type 'exit' to quit):")
     
     try:
         while True:
             # Hiển thị Menu cho người dùng
             print("\n" + "="*35)
-            print("📜 MENU ĐIỀU KHIỂN NHÀ THÔNG MINH")
-            print("1. 💡 Bật đèn phòng khách")
-            print("2. 🌑 Tắt đèn phòng khách")
-            print("3. 🌈 Bật đèn màu (NeoPixel)")
-            print("4. 🌑 Tắt đèn màu (NeoPixel)")
-            print("5. 🌡️ Xem trạng thái nhiệt độ, độ ẩm")
-            print("0. ❌ Thoát chương trình")
+            print("📜 SMART HOME CONTROL MENU")
+            print("1. 💡 Turn on living room light")
+            print("2. 🌑 Turn off living room light")
+            print("3. 🌈 Turn on NeoPixel light")
+            print("4. 🌑 Turn off NeoPixel light")
+            print("5. 🌡️ View temperature and humidity status")
+            print("0. ❌ Exit program")
             print("="*35)
             
             # Lấy lựa chọn từ người dùng
-            choice = input("👉 Mời bạn chọn chức năng (0-5): ").strip()
+            choice = input("👉 Please choose an option (0-5): ").strip()
             
             if choice == '0':
-                print("👋 Đang thoát chương trình...")
+                print("👋 Exiting program...")
                 break
                 
             elif choice == '1':
-                print("🤖 HERA: Đang bật đèn phòng khách...")
+                print("🤖 HERA: Turning on the living room light...")
                 mqtt_system.send_rpc_command("setValueLedBlinky", True)
                 
             elif choice == '2':
-                print("🤖 HERA: Đang tắt đèn phòng khách...")
+                print("🤖 HERA: Turning off the living room light...")
                 mqtt_system.send_rpc_command("setValueLedBlinky", False)
 
             elif choice == '3':
-                print("🤖 HERA: Đang bật đèn NeoPixel...")
+                print("🤖 HERA: Turning on the NeoPixel light...")
                 mqtt_system.send_rpc_command("setValueNeoLed", True)
                 
             elif choice == '4':
-                print("🤖 HERA: Đang tắt đèn NeoPixel...")
+                print("🤖 HERA: Turning off the NeoPixel light...")
                 mqtt_system.send_rpc_command("setValueNeoLed", False)
                 
             elif choice == '5':
                 if hasattr(mqtt_system, 'latest_sensor_data') and mqtt_system.latest_sensor_data:
-                    temp = mqtt_system.latest_sensor_data.get("temperature", "Chưa cập nhật")
-                    hum = mqtt_system.latest_sensor_data.get("humidity", "Chưa cập nhật")
-                    print(f"🤖 THÔNG TIN SENSOR: Nhiệt độ hiện tại là {temp}°C, Độ ẩm là {hum}%.")
+                    temp = mqtt_system.latest_sensor_data.get("temperature", "Not updated yet")
+                    hum = mqtt_system.latest_sensor_data.get("humidity", "Not updated yet")
+                    print(f"🤖 SENSOR INFO: Current temperature is {temp}°C, humidity is {hum}%.")
                 else:
-                    print("🤖 THÔNG TIN SENSOR: Đang chờ mạch gửi dữ liệu lên, vui lòng thử lại sau vài giây...")
+                    print("🤖 SENSOR INFO: Waiting for the board to send data, please try again in a few seconds...")
                 
             else:
-                print("⚠️ Lựa chọn không hợp lệ. Vui lòng nhập số từ 0 đến 5.")
+                print("⚠️ Invalid choice. Please enter a number from 0 to 5.")
     except KeyboardInterrupt:
-        print("Đang đóng kết nối...")
+        print("Closing connection...")
         mqtt_system.client.disconnect()
