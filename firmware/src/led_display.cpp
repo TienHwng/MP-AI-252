@@ -12,6 +12,7 @@ enum TempState {
 	TEMP_NORMAL,
 	TEMP_HOT,
 	TEMP_WARNING,
+	
 	TEMP_STATE_COUNT
 };
 

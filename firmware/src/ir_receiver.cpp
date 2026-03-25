@@ -1,7 +1,6 @@
 #include "ir_receiver.h"
 #include <IRremote.h>
 
-
 void setup_ir_receiver() {
     Serial.printf("[IR] IR_RECEIVE_PIN=%d\n", IR_RECEIVE_PIN);
 
