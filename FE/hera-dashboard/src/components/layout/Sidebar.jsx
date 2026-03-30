@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
+import { Home, BarChart3, Lightbulb, Settings } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const menuItems = [
-    { id: 'home', icon: '🏠', label: 'Home' },
-    { id: 'analytics', icon: '📊', label: 'Analytics' },
-    { id: 'devices', icon: '💡', label: 'Devices' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' },
+    { id: 'home', Icon: Home, label: 'Home' },
+    { id: 'analytics', Icon: BarChart3, label: 'Analytics' },
+    { id: 'devices', Icon: Lightbulb, label: 'Devices' },
+    { id: 'settings', Icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -43,20 +44,23 @@ const Sidebar = ({ activePage, setActivePage }) => {
         </div>
 
         <nav className="flex-1">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActivePage(item.id)}
-              className={`w-[90%] mx-auto flex items-center px-4 py-3 mb-2 rounded-r-full transition-colors ${
-                activePage === item.id
-                  ? 'bg-primary text-white font-medium'
-                  : 'text-textMain hover:bg-gray-100'
-              }`}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            const Icon = item.Icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                className={`w-[90%] mx-auto flex items-center px-4 py-3 mb-2 rounded-r-full transition-colors ${
+                  activePage === item.id
+                    ? 'bg-primary text-white font-medium'
+                    : 'text-textMain hover:bg-gray-100'
+                }`}
+              >
+                <Icon size={20} strokeWidth={1.9} className="mr-3 shrink-0" />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </aside>
     </>
