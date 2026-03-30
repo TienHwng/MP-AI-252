@@ -24,16 +24,16 @@ void setup_digital_manager() {
     // Khởi tạo nút BOOT (Nút lật LCD)
     pinMode(BOOT_PIN, INPUT_PULLUP);
 
-    // Khởi tạo các chân Output
-    pinMode(RELAY_1_PIN, OUTPUT);
-    pinMode(RELAY_2_PIN, OUTPUT);
-    pinMode(RELAY_3_PIN, OUTPUT);
-    pinMode(RELAY_4_PIN, OUTPUT);
+    // Khởi tạo các chân Output theo cấu hình cổng số
+    pinMode(WS2812_PIN, OUTPUT);
+    pinMode(MINI_FAN_PIN, OUTPUT);
+    pinMode(IR_RECEIVE_PIN, OUTPUT);
+    pinMode(RELAY_PIN, OUTPUT);
 
-    digitalWrite(RELAY_1_PIN, LOW);
-    digitalWrite(RELAY_2_PIN, LOW);
-    digitalWrite(RELAY_3_PIN, LOW);
-    digitalWrite(RELAY_4_PIN, LOW);
+    digitalWrite(WS2812_PIN, LOW);
+    digitalWrite(MINI_FAN_PIN, LOW);
+    digitalWrite(IR_RECEIVE_PIN, LOW);
+    digitalWrite(RELAY_PIN, LOW);
 
     // Chốt trạng thái ban đầu cho 2 nút
     lastStableRead      = digitalRead(BUTTON_PIN);
@@ -70,9 +70,9 @@ void digital_manager(void *pvParameters) {
                     output4State = !output4State;
 
                     ws2812_toggle();
-                    digitalWrite(RELAY_2_PIN, output2State ? HIGH : LOW);
-                    digitalWrite(RELAY_3_PIN, output3State ? HIGH : LOW);
-                    digitalWrite(RELAY_4_PIN, output4State ? HIGH : LOW);
+                    digitalWrite(MINI_FAN_PIN,      output2State ? HIGH : LOW);
+                    digitalWrite(IR_RECEIVE_PIN,    output3State ? HIGH : LOW);
+                    digitalWrite(RELAY_PIN,         output4State ? HIGH : LOW);
                 }
             }
         }

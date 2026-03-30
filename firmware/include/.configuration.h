@@ -7,6 +7,7 @@
 //            Configuration Header File for MP-AI-252
 // ===============================================================
 
+// ----- General Settings -----
 // Mode Settings
 #define IS_DEBUG_MODE               false
 #define IS_MONITOR_MODE             true
@@ -35,47 +36,80 @@
 #define LONG_PRESS_MS               3000
 #define DEBOUNCE_MS                 50
 
+#define ANALOG_READ_DELAY_MS        10
+#define ANALOG_DEBOUNCE_MS          80
+
 #define WIFI_CONNECT_TIMEOUT_MS     10000
 #define WIFI_RETRY_INTERVAL_MS      5000
 #define MQTT_RETRY_INTERVAL_MS      5000
 #define SENSOR_LOG_DELAY_MS         2000
+// ----- END General Settings -----
 
-// GPIO Pins Definitions
+
+
+// ----- Board default ports mapping -----
+// Digital Ports
+#define DIGITAL_PORT_1_PIN          18      // D9
+#define DIGITAL_PORT_2_PIN          10      // D7
+#define DIGITAL_PORT_3_PIN          8       // D5
+#define DIGITAL_PORT_4_PIN          6       // D3
+
+// Analog Ports
+#define ANALOG_PORT_1_PIN           3       // A3
+#define ANALOG_PORT_2_PIN           4       // A2
+#define ANALOG_PORT_3_PIN           5       // A1
+#define ANALOG_PORT_4_PIN           6       // A0
+
+// I2C Pins
+#define I2C_SDA_PIN                 11      // A4
+#define I2C_SCL_PIN                 12      // A5
+// ----- END Board default ports mapping -----
+
+
+
+// ----- GPIO Pins Definitions -----
+// Buttons
 #define BOOT_PIN                    0
 #define BUTTON_PIN                  47
 
-#define RELAY_1_PIN                 18    //Replace Relay with actual devices(E.g. Light, Fan)
-#define RELAY_2_PIN                 10    
-#define RELAY_3_PIN                 8     
-#define RELAY_4_PIN                 6
+// Grove's port devices
+#define WS2812_PIN                  DIGITAL_PORT_1_PIN
+#define MINI_FAN_PIN                DIGITAL_PORT_2_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_3_PIN
+#define RELAY_PIN                   DIGITAL_PORT_4_PIN
 
-typedef enum {
-    DEV_RELAY_1 = 0,
-    DEV_RELAY_2,
-    DEV_RELAY_3,
-    DEV_RELAY_4,
-    
-    NUM_DEVICES 
-} DeviceID;
+#define LIGHT_SENSOR_PIN            ANALOG_PORT_1_PIN
+#define MQ2_SENSOR_PIN              ANALOG_PORT_2_PIN
+#define SOIL_MOISTURE_PIN           ANALOG_PORT_3_PIN
+#define ANALOG_GPIO_PIN             ANALOG_PORT_4_PIN
 
-#define ANALOG_GPIO_PIN             3
-#define ANALOG_READ_DELAY_MS        10
-#define ANALOG_DEBOUNCE_MS          80
-
-#define ANALOG_LEVEL_0_MAX          900
-#define ANALOG_LEVEL_1_MAX          1900
-#define ANALOG_LEVEL_2_MAX          3000
-
+// GPIO ports
 #define LED_PIN                     48
 
 #define NEO_LED_PIN                 45
 #define NEO_LED_NUMBER              8
 
-#define IR_RECEIVE_PIN              10
+#define WS2812_NUMBER               4
+// ----- END GPIO Pins Definitions -----
 
-// I2C Pins
-#define I2C_SDA_PIN                 11
-#define I2C_SCL_PIN                 12
+
+
+// ----- Thresholds & Constants -----
+#define ANALOG_LEVEL_0_MAX          900
+#define ANALOG_LEVEL_1_MAX          1900
+#define ANALOG_LEVEL_2_MAX          3000
+// ----- END Thresholds & Constants -----
+
+
+
+typedef enum {
+    DIGITAL_PORT_1 = 0,
+    DIGITAL_PORT_2,
+    DIGITAL_PORT_3,
+    DIGITAL_PORT_4,
+    
+    NUM_DEVICES 
+} DeviceID;
 
 // clang-format on
 

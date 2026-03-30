@@ -1,10 +1,10 @@
 # --- Frontend .gitignore ---
 
-# Dependencies (Very heavy - Do not commit)
+# Dependencies
 node_modules/
 **/node_modules/
 
-# Build Outputs (Generated automatically)
+# Build outputs
 dist/
 build/
 out/
@@ -14,9 +14,12 @@ dist-ssr/
 **/out/
 **/dist-ssr/
 
-# Tool cache
+# Tool/cache
 .vite/
 **/.vite/
+.eslintcache
+.stylelintcache
+.parcel-cache/
 
 # Test coverage
 coverage/
@@ -27,28 +30,25 @@ coverage/
 .env.*
 !.env.example
 
-# Debug Logs
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+*.log
 
 # OS / editor local files
 .DS_Store
+Thumbs.db
 .idea/
-
-# IDE / Editor Configuration
 .vscode/
-
-# PlatformIO
-.pio/
-
 *.code-workspace
-.idea/
 
-# General Logs and Temporary Files
-*.log
+# Temp
 temp/
 tmp/
+
+# Python env accidentally created inside FE
+venv/
+.venv/

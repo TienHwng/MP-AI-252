@@ -97,6 +97,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	StaticJsonDocument<512> responseDoc;
 	if (method == method_led_blinky.c_str()) {
 		// Gọi hàm bật/tắt LED thật ở đây (vd: digitalWrite(LED_PIN, params))
+		// turn_on(LED)
 
 		if (xSemaphoreTake(xLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
 			is_LED_on = params ? true : false;
@@ -108,10 +109,11 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 	else if (method == method_neo_led.c_str()) {
 		// Gọi hàm bật/tắt NeoPixel thật ở đây
+		// turn_on(NEOPIXEL)
 
 		if (xSemaphoreTake(xNeoLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
-				is_NeoLED_on = params ? true : false;
-				xSemaphoreGive(xNeoLedStateSemaphore);
+			is_NeoLED_on = params ? true : false;
+			xSemaphoreGive(xNeoLedStateSemaphore);
 		}
 
 		Serial.println(params ? "🌈 Turning on NeoPixel" : "🌈 Turning off NeoPixel");
