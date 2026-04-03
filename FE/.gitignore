@@ -1,4 +1,8 @@
-# --- Frontend .gitignore ---
+# --- FE .gitignore ---
+
+# Python Virtual Environment Folder
+venv/
+.venv/
 
 # Dependencies
 node_modules/
@@ -48,7 +52,3 @@ Thumbs.db
 # Temp
 temp/
 tmp/
-
-# Python env accidentally created inside FE
-venv/
-.venv/

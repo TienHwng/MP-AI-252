@@ -29,3 +29,7 @@
 *.log
 temp/
 tmp/
+
+# Old FE & BE folders
+frontend/
+backend/
