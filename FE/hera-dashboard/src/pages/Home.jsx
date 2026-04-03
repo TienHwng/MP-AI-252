@@ -1,0 +1,157 @@
+import React, { useEffect, useState } from 'react';
+import AiAssistant from '../components/chat/AI';
+import ControlCard from '../components/dashboard/ControlCard';
+import EnvironmentCards from '../components/dashboard/EnvironmentCards';
+import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
+import { fetchLatestSensorData } from '../services/api';
+
+const getRelativeUpdatedLabel = (timestamp) => {
+  const updated = new Date(timestamp).getTime();
+  if (Number.isNaN(updated)) {
+    return 'just now';
+  }
+
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - updated) / 1000));
+  if (diffSeconds < 60) {
+    return 'just now';
+  }
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `${diffHours}h ago`;
+};
+
+const getAirQualityState = (aqi, temperature, humidity) => {
+  const hasAqi = Number.isFinite(aqi) && aqi > 0;
+  const score = hasAqi ? aqi : Math.max(0, Math.min(100, (temperature - 20) * 3 + (humidity - 45) * 1.2));
+
+  if (score >= 70) return { level: 'danger', progress: 90 };
+  if (score >= 40) return { level: 'warning', progress: 60 };
+  return { level: 'good', progress: 30 };
+};
+
+const getGasState = (gasPpm, gasDetected) => {
+  if (gasDetected || gasPpm >= 300) return { level: 'danger', progress: 95 };
+  if (gasPpm >= 120) return { level: 'warning', progress: 65 };
+  return { level: 'good', progress: 20 };
+};
+
+const Home = () => {
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [sensorData, setSensorData] = useState({
+    temperature: 0,
+    humidity: 0,
+    light: 0,
+    airQualityIndex: 0,
+    gasPpm: 0,
+    gasDetected: false,
+    updatedAt: Date.now(),
+  });
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLatestData = async () => {
+      try {
+        const latest = await fetchLatestSensorData();
+        if (isMounted) {
+          setSensorData(latest);
+        }
+      } catch (error) {
+        console.error('Failed to fetch sensor data:', error);
+      }
+    };
+
+    loadLatestData();
+    const intervalId = setInterval(loadLatestData, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  const updatedLabel = getRelativeUpdatedLabel(sensorData.updatedAt);
+  const airState = getAirQualityState(sensorData.airQualityIndex, sensorData.temperature, sensorData.humidity);
+  const gasState = getGasState(sensorData.gasPpm, sensorData.gasDetected);
+
+  return (
+    <div className="p-6 lg:p-8 w-full h-full min-h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8">
+      {/* Cột trái: Bảng điều khiển */}
+      <div className="min-w-0 flex flex-col gap-8">
+        <header className="flex justify-between items-end">
+          <div>
+            <h2 className="text-3xl font-semibold text-textMain">Welcome Home, Neji !</h2>
+            <p className="text-textMuted mt-1">
+              {currentTime.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+          <div className="text-right">
+            <h3 className="text-2xl text-textMain">
+              {currentTime.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </h3>
+            <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span> All Systems Normal
+            </span>
+          </div>
+        </header>
+
+        {/* Mẫu Card tĩnh - Sau này em tách ra file InfoCard.jsx nhé */}
+        <section>
+          <h4 className="font-medium mb-3">Environment & Safety</h4>
+          <EnvironmentCards data={sensorData} />
+          <SafetyStatusCards
+            airQuality={{
+              value: Number(sensorData.airQualityIndex || 0).toFixed(0),
+              unit: 'AQI',
+              level: airState.level,
+              progress: airState.progress,
+              updatedAt: updatedLabel,
+            }}
+            gasDetection={{
+              value: Number(sensorData.gasPpm || 0).toFixed(0),
+              unit: 'ppm',
+              level: gasState.level,
+              progress: gasState.progress,
+              updatedAt: updatedLabel,
+            }}
+          />
+        </section>
+
+        {/* Nút điều khiển - Sau này tách ra ControlCard.jsx */}
+        <section>
+          <h4 className="font-medium mb-3">Quick Controls</h4>
+           <ControlCard />
+        </section>
+      </div>
+
+      {/* Cột phải: Ai Assistant */}
+      <div className="h-full min-h-[560px]">
+        <AiAssistant />
+      </div>
+    </div>
+  );
+};
+
+export default Home;

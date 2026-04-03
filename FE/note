@@ -1,0 +1,9 @@
+npm create vite@latest hera-dashboard -- --template react
+cd hera-dashboard
+npm install
+
+npm install recharts lucide-react
+
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+npm i lucide-react
