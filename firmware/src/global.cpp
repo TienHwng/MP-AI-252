@@ -2,8 +2,8 @@
 
 DHT20 dht20;
 
-String WIFI_SSID = "Hung 2.4GHz";
-String WIFI_PASS = "bat4glendi";
+String WIFI_SSID = "Tri Tan Lau 1";
+String WIFI_PASS = "0933007857";
 
 String CORE_IOT_TOKEN;
 String CORE_IOT_SERVER;

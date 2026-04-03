@@ -7,3 +7,5 @@ npm install recharts lucide-react
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -p
 npm i lucide-react
+
+npm install express cors mongodb

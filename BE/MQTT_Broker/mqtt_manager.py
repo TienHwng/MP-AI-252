@@ -7,9 +7,15 @@ import time
 import paho.mqtt.client as mqtt
 import json
 import random
+from pymongo import MongoClient
+from datetime import datetime, timezone
+
+client = MongoClient("mongodb://localhost:27017/")
+db = client["HERA"]
+collection = db["telemetry_points"]
 
 class MQTTManager:
-    def __init__(self, broker_address="192.168.1.2", port=1883):
+    def __init__(self, broker_address="192.168.1.34", port=1883):
         self.broker_address = broker_address
         self.port = port
         
@@ -40,6 +46,11 @@ class MQTTManager:
         self.latest_sensor_data = {}
         # self.latest_sensor_data = {"temperature": "25"}
 
+    @property
+    def sensor_state(self) -> dict:
+        """Compatibility property - returns latest_sensor_data"""
+        return self.latest_sensor_data
+
     # --- Các hàm của Broker ---
     def _start_broker_thread(self):
         async def broker_coro():
@@ -69,10 +80,21 @@ class MQTTManager:
 
         if "telemetry" in topic:
             # Log dữ liệu cảm biến nhận được từ ESP32 (để debug)
-            print(f"📊 [Sensor data] {payload}")
+            # print(f"📊 [Sensor data] {payload}")
             try:
                 # Cập nhật dữ liệu mới nhất vào bộ nhớ
                 self.latest_sensor_data = json.loads(payload)
+                doc = {
+                    "recorded_at": datetime.now(timezone.utc),
+                    "metadata": {
+                        "device_id": "device_0001",
+                        "env_id": "env_0001"
+                    },
+                    **{k: v for k, v in self.latest_sensor_data.items() if v is not None}
+                }
+
+                collection.insert_one(doc)
+                print(f"💾 [Database] Inserted sensor data: {doc}")
             except Exception as e:
                 print("JSON parse error:", e)
         elif "response" in topic:
@@ -146,50 +168,51 @@ if __name__ == "__main__":
     
     try:
         while True:
-            # Hiển thị Menu cho người dùng
-            print("\n" + "="*35)
-            print("📜 SMART HOME CONTROL MENU")
-            print("1. 💡 Turn on living room light")
-            print("2. 🌑 Turn off living room light")
-            print("3. 🌈 Turn on NeoPixel light")
-            print("4. 🌑 Turn off NeoPixel light")
-            print("5. 🌡️ View temperature and humidity status")
-            print("0. ❌ Exit program")
-            print("="*35)
+    #         # Hiển thị Menu cho người dùng
+    #         print("\n" + "="*35)
+    #         print("📜 SMART HOME CONTROL MENU")
+    #         print("1. 💡 Turn on living room light")
+    #         print("2. 🌑 Turn off living room light")
+    #         print("3. 🌈 Turn on NeoPixel light")
+    #         print("4. 🌑 Turn off NeoPixel light")
+    #         print("5. 🌡️ View temperature and humidity status")
+    #         print("0. ❌ Exit program")
+    #         print("="*35)
             
-            # Lấy lựa chọn từ người dùng
-            choice = input("👉 Please choose an option (0-5): ").strip()
+    #         # Lấy lựa chọn từ người dùng
+    #         choice = input("👉 Please choose an option (0-5): ").strip()
             
-            if choice == '0':
-                print("👋 Exiting program...")
-                break
+    #         if choice == '0':
+    #             print("👋 Exiting program...")
+    #             break
                 
-            elif choice == '1':
-                print("🤖 HERA: Turning on the living room light...")
-                mqtt_system.send_rpc_command("setValueLedBlinky", True)
+    #         elif choice == '1':
+    #             print("🤖 HERA: Turning on the living room light...")
+    #             mqtt_system.send_rpc_command("setValueLedBlinky", True)
                 
-            elif choice == '2':
-                print("🤖 HERA: Turning off the living room light...")
-                mqtt_system.send_rpc_command("setValueLedBlinky", False)
+    #         elif choice == '2':
+    #             print("🤖 HERA: Turning off the living room light...")
+    #             mqtt_system.send_rpc_command("setValueLedBlinky", False)
 
-            elif choice == '3':
-                print("🤖 HERA: Turning on the NeoPixel light...")
-                mqtt_system.send_rpc_command("setValueNeoLed", True)
+    #         elif choice == '3':
+    #             print("🤖 HERA: Turning on the NeoPixel light...")
+    #             mqtt_system.send_rpc_command("setValueNeoLed", True)
                 
-            elif choice == '4':
-                print("🤖 HERA: Turning off the NeoPixel light...")
-                mqtt_system.send_rpc_command("setValueNeoLed", False)
+    #         elif choice == '4':
+    #             print("🤖 HERA: Turning off the NeoPixel light...")
+    #             mqtt_system.send_rpc_command("setValueNeoLed", False)
                 
-            elif choice == '5':
-                if hasattr(mqtt_system, 'latest_sensor_data') and mqtt_system.latest_sensor_data:
-                    temp = mqtt_system.latest_sensor_data.get("temperature", "Not updated yet")
-                    hum = mqtt_system.latest_sensor_data.get("humidity", "Not updated yet")
-                    print(f"🤖 SENSOR INFO: Current temperature is {temp}°C, humidity is {hum}%.")
-                else:
-                    print("🤖 SENSOR INFO: Waiting for the board to send data, please try again in a few seconds...")
+    #         elif choice == '5':
+    #             if hasattr(mqtt_system, 'latest_sensor_data') and mqtt_system.latest_sensor_data:
+    #                 temp = mqtt_system.latest_sensor_data.get("temperature", "Not updated yet")
+    #                 hum = mqtt_system.latest_sensor_data.get("humidity", "Not updated yet")
+    #                 print(f"🤖 SENSOR INFO: Current temperature is {temp}°C, humidity is {hum}%.")
+    #             else:
+    #                 print("🤖 SENSOR INFO: Waiting for the board to send data, please try again in a few seconds...")
                 
-            else:
-                print("⚠️ Invalid choice. Please enter a number from 0 to 5.")
+    #         else:
+    #             print("⚠️ Invalid choice. Please enter a number from 0 to 5.")
+            None
     except KeyboardInterrupt:
         print("Closing connection...")
         mqtt_system.client.disconnect()

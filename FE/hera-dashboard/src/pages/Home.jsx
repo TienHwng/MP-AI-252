@@ -27,7 +27,9 @@ const getRelativeUpdatedLabel = (timestamp) => {
 
 const getAirQualityState = (aqi, temperature, humidity) => {
   const hasAqi = Number.isFinite(aqi) && aqi > 0;
-  const score = hasAqi ? aqi : Math.max(0, Math.min(100, (temperature - 20) * 3 + (humidity - 45) * 1.2));
+  const score = hasAqi
+    ? aqi
+    : Math.max(0, Math.min(100, (temperature - 20) * 3 + (humidity - 45) * 1.2));
 
   if (score >= 70) return { level: 'danger', progress: 90 };
   if (score >= 40) return { level: 'warning', progress: 60 };
@@ -43,13 +45,16 @@ const getGasState = (gasPpm, gasDetected) => {
 const Home = () => {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [sensorData, setSensorData] = useState({
-    temperature: 0,
-    humidity: 0,
-    light: 0,
-    airQualityIndex: 0,
-    gasPpm: 0,
+    temperature: null,
+    humidity: null,
+    light: null,
+    airQualityIndex: null,
+    gasPpm: null,
     gasDetected: false,
     updatedAt: Date.now(),
+    led_state: false,
+    neo_led_state: false,
+    inference_result: null,
   });
 
   useEffect(() => {
@@ -61,12 +66,12 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    let cancelled = false;
 
     const loadLatestData = async () => {
       try {
         const latest = await fetchLatestSensorData();
-        if (isMounted) {
+        if (!cancelled) {
           setSensorData(latest);
         }
       } catch (error) {
@@ -78,18 +83,21 @@ const Home = () => {
     const intervalId = setInterval(loadLatestData, 5000);
 
     return () => {
-      isMounted = false;
+      cancelled = true;
       clearInterval(intervalId);
     };
   }, []);
 
   const updatedLabel = getRelativeUpdatedLabel(sensorData.updatedAt);
-  const airState = getAirQualityState(sensorData.airQualityIndex, sensorData.temperature, sensorData.humidity);
+  const airState = getAirQualityState(
+    sensorData.airQualityIndex,
+    sensorData.temperature,
+    sensorData.humidity,
+  );
   const gasState = getGasState(sensorData.gasPpm, sensorData.gasDetected);
 
   return (
     <div className="p-6 lg:p-8 w-full h-full min-h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8">
-      {/* Cột trái: Bảng điều khiển */}
       <div className="min-w-0 flex flex-col gap-8">
         <header className="flex justify-between items-end">
           <div>
@@ -103,34 +111,36 @@ const Home = () => {
               })}
             </p>
           </div>
+
           <div className="text-right">
             <h3 className="text-2xl text-textMain">
               {currentTime.toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit',
+                second: '2-digit',
                 hour12: true,
               })}
             </h3>
             <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span> All Systems Normal
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              All Systems Normal
             </span>
           </div>
         </header>
 
-        {/* Mẫu Card tĩnh - Sau này em tách ra file InfoCard.jsx nhé */}
         <section>
           <h4 className="font-medium mb-3">Environment & Safety</h4>
           <EnvironmentCards data={sensorData} />
           <SafetyStatusCards
             airQuality={{
-              value: Number(sensorData.airQualityIndex || 0).toFixed(0),
+              value: sensorData.airQualityIndex == null ? '--' : Number(sensorData.airQualityIndex).toFixed(0),
               unit: 'AQI',
               level: airState.level,
               progress: airState.progress,
               updatedAt: updatedLabel,
             }}
             gasDetection={{
-              value: Number(sensorData.gasPpm || 0).toFixed(0),
+              value: sensorData.gasPpm == null ? '--' : Number(sensorData.gasPpm).toFixed(0),
               unit: 'ppm',
               level: gasState.level,
               progress: gasState.progress,
@@ -139,14 +149,12 @@ const Home = () => {
           />
         </section>
 
-        {/* Nút điều khiển - Sau này tách ra ControlCard.jsx */}
         <section>
           <h4 className="font-medium mb-3">Quick Controls</h4>
-           <ControlCard />
+          <ControlCard />
         </section>
       </div>
 
-      {/* Cột phải: Ai Assistant */}
       <div className="h-full min-h-[560px]">
         <AiAssistant />
       </div>
