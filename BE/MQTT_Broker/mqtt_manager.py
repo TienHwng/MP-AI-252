@@ -69,7 +69,7 @@ class MQTTManager:
 
         if "telemetry" in topic:
             # Log dữ liệu cảm biến nhận được từ ESP32 (để debug)
-            # print(f"📊 [Sensor data] {payload}")
+            print(f"📊 [Sensor data] {payload}")
             try:
                 # Cập nhật dữ liệu mới nhất vào bộ nhớ
                 self.latest_sensor_data = json.loads(payload)
