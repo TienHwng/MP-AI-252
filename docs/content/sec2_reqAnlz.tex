@@ -1,0 +1,139 @@
+\clearpage
+\section{Requirements Analysis}
+\label{sec:requirements_analysis}
+
+This section presents the requirements analysis of the H.E.R.A system. The identified requirements are organized into four categories: business requirements, functional requirements, non-functional requirements, and data requirements.
+
+\subsection{Business Requirements}
+
+\begin{table}[H]
+	\centering
+	\caption{Business Requirements of the H.E.R.A system}
+	\label{tab:business_requirements}
+	\renewcommand{\arraystretch}{1.2}
+	\small
+	
+	\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.2cm}|p{3.2cm}|X|X|}
+		\hline
+		\textbf{ID}                                                                                                                                                                                            & \textbf{Stakeholder}                       & \textbf{Requirement Description} & \textbf{Success Criteria} \\
+		\hline
+		\hline
+		BR1                                                                                                                                                                                                    & Residents (Primary Key Users)              & 
+		The system must enhance quality of life, convenience, and health protection by creating an automated living environment that proactively understands user preferences, routines, and contextual needs. & 
+		The system accurately processes natural language commands and autonomously adjusts environmental conditions such as lighting and ventilation without requiring manual interaction through separate mobile applications.                                                                                            \\
+		\hline
+		BR2                                                                                                                                                                                                    & System Administrator (Secondary Key Users) & 
+		The system must optimize operational costs, especially electricity consumption, while also ensuring reliable property security and minimizing false alarm notifications.                               & 
+		The system provides an interactive dashboard for monitoring and forecasting, while intelligent classification or anomaly detection mechanisms significantly reduce false alarms and improve the reliability of alerts.                                                                                             \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\subsection{Functional Requirements}
+
+\begin{table}[H]
+	\centering
+	\caption{Functional Requirements of the H.E.R.A system}
+	\label{tab:functional_requirements}
+	\renewcommand{\arraystretch}{1.2}
+	\small
+	\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.2cm}|X|}
+		\hline
+		\textbf{ID} & \textbf{Functional Requirement}                                                                                                                                                            \\
+		\hline \hline
+		FR1         & The system shall continuously collect environmental telemetry data, including temperature, humidity, light intensity, and device states, to support automation, monitoring, and analytics. \\
+		\hline
+		FR2         & The system shall accept user commands through both voice and text interfaces, with voice input converted into text through a Speech-to-Text process.                                       \\
+		\hline
+		FR3         & The system shall process unstructured natural language commands in order to identify user intents and relevant entities for command execution.                                             \\
+		\hline
+		FR4         & The system shall autonomously adjust environmental conditions such as lighting and ventilation based on context, occupancy, habits, or detected sensor conditions.                         \\
+		\hline
+		FR5         & The system shall execute control actions on connected devices and actuators through the IoT control layer.                                                                                 \\
+		\hline
+		FR6         & The system shall monitor abnormal conditions and generate real-time alerts for unsafe events, suspicious activities, or environmental anomalies.                                           \\
+		\hline
+		FR7         & The system shall provide analytical functions for energy consumption monitoring, pattern identification, and forecasting.                                                                  \\
+		\hline
+		FR8         & The system shall apply classification or anomaly detection models to distinguish genuine threats from false alarms.                                                                        \\
+		\hline
+		FR9         & The system shall provide an interactive dashboard that visualizes real-time status, historical telemetry, alerts, and analytical insights.                                                 \\
+		\hline
+		FR10        & The system shall record commands, sensor readings, device states, alerts, and analytical outputs in a persistent activity log.                                                             \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\subsection{Non-Functional Requirements}
+
+\begin{table}[H]
+	\centering
+	\caption{Non-Functional Requirements of the H.E.R.A system}
+	\label{tab:nonfunctional_requirements}
+	\renewcommand{\arraystretch}{1.2}
+	\small
+	\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.2cm}|X|}
+		\hline
+		\textbf{ID} & \textbf{Non-Functional Requirement}                                                                                                                                                \\
+		\hline \hline
+		NFR1        & The system should provide a user-friendly and hands-free interaction experience through intuitive natural language communication and clear feedback.                               \\
+		\hline
+		NFR2        & The system should respond to user commands and environmental events with low latency to ensure seamless automation.                                                                \\
+		\hline
+		NFR3        & The system should operate reliably and maintain stable sensing, communication, and control during normal residential operation.                                                    \\
+		\hline
+		NFR4        & The system should achieve high accuracy in intent recognition, command interpretation, anomaly detection, and classification to avoid incorrect actions and minimize false alarms. \\
+		\hline
+		NFR5        & The system must ensure security and privacy for user data, telemetry data, and voice input, while protecting communication channels from unauthorized access.                      \\
+		\hline
+		NFR6        & The architecture should be scalable so that additional devices, sensors, and analytical modules can be integrated without major redesign.                                          \\
+		\hline
+		NFR7        & The system should be maintainable, modular, and easy to test, update, and troubleshoot over time.                                                                                  \\
+		\hline
+		NFR8        & Essential system functions should remain available as much as possible, including local edge-level operation for critical sensing and control tasks.                               \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\subsection{Data Requirements}
+
+\begin{table}[H]
+	\centering
+	\caption{Data Requirements of the H.E.R.A system}
+	\label{tab:data_requirements}
+	\renewcommand{\arraystretch}{1.2}
+	\small
+	\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.2cm}|X|}
+		\hline
+		\textbf{ID} & \textbf{Data Requirement}                                                                                                                                                     \\
+		\hline \hline
+		DR1         & The system shall store time-series sensor telemetry data, including temperature, humidity, light intensity, timestamps, and related device or environment identifiers.        \\
+		\hline
+		DR2         & The system shall maintain current and historical records of device states, command execution results, and actuator responses.                                                 \\
+		\hline
+		DR3         & The system shall store user interaction data, including command history, interaction sessions, detected intents, generated responses, and execution outcomes.                 \\
+		\hline
+		DR4         & The system shall store alert events, anomaly scores, classification outputs, and severity levels for security and environmental monitoring.                                   \\
+		\hline
+		DR5         & The system shall store historical energy-related data and analytical outputs to support reporting, forecasting, and consumption analysis.                                     \\
+		\hline
+		DR6         & The system shall maintain master and configuration data for users, devices, environments, access roles, and system settings.                                                  \\
+		\hline
+		DR7         & The system shall preserve logging and audit data for debugging, accountability, incident tracing, and performance evaluation.                                                 \\
+		\hline
+		DR8         & The system shall maintain metadata of analytical or AI models and store their generated insights, including forecasts and anomaly detection results.                          \\
+		\hline
+		DR9         & The collected data should be timestamped, validated, and structured consistently so that they can be reliably used for automation, visualization, and machine learning tasks. \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+In summary, the requirements analysis defines the business objectives of the H.E.R.A system together with the corresponding functional, non-functional, and data requirements needed for implementation and evaluation.

@@ -1,6 +1,0 @@
-# --- docs .gitignore ---
-
-# LaTeX folder
-report/
-# report/.build/
-# report/output/main.synctex.gz

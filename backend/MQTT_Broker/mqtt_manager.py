@@ -99,6 +99,18 @@ class MQTTManager:
         # Dùng loop_start() chạy ngầm thay vì loop_forever() để không khóa luồng chính
         self.client.loop_start()
 
+    # Alias for HERA compatibility
+    def connect(self):
+        """Alias for start() - used by HERA"""
+        self.start()
+
+    def disconnect(self):
+        """Disconnect MQTT client"""
+        if self.client:
+            self.client.loop_stop()
+            self.client.disconnect()
+            print("🔴 MQTT Client disconnected")
+
     def send_rpc_command(self, method_name, params):
         """Hàm dùng để AI gọi khi cần gửi text/lệnh xuống ESP32
         đóng gói data theo dạng JSON """
@@ -115,6 +127,15 @@ class MQTTManager:
         # Gửi đi
         self.client.publish(topic, json_payload)
         print(f"🚀 [Backend Send] Topic: {topic} | Data: {json_payload}")
+
+    # Alias for HERA compatibility
+    def publish_rpc(self, method: str, params):
+        """Alias for send_rpc_command() - used by HERA"""
+        self.send_rpc_command(method, params)
+
+    def get_sensor_snapshot(self) -> dict:
+        """Return a copy of the current sensor state - used by HERA"""
+        return dict(self.latest_sensor_data)
 
 # === Cách chạy thử file này ===
 if __name__ == "__main__":

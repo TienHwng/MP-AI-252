@@ -1,0 +1,399 @@
+\clearpage
+\section{Firmware Architecture and Organization}
+\label{sec:firmware_architecture}
+
+% This section summarises the principal hardware components used in the H.E.R.A system and classifies them according to their operational roles. The objective is to provide a concise inventory of the devices, including their names, quantities, and primary functions, and then distinguish clearly between input and output hardware.
+
+
+
+% \subsection{Introduction to OhStem's YoloUNO and AIoT Kit}
+
+% % In this project, the central embedded controller responsible for managing the hardware subsystem is the \href{https://ohstem.vn/product/yolo-uno/}{Ohstem Yolo UNO development board}. This board serves as the local ``brain'' of the system, coordinating sensor data acquisition, communication with the upper software layer, and control of output devices such as the LCD, LED, fan, and relay. The Yolo UNO is built around a customised ESP32-S3 platform provided by \href{https://ohstem.vn/}{Ohstem}, which combines the processing capability of the ESP32-S3 with a development-friendly hardware design suitable for rapid prototyping and IoT applications.
+
+% % The ESP32-S3 is a powerful dual-core microcontroller developed by Espressif Systems, built on the Xtensa LX7 architecture with two 32-bit CPU cores operating at up to 240~MHz. It features comprehensive wireless connectivity including Wi-Fi 802.11 b/g/n (2.4~GHz) and Bluetooth 5.0 (LE), making it ideal for IoT applications requiring robust wireless communication capabilities. \\
+
+% % For this project, we use the ESP32-S3-N16R8 variant integrated on the Ohstem Yolo UNO development board. The N16R8 configuration provides 16~MB of flash memory and 8~MB of PSRAM, offering substantial storage and processing capabilities for complex IoT applications. The Yolo UNO board simplifies development with its built-in sensors, connectivity options and user-friendly interface, enabling seamless integration with the CoreIoT platform for data transmission and remote device control.
+
+% In this project, the hardware subsystem is managed by the \href{https://ohstem.vn/product/yolo-uno/}{Ohstem Yolo UNO development board}, which acts as the central embedded controller of the H.E.R.A system. It is responsible for acquiring sensor data, communicating with the upper software layer, and controlling output devices such as the LCD, LED, fan, and relay. Developed by \href{https://ohstem.vn/}{Ohstem}, the Yolo UNO is based on a customised ESP32-S3 platform and is designed to support rapid prototyping and IoT-oriented applications through its integrated peripherals and development-friendly architecture. \\
+
+% At its core, the ESP32-S3 is a high-performance dual-core microcontroller from Espressif Systems, built on the Xtensa LX7 architecture with two 32-bit processors operating at up to 240~MHz. It also provides built-in Wi-Fi 802.11 b/g/n (2.4~GHz) and Bluetooth 5.0 Low Energy connectivity, which makes it well suited for wireless embedded systems. \\
+
+% The specific version used in this project is the ESP32-S3-N16R8, which provides 16~MB of flash memory and 8~MB of PSRAM. This memory configuration offers sufficient capacity for firmware development, wireless communication, sensor integration, and interaction with the CoreIoT platform for remote monitoring and device control.
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.95\linewidth]{image/figure/pinout-mach-yolo-uno.png}
+%     \caption{ESP32-S3-N16R8 based Ohstem Yolo UNO development board and pinout.}
+%     \label{fig:yolouno_esp32s3_pinout}
+% \end{figure}
+
+% In project, we will use PlatformIO to develop and upload firmware to the ESP32-S3 microcontroller on the Yolo Uno board. PlatformIO is an open-source ecosystem for IoT development that supports multiple platforms and frameworks, providing a unified interface for building, testing, and deploying embedded applications.
+
+
+
+
+
+
+\subsection{Introduction to OhStem's Yolo UNO and AIoT Kit}
+
+In this project, the hardware subsystem is centred around the \href{https://ohstem.vn/product/yolo-uno/}{Ohstem Yolo UNO development board}, which serves as the main embedded controller of the H.E.R.A system. As the local control unit, it is responsible for acquiring sensor data, communicating with the upper software layer, and executing control commands for output devices such as the LCD, RGB LED, fan, and relay. Developed by \href{https://ohstem.vn/}{Ohstem}, the Yolo UNO is built on a customised ESP32-S3 platform and is intended to support rapid prototyping, embedded control, and IoT-oriented application development through its user-friendly and integration-ready design. \\
+
+At the core of the Yolo UNO is the ESP32-S3, a high-performance dual-core microcontroller developed by Espressif Systems. Based on the Xtensa LX7 architecture, it features two 32-bit processors operating at up to 240~MHz, together with built-in Wi-Fi 802.11 b/g/n (2.4~GHz) and Bluetooth 5.0 Low Energy connectivity. These capabilities make it well suited for intelligent embedded systems that require reliable wireless communication and real-time interaction with external devices. \\
+
+The specific version used in this project is the ESP32-S3-N16R8, which provides 16~MB of flash memory and 8~MB of PSRAM. This hardware configuration offers sufficient resources for firmware development, peripheral integration, wireless communication, and interaction with the CoreIoT platform for remote monitoring and device control.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{image/figure/pinout-mach-yolo-uno.png}
+  \caption{ESP32-S3-N16R8 based Ohstem Yolo UNO development board and pinout.}
+  \label{fig:yolouno_esp32s3_pinout}
+\end{figure}
+
+For firmware development and deployment, this project uses PlatformIO to program the ESP32-S3 microcontroller on the Yolo UNO board. PlatformIO is an open-source ecosystem for IoT development that supports multiple platforms and frameworks, providing a unified environment for building, uploading, testing, and maintaining embedded applications. \\
+
+In addition to the controller board itself, many of the peripheral devices used in the system, including input modules, output modules, and environmental sensors, are selected from the \href{https://ohstem.vn/product/aiot-kit-hoc-lap-trinh-iot-va-ai/}{OhStem AIoT Kit}. This kit provides a convenient collection of plug-and-play modules, allowing the hardware components of the H.E.R.A system to be integrated more easily, safely, and consistently during development and experimentation.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{image/figure/kit-hoc-lap-trinh-IoT-va-AI-AIoT-Kit.jpg}
+  \caption{OhStem AIoT Kit and its main hardware modules.}
+  \label{fig:ohstem_aiot_kit}
+\end{figure}
+
+Figure~\ref{fig:ohstem_aiot_kit} shows the OhStem AIoT Kit, which provides a set of plug-and-play modules for IoT and embedded-system prototyping. The kit includes a variety of common input and output devices, such as the DHT20 sensor, infrared modules, light sensor, relay, RGB LED, LCD display, mini fan, ultrasonic sensor, and water pump. \\
+
+In the H.E.R.A system, the AIoT Kit serves as the main source of peripheral modules for sensing and actuation. Its modular design simplifies hardware integration and supports faster, safer, and more convenient prototype development.
+
+
+
+
+
+\newpage
+\subsection{Hardware Device Inventory}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Main hardware devices used in the H.E.R.A system}
+  \label{tab:hardware_inventory}
+  \renewcommand{\arraystretch}{1.2}
+  \small
+  \begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{0.8cm}|p{4.0cm}|>{\centering\arraybackslash}p{1.0cm}|X|}
+    \hline
+    \textbf{No.} & \textbf{Device Name} & \textbf{Qty.} & \textbf{Primary Function} \\
+    \hline \hline
+    1  & Central Processing Node (PC) & 1 & Performs high-level processing tasks, including Speech-to-Text (STT), Natural Language Understanding (NLU), and command coordination for the overall system. \\
+    \hline
+    2  & Microphone / Sound Sensor & 1 & Captures user voice input for speech-based interaction and forwards audio data to the processing layer. \\
+    \hline
+    3  & Yolo UNO Development Board & 1 & Serves as the main embedded controller, handling sensor data acquisition, MQTT communication, and actuator control. \\
+    \hline
+    4  & Temperature and Humidity Sensor (DHT20) & 1 & Measures ambient temperature and humidity for environmental monitoring and automated control decisions. \\
+    \hline
+    5  & Light Sensor (LDR) & 1 & Detects surrounding light intensity to support context-aware lighting automation. \\
+    \hline
+    6  & IR Receiver Sensor & 1 & Receives infrared signals from a remote controller, enabling wireless command input for device operation. \\
+    \hline
+    7  & Gas Sensor (MQ-2) & 1 & Detects combustible gases and smoke levels to support basic gas leakage and safety monitoring. \\
+    \hline
+    8  & LCD Display & 1 & Displays real-time sensor readings, device states, and general system status information. \\
+    \hline
+    9  & RGB LED Module (WS2812) & 1 & Provides visual output for lighting control demonstration and system status indication. \\
+    \hline
+    10 & Mini Fan & 1 & Simulates ventilation or cooling control in response to environmental conditions or user commands. \\
+    \hline
+    11 & Relay Module & 1 & Enables switching control of external electrical loads or household appliances. \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\subsection{Functional Classification of Hardware Devices}
+
+To provide a clearer view of the hardware architecture, the devices used in the H.E.R.A system can be classified according to their functional roles. Rather than considering only input and output functions, this classification also includes the processing and control units that coordinate sensing, communication, and actuation within the system.
+
+\begin{table}[H]
+  \centering
+  \caption{Functional classification of hardware devices in the H.E.R.A system}
+  \label{tab:functional_classification}
+  \renewcommand{\arraystretch}{1.2}
+  \small
+  \begin{tabularx}{\textwidth}{|p{3.4cm}|p{5.0cm}|X|}
+    \hline
+    \textbf{Category} & \textbf{Devices} & \textbf{Role in the System} \\
+    \hline \hline
+    Processing and Control Units
+    & Central Processing Node (PC), Yolo UNO Development Board
+    & These units form the computational and control core of the system. The PC performs high-level processing tasks such as speech recognition, natural language understanding, and command orchestration, while the Yolo UNO executes embedded control tasks including sensor acquisition, MQTT communication, and actuator management. \\
+    \hline
+    Input Devices
+    & Microphone / sound sensor, DHT20 temperature and humidity sensor, LDR light sensor, IR receiver sensor, MQ-2 gas sensor
+    & These devices collect user commands and environmental data, including voice input, ambient conditions, infrared remote signals, and gas concentration information, then forward them to the controller for processing and decision-making. \\
+    \hline
+    Output Devices
+    & LCD display, RGB LED module, mini fan, relay module
+    & These devices present system information and perform physical responses, such as visual feedback, airflow generation, and switching external electrical loads or appliances. \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+In summary, the H.E.R.A platform combines sensing devices, embedded control hardware, and output actuators into an integrated smart-home architecture. This functional organisation enables the system not only to perceive environmental conditions and user input, but also to process commands intelligently and respond through appropriate physical actions.
+
+
+
+
+
+\subsection{Software Environment}
+
+The software environment and main libraries used in this project (which are already included) are:
+
+\begin{itemize}
+  \item PlatformIO plug-in with the right toolchain.
+  \item FreeRTOS as the real-time operating system.
+  \item C/C++ as the main programming language for embedded tasks.
+  \item Libraries for the DHT20 sensor, NeoPixel (Adafruit NeoPixel or equivalent), and I\textsuperscript{2}C LCD.
+  \item (python model ghi vô đây).
+  \item (Docker ghi vô đây)
+  \item Python 3.8.5 environment for data collection, cleaning, and model training.
+  \item Telegram Bot API accessed from Python scripts.
+\end{itemize}
+
+
+\newpage
+\subsection{Firmware Directory Structure}
+
+\subsubsection{Firmware Directory Tree}
+
+\begin{lstlisting}[style=projecttree]
+IOT-251-Assignment/                 # Project root (PlatformIO workspace)
+|-- .pio/                           # PlatformIO build artifacts (auto-generated)
+|-- .venv/                          # Local Python virtual environment
+|-- .vscode/                        # VS Code / PlatformIO configuration
+|-- boards/                         # Custom board definition
+|   `-- yolo_uno.json               # YoloUNO ESP32-S3 board configuration
+|-- data/                           # Web assets stored in SPIFFS/LittleFS
+|   |-- index.html                  # AP-mode web UI (Task 4)
+|   |-- script.js                   # Web UI logic (button handlers, AJAX)
+|   `-- styles.css                  # CSS styling for the web interface
+|-- include/                        # Header files and global interfaces
+|   |-- .configuration.h            # Central configuration macros (extended)
+|   |-- global.h                    # Global objects, semaphores, task handles
+|   |-- dht20_reader.h              # DHT20 reader task (Tasks 1-3)
+|   |-- led_blinky.h                # Temperature-based LED task (Task 1)
+|   |-- neo_blinky.h                # Humidity-based NeoPixel task (Task 2)
+|   |-- temp_humi_monitor.h         # LCD monitor task (Task 3)
+|   |-- mainserver.h                # AP-mode web server interface (Task 4)
+|   |-- coreiot.h                   # CoreIOT client functions (Task 6)
+|   |-- tinyml.h                    # TinyML inference interface (Task 5)
+|   |-- bot_alert.h                 # Telegram alert task (extended feature)
+|   |-- sensor_log.h                # Dataset logging task (extended feature)
+|   |-- task_check_info.h           # System info / debug-print task
+|   |-- task_core_iot.h             # CoreIOT RTOS task wrapper
+|   |-- task_handler.h              # Task creation and supervision helpers
+|   |-- task_rs485.h                # RS485 communication task (optional)
+|   |-- task_toogle_boot.h          # BOOT button handler task
+|   |-- task_webserver.h            # Web server RTOS task wrapper
+|   `-- task_wifi.h                 # Wi-Fi connection management task
+|-- lib/                            # Local copies of Arduino/ESP32 libraries
+|   |-- ArduinoHttpClient/          # HTTP/WebSocket client for CoreIOT
+|   `-- ...                         # Other reused libraries (JSON, MQTT, etc.)
+|-- python/                         # Host-side Python tools and experiments
+|   |-- CoreIOT Simulator/          # Scripts to simulate CoreIOT dashboard
+|   |-- MQTT Broker/                # Local MQTT test utilities
+|   |-- Telegram Bot/               # Telegram Bot API test scripts
+|   `-- Tiny ML/                    # Dataset processing and training pipeline
+|       |-- data/                   # Raw and cleaned sensor datasets (CSV)
+|       |-- plots/                  # Training and evaluation plots
+|       |-- trained models/         # Saved .keras/.tflite/.h TinyML models
+|       |-- data_cleaner.py         # Clean and filter raw DHT20 logs
+|       |-- model_tester.py         # Evaluate trained models on test data
+|       |-- model_verify.py         # Verify model behaviour on new samples
+|       |-- TLF_For_MCU.py          # Convert/export models for MCU deployment
+|       `-- ...                     # Additional helper scripts and artifacts
+|-- src/                            # ESP32-S3 application source files
+|   |-- main.cpp                    # Entry point, FreeRTOS task creation
+|   |-- global.cpp                  # Definition of globals, semaphores, queues
+|   |-- dht20_reader.cpp            # DHT20 reader implementation (Tasks 1-3)
+|   |-- led_blinky.cpp              # LED blink logic (Task 1)
+|   |-- neo_blinky.cpp              # NeoPixel control logic (Task 2)
+|   |-- temp_humi_monitor.cpp       # LCD display logic (Task 3)
+|   |-- mainserver.cpp              # AP-mode web server logic (Task 4)
+|   |-- coreiot.cpp                 # CoreIOT publish logic (Task 6)
+|   |-- tinyml.cpp                  # On-device TinyML inference (Task 5)
+|   |-- bot_alert.cpp               # Telegram notifications (extended feature)
+|   |-- sensor_log.cpp              # Dataset logging (extended feature)
+|   |-- task_check_info.cpp         # System info / debug utilities
+|   |-- task_core_iot.cpp           # CoreIOT RTOS task implementation
+|   |-- task_handler.cpp            # Task initialisation and supervision
+|   |-- task_rs485.cpp              # RS485 communication (optional extension)
+|   |-- task_toogle_boot.cpp        # BOOT button behaviour
+|   |-- task_webserver.cpp          # Web server RTOS task implementation
+|   `-- task_wifi.cpp               # Wi-Fi connection management
+|-- test/                           # Additional test sketches and notes
+|   `-- README                      # Notes for test cases
+|-- .gitignore                      # Git ignore rules
+|-- platformio.ini                  # PlatformIO project configuration
+`-- README.md                       # Project documentation
+\end{lstlisting}
+
+
+\subsubsection{Description of Main Directories and Files}
+
+The project is organized into several folders and configuration files in the working directory:
+
+\begin{itemize}
+    \item \texttt{\textbf{platformio.ini}}: PlatformIO project configuration (board type, framework, build options and library dependencies).
+    \item \texttt{README.md}, \texttt{requirements.txt}: project documentation and Python environment requirements.
+\end{itemize}
+
+The main directories are:
+
+\begin{itemize}
+    \item \textbf{.venv/}: local Python virtual environment used for data processing, TinyML training and CoreIOT/Telegram simulation scripts.
+    \item \textbf{boards/}: custom board definition files for the YoloUNO (ESP32-S3) platform used by PlatformIO.
+    \item \textbf{data/}: web-server assets (e.g., \texttt{index.html}, \texttt{script.js}, \texttt{styles.css}) that are uploaded to the ESP32-S3 filesystem and served by the AP-mode web server (Task~4).
+    \item \textbf{include/}: C/C++ header files for each application module and task. Typical headers include:
+    \begin{itemize}
+        \item \texttt{global.h}: global objects, semaphores and shared data structures.
+        \item \texttt{dht20\_reader.h}, \texttt{led\_blinky.h}, \texttt{neo\_blinky.h}: task interfaces for the DHT20 reader, temperature-based LED and humidity-based NeoPixel control.
+        \item \texttt{temp\_humi\_monitor.h}: LCD monitoring task (temperature, humidity and state).
+        \item \texttt{coreiot.h}, \texttt{tinyml.h}: CoreIOT client and TinyML inference interfaces.
+        \item \texttt{bot\_alert.h}, \texttt{task\_wifi.h}, \texttt{task\_webserver.h}: Telegram alert task and Wi-Fi/web server management tasks.
+        \item \texttt{.configuration.h}: centralized configuration header that defines system modes, timing parameters and pin mappings (extended feature).
+    \end{itemize}
+    \item \textbf{lib/}: third-party Arduino/PlatformIO libraries such as \texttt{ArduinoHttpClient} and other dependencies (JSON, MQTT, \ldots) that are reused by the project.
+    \item \textbf{python/}: host-side Python utilities, divided into subfolders:
+    \begin{itemize}
+        \item \textbf{CoreIOT Simulator/}: scripts for simulating the CoreIOT dashboard and testing data publishing.
+        \item \textbf{MQTT Broker/}: helper scripts for experimenting with MQTT-based communication.
+        \item \textbf{Telegram Bot/}: scripts for testing the Telegram Bot API and sending messages.
+        \item \textbf{Tiny ML/}: TinyML toolchain for dataset preparation, model training and deployment:
+        \begin{itemize}
+            \item \texttt{data/}: raw and cleaned sensor datasets in CSV format.
+            \item \texttt{plots/}: visualizations of training curves and evaluation metrics.
+            \item \texttt{trained models/}: exported models in \texttt{.keras}, \texttt{.tflite} and \texttt{.h} formats for MCU deployment.
+            \item \texttt{data\_cleaner.py}: cleans and filters raw DHT20 logs, handling outliers and missing values.
+            \item \texttt{model\_tester.py}: evaluates trained models on test data and reports accuracy and confusion matrix.
+            \item \texttt{model\_verify.py}: verifies model behaviour on new samples before deployment.
+            \item \texttt{TLF\_For\_MCU.py}: converts trained models into a TensorFlow Lite Micro representation and generates C arrays for the ESP32-S3 firmware.
+        \end{itemize}
+    \end{itemize}
+
+\item \textbf{src/}: main application source files for the ESP32-S3 firmware:
+    \begin{itemize}
+        \item \textbf{RTOS task implementations}:
+        \begin{itemize}
+            \item \texttt{dht20\_reader.cpp}: periodic reading of temperature and humidity from the DHT20 sensor.
+            \item \texttt{led\_blinky.cpp}: temperature-based LED blinking logic (Task~1).
+            \item \texttt{neo\_blinky.cpp}: humidity-based NeoPixel control (Task~2).
+            \item \texttt{temp\_humi\_monitor.cpp}: LCD display of temperature, humidity and state (Task~3).
+            \item \texttt{task\_wifi.cpp}: Wi-Fi connection management in STA mode.
+            \item \texttt{task\_webserver.cpp}: AP-mode web server handling HTTP requests (Task~4).
+            \item \texttt{coreiot.cpp}: CoreIOT data publishing logic (Task~6).
+            \item \texttt{tinyml.cpp}: on-device TinyML inference using the exported model (Task~5).
+            \item \texttt{bot\_alert.cpp}: Telegram notification and command handling (extended feature).
+            \item \texttt{task\_toogle\_boot.cpp}: BOOT button behaviour and related actions.
+        \end{itemize}
+        \item \texttt{global.cpp} and \texttt{task\_handler.cpp}: implementation of shared resources, semaphore and queue creation, and central task orchestration.
+        \item \texttt{main.cpp}: entry point defining \texttt{setup()} and \texttt{loop()}, responsible for initialisation and creation of all FreeRTOS tasks.
+    \end{itemize}
+    \item \textbf{test/}: additional test sketches and notes used during development.
+\end{itemize}
+
+
+\newpage
+\subsection{Configuration Macros and System Modes}
+
+An important design decision is the introduction of a centralized configuration header (included at the beginning of \texttt{global.h}) that defines all operational parameters using preprocessor macros. This header groups together:
+
+\begin{itemize}
+    \item \textbf{Mode flags}: debug and logging options (e.g., enabling or disabling debug output and payload display).
+    \item \textbf{Task delays and timeouts}: delays for LED blinking, NeoPixel updates, sensor reading, TinyML inference, CoreIOT publishing, and Wi-Fi/MQTT retry intervals.
+    \item \textbf{GPIO mappings}: pins for the on-board LED, NeoPixel data line and LED count.
+    \item \textbf{I\textsuperscript{2}C pins}: SDA and SCL GPIO mapping for the LCD module and other I\textsuperscript{2}C peripherals.
+\end{itemize}
+
+An excerpt of the configuration header is shown below:
+
+\begin{lstlisting}[language=C,caption={Excerpt of configuration macros}]
+// ----- General Settings -----
+// Mode Settings
+#define IS_DEBUG_MODE               false
+#define IS_MONITOR_MODE             true
+#define IS_SHOW_DHT20_STATUS        false
+#define IS_SHOW_LED_STATUS          false
+#define IS_SHOW_NEO_STATUS          false
+#define IS_SHOW_LCD_STATUS          false
+#define IS_SHOW_PAYLOAD             false
+#define IS_SHOW_INFERENCE_RESULT    false
+
+#define IS_SHOW_BOT_STATUS          false
+#define IS_SHOW_SENSOR_LOG          false
+
+// Time Delays (in milliseconds)
+#define LED_BLINKY_DELAY_MS         1000
+#define NEO_DISPLAY_DELAY_MS        1000
+#define TEMP_HUMI_DELAY_MS          1000
+#define MAIN_SERVER_DELAY_MS        1000
+#define TINY_ML_DELAY_MS            5000
+#define POLL_FROM_SERVER_DELAY_MS   1000
+#define CORE_IOT_DELAY_MS           10000
+
+#define LED_READER_DELAY_MS         1000
+#define HUMID_READER_DELAY_MS       1000
+
+#define LONG_PRESS_MS               3000
+#define DEBOUNCE_MS                 50
+
+#define ANALOG_READ_DELAY_MS        10
+#define ANALOG_DEBOUNCE_MS          80
+
+#define WIFI_CONNECT_TIMEOUT_MS     10000
+#define WIFI_RETRY_INTERVAL_MS      5000
+#define MQTT_RETRY_INTERVAL_MS      5000
+#define SENSOR_LOG_DELAY_MS         2000
+// ----- END General Settings -----
+
+// ----- Board default ports mapping -----
+// Digital Ports
+#define DIGITAL_PORT_1_PIN          18      // D9
+#define DIGITAL_PORT_2_PIN          10      // D7
+#define DIGITAL_PORT_3_PIN          8       // D5
+#define DIGITAL_PORT_4_PIN          6       // D3
+
+// Analog Ports
+#define ANALOG_PORT_1_PIN           3       // A3
+#define ANALOG_PORT_2_PIN           4       // A2
+#define ANALOG_PORT_3_PIN           5       // A1
+#define ANALOG_PORT_4_PIN           6       // A0
+
+// I2C Pins
+#define I2C_SDA_PIN                 11      // A4
+#define I2C_SCL_PIN                 12      // A5
+// ----- END Board default ports mapping -----
+
+// ----- GPIO Pins Definitions -----
+// Buttons
+#define BOOT_PIN                    0
+#define BUTTON_PIN                  47
+
+// Grove's port devices
+#define WS2812_PIN                  DIGITAL_PORT_1_PIN
+#define MINI_FAN_PIN                DIGITAL_PORT_2_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_3_PIN
+#define RELAY_PIN                   DIGITAL_PORT_4_PIN
+
+#define LIGHT_SENSOR_PIN            ANALOG_PORT_1_PIN
+#define MQ2_SENSOR_PIN              ANALOG_PORT_2_PIN
+#define SOIL_MOISTURE_PIN           ANALOG_PORT_3_PIN
+#define ANALOG_GPIO_PIN             ANALOG_PORT_4_PIN
+
+// GPIO ports
+#define LED_PIN                     48
+
+#define NEO_LED_PIN                 45
+#define NEO_LED_NUMBER              8
+
+#define WS2812_NUMBER               4
+// ----- END GPIO Pins Definitions -----
+\end{lstlisting}
+
+At system startup, this header is compiled into all relevant modules, and the macros are used instead of hard-coded literals inside the application logic. This design allows users to adjust system behavior (timing, modes and pin mapping) by editing a single header file, without modifying the core task implementations. This centralized configuration mechanism is an explicit extended feature beyond the original assignment.

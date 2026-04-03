@@ -46,7 +46,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 
-# MQTT topics — phải khớp với device_simulator.py / firmware thật
+# MQTT topics — phải khớp với firmware thật
 TOPIC_TELEMETRY = "v1/devices/me/telemetry"
 TOPIC_RPC_REQUEST = "v1/devices/me/rpc/request/"
 TOPIC_ATTRIBUTES = "v1/devices/me/attributes"

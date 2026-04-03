@@ -46,12 +46,14 @@ class TelegramAdapter:
         self._mqtt = mqtt
         self._provider = provider
         self._app = None
+        self._registered_chats = set()  # Track users who started the bot
 
     # ── command handlers ──────────────────────────────────────
 
     async def cmd_start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        chat_id = str(update.effective_chat.id)
-        self._orch.reset_history(chat_id)
+        chat_id = update.effective_chat.id
+        self._registered_chats.add(chat_id)  # Register this user for alerts
+        
         model = OLLAMA_MODEL if self._provider == "ollama" else OPENROUTER_MODEL
         provider_label = (
             f"🏠 Ollama ({model})" if self._provider == "ollama"
@@ -85,6 +87,47 @@ class TelegramAdapter:
             f"🕐 Updated: `{s['last_updated'] or 'waiting…'}`",
             parse_mode="Markdown",
         )
+
+    # ── anomaly monitoring ────────────────────────────────────
+
+    async def monitor_anomalies(self, context):
+        """Background task: Check sensor state and alert on anomalies."""
+        try:
+            sensor_state = self._mqtt.get_sensor_snapshot()
+            current_score = sensor_state.get('inference_result') or 0  # Handle None values
+
+            # Alert on every anomaly detection (score > 0.5) in real-time
+            if current_score > 0.5:
+                severity = "CRITICAL" if current_score > 0.8 else "ABNORMAL"
+                alert_msg = (
+                    f"\n{'='*60}\n"
+                    f"🚨 {severity} Environmental Anomaly Detected!\n"
+                    f"{'='*60}\n"
+                    f"🌡 Temperature: {sensor_state['temperature']}°C\n"
+                    f"💧 Humidity: {sensor_state['humidity']}%\n"
+                    f"📊 ML Score: {current_score:.4f}\n"
+                    f"{'='*60}\n"
+                )
+                
+                print(alert_msg)
+                
+                # Send alert to all registered Telegram users
+                if self._registered_chats and self._app:
+                    for chat_id in self._registered_chats:
+                        try:
+                            await self._app.bot.send_message(
+                                chat_id=chat_id,
+                                text=alert_msg,
+                                parse_mode="HTML"
+                            )
+                            print(f"[TELEGRAM] 📤 Sent alert to chat {chat_id}")
+                        except Exception as send_err:
+                            print(f"[TELEGRAM] Failed to send to {chat_id}: {send_err}")
+                else:
+                    print("[ALERT] ⏸️ No registered users (need /start)")
+
+        except Exception as e:
+            print(f"[MONITOR] Error: {e}")
 
     # ── message handler ───────────────────────────────────────
 
@@ -157,4 +200,12 @@ class TelegramAdapter:
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message),
         )
         self._app = app
+
+        # Start background anomaly monitoring (5-second interval)
+        app.job_queue.run_repeating(
+            self.monitor_anomalies,
+            interval=5.0,
+            first=1.0
+        )
+
         app.run_polling()

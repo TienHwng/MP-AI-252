@@ -2,15 +2,15 @@
 Omniverse Digital Twin Connector — Dual LED
 ===========================================
 Control LEDs in the Omniverse scene via MQTT,
-synchronized with the device simulator + HERA Telegram bot.
+synchronized with the real ESP32 hardware + HERA Telegram bot.
 
 Simulated LEDs:
     1. White Indicator LED — 4 prims (SphereLight1, 8, 9, 10) intensity 3000
     2. NeoPixel RGB LED — 1 prim (SphereLight2) intensity 30000
 
 Usage:
-    1. Start Mosquitto
-    2. Run device_simulator.py
+    1. Start HERA (which starts the MQTT broker)
+    2. Connect ESP32 hardware
     3. In Omniverse: Window → Script Editor → paste → Run
 """
 

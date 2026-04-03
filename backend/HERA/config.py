@@ -74,12 +74,8 @@ CHAT_AGENT_MODEL_OPENROUTER = os.getenv("CHAT_AGENT_MODEL_OPENROUTER", OPENROUTE
 
 # ===================== MQTT =====================
 
-MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.1.2")
 MQTT_PORT = _env_int("MQTT_PORT", 1883)
-TOPIC_TELEMETRY = os.getenv("TOPIC_TELEMETRY", "v1/devices/me/telemetry")
-TOPIC_RPC_REQUEST = os.getenv("TOPIC_RPC_REQUEST", "v1/devices/me/rpc/request/")
-TOPIC_RPC_RESPONSE = os.getenv("TOPIC_RPC_RESPONSE", "v1/devices/me/rpc/response/")
-TOPIC_ATTRIBUTES = os.getenv("TOPIC_ATTRIBUTES", "v1/devices/me/attributes")
 
 
 # ===================== AI THRESHOLDS =====================
@@ -102,11 +98,3 @@ ANOMALY_CRITICAL_THRESHOLD = _env_float("ANOMALY_CRITICAL_THRESHOLD", 0.8)
 MAX_TOOL_ITERATIONS = _env_int("MAX_TOOL_ITERATIONS", 5)
 MAX_HISTORY = _env_int("MAX_HISTORY", 8)
 
-
-# ===================== SIMULATOR =====================
-
-SIM_TELEMETRY_INTERVAL = _env_int("SIM_TELEMETRY_INTERVAL", 5)
-SIM_TEMP_MIN = _env_float("SIM_TEMP_MIN", 15.0)
-SIM_TEMP_MAX = _env_float("SIM_TEMP_MAX", 45.0)
-SIM_HUMI_MIN = _env_float("SIM_HUMI_MIN", 30.0)
-SIM_HUMI_MAX = _env_float("SIM_HUMI_MAX", 95.0)

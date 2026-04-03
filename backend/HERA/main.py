@@ -52,10 +52,10 @@ from adapters.telegram_adapter import TelegramAdapter
 for lib in ["httpx", "telegram", "apscheduler", "paho.mqtt", "urllib3", "openai"]:
     logging.getLogger(lib).setLevel(logging.WARNING)
 
-# Configure main app logging (HERA, MQTT, SIM only)
+# Configure main app logging (HERA, MQTT only)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(message)s",  # Simple: just show [HERA] ... [MQTT] ... [SIM] ...
+    format="%(message)s",  # Simple: just show [HERA] ... [MQTT] ...
 )
 
 
@@ -144,7 +144,7 @@ def main() -> None:
 
     provider = select_llm_provider()
 
-    mqtt_svc = MQTTService()
+    mqtt_svc = MQTTService(broker_address=MQTT_BROKER, port=MQTT_PORT)
     try:
         mqtt_svc.connect()
         print(f"[MQTT] Connected {MQTT_BROKER}:{MQTT_PORT}")

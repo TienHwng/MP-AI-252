@@ -1,15 +1,13 @@
 """
 Device Control Agent
 ====================
-Handles LED on/off, NeoPixel, and actuator commands by leveraging
-tool calling through the LLM.  Uses the smallest feasible model because
-the task is highly constrained (turn on / turn off / status).
+Handles LED and actuator commands via tool calling.
+Uses the smallest feasible model because the task is highly constrained.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 
 from agents.base import AgentBase
 from core.llm_service import LLMService, filter_response
@@ -24,9 +22,8 @@ from config import (
 )
 
 _DEVICE_TOOLS = [
-    "turn_on_led", "turn_off_led",
-    "turn_on_neo_led", "turn_off_neo_led",
-    "turn_on_all_lights", "turn_off_all_lights",
+    "turn_on_light",
+    "turn_off_light",
 ]
 
 SYSTEM_PROMPT = """\
@@ -41,8 +38,11 @@ Your ONLY job is to control the two LEDs on an ESP32 device.
 - ALWAYS respond in the SAME LANGUAGE as the user
 - Call the appropriate tool(s) to fulfil the request
 - After execution, confirm briefly (one sentence)
-- "lights" / "both" / "all" → turn_on_all_lights or turn_off_all_lights
-- Specific LED name → use specific tool
+- Use `turn_on_light` or `turn_off_light`
+- Set `light_target` to `main_led`, `neo_led`, or `all_lights`
+- "lights" / "both" / "all" means `all_lights`
+- White / indicator LED means `main_led`
+- NeoPixel / RGB / colorful LED means `neo_led`
 - DO NOT answer questions unrelated to device control
 - NEVER output Chinese/Mandarin
 """
@@ -74,7 +74,9 @@ class DeviceControlAgent(AgentBase):
     ) -> AgentResponse:
         target_language = context.get("target_language", "en")
         tool_defs = self._tools.get_definitions(_DEVICE_TOOLS)
-        system_prompt = f"{SYSTEM_PROMPT}\n\n{build_language_policy(target_language)}"
+        system_prompt = (
+            f"{SYSTEM_PROMPT}\n\n{build_language_policy(target_language)}"
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": message.text},
@@ -84,7 +86,10 @@ class DeviceControlAgent(AgentBase):
 
         for _ in range(MAX_TOOL_ITERATIONS):
             result = await asyncio.to_thread(
-                self._llm.completion, messages, tool_defs, self._model_override,
+                self._llm.completion,
+                messages,
+                tool_defs,
+                self._model_override,
             )
 
             if not result["tool_calls"]:
@@ -93,11 +98,12 @@ class DeviceControlAgent(AgentBase):
 
             messages.append(
                 self._llm.build_assistant_tool_msg(
-                    result["content"], result["tool_calls"],
+                    result["content"],
+                    result["tool_calls"],
                 )
             )
             for tc in result["tool_calls"]:
-                print(f"  [DeviceAgent] 🔧 {tc['name']}({tc['args']})")
+                print(f"  [DeviceAgent] {tc['name']}({tc['args']})")
                 tool_result = self._tools.execute(tc["name"], tc["args"])
                 tools_used.append(tc["name"])
                 messages.append(

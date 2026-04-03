@@ -29,3 +29,16 @@
 *.log
 temp/
 tmp/
+.env
+.env/
+
+# LaTeX Build Artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.toc
+*.synctex.gz
+*.run.xml

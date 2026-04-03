@@ -1,0 +1,311 @@
+% ====================================================================
+%  Chapter: Multi-Agent AI Pipeline Architecture
+% ====================================================================
+\newpage
+\section{Multi-Agent AI Pipeline Architecture}
+\label{sec:multi-agent}
+
+The \texttt{backend/HERA} subsystem implements the conversational
+intelligence of H.E.R.A as a hierarchical multi-agent pipeline. Rather
+than using a single model for every task, the backend separates
+\emph{routing}, \emph{tool-centric control}, \emph{sensor analysis},
+\emph{anomaly explanation}, and \emph{general conversation} into
+specialized components. This choice is not only architectural; it is an
+explicit latency and maintainability optimization for a resource-limited
+student project.
+
+\subsection{Why a Multi-Agent Backend}
+
+The backend currently needs to solve four very different tasks:
+\begin{itemize}
+    \item map a short user utterance to one of four intents;
+    \item execute a small number of deterministic device-control tools;
+    \item explain live sensor readings in natural language;
+    \item handle open-ended fallback conversation.
+\end{itemize}
+
+Placing all four tasks into one prompt creates three practical problems.
+First, low-value requests such as ``turn on the LED'' would pay the full
+latency cost of a larger model. Second, tool descriptions, sensor
+context, and conversation rules would compete for the same prompt budget.
+Third, debugging becomes difficult because reasoning errors, tool-call
+errors, and conversational failures are coupled together.
+
+The implemented solution is an \emph{orchestrator-specialist} topology:
+a lightweight router classifies intent, then forwards the message to a
+specialist agent that owns a much narrower system prompt and, when
+needed, a constrained tool set. This is a pragmatic form of hierarchical
+multi-agent design: it is simpler than peer-to-peer agent cooperation,
+but it captures most of the latency and modularity benefits.
+
+\subsection{Implementation Mapping to the Codebase}
+
+The main execution path starts in
+\texttt{backend/HERA/main.py}. The runtime wires together the
+\texttt{LLMService}, \texttt{MQTTService}, \texttt{ToolRegistry},
+four specialist agents, and the Telegram adapter. The orchestrator then
+routes each \texttt{UserMessage} to one of four intent categories:
+\texttt{device\_control}, \texttt{sensor\_query},
+\texttt{anomaly\_query}, or \texttt{general}.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            box/.style={draw, rounded corners, minimum width=3.1cm,
+                    minimum height=0.9cm, align=center, font=\small},
+            arrow/.style={->, >=stealth, thick},
+            every node/.style={font=\small}
+        ]
+        \node[box, fill=blue!12] (tg) at (0,6) {Telegram\\Adapter};
+        \node[box, fill=blue!12] (vc) at (4,6) {Voice\\Adapter (stub)};
+        \node[box, fill=blue!12] (rs) at (8,6) {REST\\Adapter (future)};
+
+        \node[box, fill=orange!18, minimum width=9.6cm] (orch) at (4,4.4)
+        {Orchestrator - Intent Classification and Routing};
+
+        \node[box, fill=green!14] (dev) at (-0.5,2.8) {Device\\Agent};
+        \node[box, fill=green!14] (sen) at (2.7,2.8) {Sensor\\Agent};
+        \node[box, fill=green!14] (ano) at (5.5,2.8) {Anomaly\\Agent};
+        \node[box, fill=green!14] (cha) at (8.5,2.8) {Chat\\Agent};
+
+        \node[box, fill=gray!14, minimum width=9.6cm] (core) at (4,1.2)
+        {Core Services: LLM | MQTT | Tools | Language Policy};
+
+        \foreach \a in {tg,vc,rs} { \draw[arrow] (\a) -- (orch); }
+        \foreach \a in {dev,sen,ano,cha} {
+                \draw[arrow] (orch) -- (\a);
+                \draw[arrow] (\a) -- (core);
+            }
+    \end{tikzpicture}
+    \caption{Layered view of the H.E.R.A backend.}
+    \label{fig:mas-arch}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \caption{Backend package decomposition in \texttt{backend/HERA}.}
+    \label{tab:packages}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{4.8cm} X @{}}
+        \toprule
+        \textbf{Package} & \textbf{Key files} & \textbf{Responsibility} \\
+        \midrule
+        \texttt{config} &
+        \texttt{config.py} &
+        Centralized environment and model configuration. \\
+        \texttt{core} &
+        \texttt{llm\_service.py}, \texttt{mqtt\_service.py}, \texttt{tool\_registry.py}, \texttt{language\_policy.py}, \texttt{message.py} &
+        Provider-agnostic LLM calls, MQTT state management, tool schemas and execution, language constraints, and shared message objects. \\
+        \texttt{agents} &
+        \texttt{orchestrator.py}, \texttt{device\_agent.py}, \texttt{sensor\_agent.py}, \texttt{anomaly\_agent.py}, \texttt{chat\_agent.py} &
+        Routing plus domain-specialized reasoning. \\
+        \texttt{adapters} &
+        \texttt{telegram\_adapter.py}, \texttt{voice\_adapter.py} &
+        Conversion between external I/O channels and the internal message protocol. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Benchmark-Based Model Selection}
+\label{sec:llm-benchmark-selection}
+
+The codebase currently uses the Qwen2.5 family as the default local
+stack: \texttt{qwen2.5:1.5b} for routing and cheap tool-centric tasks,
+and \texttt{qwen2.5:7b} for the more explanation-heavy specialists.
+This decision is supported by two engineering constraints:
+\begin{enumerate}
+    \item the project needs reliable local inference through Ollama;
+    \item the system depends on structured output and tool/function
+    calling rather than pure open-ended chat quality.
+\end{enumerate}
+
+\subsubsection{Candidate SLMs for the Orchestrator and Low-Cost Tool Agents}
+
+Table~\ref{tab:router-slm-benchmark} compares realistic open-weight
+candidates for the router and compact specialist agents. The benchmark
+numbers are taken from official model cards and vendor documentation
+\cite{qwen25_llm_2024,qwen25_blog_2024,llama32_model_card_2024,gemma3_model_card_2025,gemma_function_calling_2025,phi35_model_card_2024,azure_foundry_models_2026}.
+
+\begin{table}[H]
+    \centering
+    \caption{Candidate small models for routing and low-cost tool-centric agents.}
+    \label{tab:router-slm-benchmark}
+    \renewcommand{\arraystretch}{1.15}
+    \small
+    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.8cm} >{\centering\arraybackslash}p{0.9cm} >{\centering\arraybackslash}p{1.0cm} X >{\raggedright\arraybackslash}p{3.2cm} @{}}
+        \toprule
+        \textbf{Model} & \textbf{Params} & \textbf{Ctx} & \textbf{Official benchmark and tool evidence} & \textbf{Project decision} \\
+        \midrule
+        Qwen2.5-1.5B-Instruct &
+        1.54B &
+        32K &
+        MMLU-Pro 32.4, IFEval 42.5, HumanEval 61.6. Official tool calling support is documented for vLLM, Ollama, and Transformers. &
+        Selected for the orchestrator and default device-control path because routing is only a 4-way classification task and this model gives the lowest memory and latency cost while preserving structured output support. \\
+        Qwen2.5-3B-Instruct &
+        3.09B &
+        32K &
+        MMLU-Pro 43.7, IFEval 58.2, HumanEval 74.4. Same tool-calling stack as the 1.5B model. &
+        Best upgrade path if the 1.5B router underperforms on multilingual or noisy commands. \\
+        Llama-3.2-3B-Instruct &
+        3.21B &
+        128K &
+        MMLU 63.4, IFEval 77.4, BFCL V2 67.0. The model card explicitly positions it for agentic retrieval and summarization use cases. &
+        Strong alternative, but heavier than Qwen2.5-1.5B and less attractive for this project's Vietnamese-first local workflow. This conclusion is an engineering inference from the official benchmarks and supported-language list. \\
+        Gemma 3 4B IT &
+        4B &
+        128K &
+        MMLU-Pro 43.6, IFEval 90.2, HumanEval 71.3. Google documents function calling support, but recommends larger Gemma 3 sizes for better balanced performance. &
+        Capable candidate, but the function-calling workflow is less turnkey for this stack than Qwen under Ollama. \\
+        Phi-3.5-mini-instruct &
+        3.8B &
+        128K &
+        MMLU 69.0, MMLU-Pro 47.4. Azure's model catalog lists tool calling as unavailable for this model family. &
+        Rejected for tool-centric local agents despite strong reasoning benchmarks. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+The central argument is therefore not that Qwen2.5-1.5B is the strongest
+small model on every benchmark. It is not. The argument is that the
+router task is simpler than the benchmark suite, and the deployment
+stack benefits more from low latency, stable structured output, and
+shared prompting conventions across router and specialist agents than
+from maximizing open-ended reasoning scores.
+
+\subsubsection{Why \texttt{qwen2.5:7b} Remains the Best Local Specialist Default}
+
+For the explanation-heavy specialists, the current configuration keeps a
+larger local model. Table~\ref{tab:specialist-model-benchmark} compares
+the current \texttt{qwen2.5:7b} default with nearby open-weight
+alternatives using official Qwen benchmarks \cite{qwen25_llm_2024}.
+
+\begin{table}[H]
+    \centering
+    \caption{Mid-size candidates for explanation-heavy specialist agents.}
+    \label{tab:specialist-model-benchmark}
+    \renewcommand{\arraystretch}{1.15}
+    \small
+    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{3.1cm} >{\centering\arraybackslash}p{1.5cm} >{\centering\arraybackslash}p{1.5cm} >{\centering\arraybackslash}p{1.4cm} X @{}}
+        \toprule
+        \textbf{Model} & \textbf{MMLU-Pro} & \textbf{HumanEval} & \textbf{IFEval} & \textbf{Interpretation} \\
+        \midrule
+        Qwen2.5-7B-Instruct & 56.3 & 84.8 & 71.2 & Selected default. It leads this comparison on reasoning and code-oriented benchmarks while also belonging to the same tool-calling family used by the router. \\
+        Gemma2-9B-IT & 52.1 & 68.9 & 70.1 & Competitive on instruction following, but notably weaker on code-oriented and structured reasoning tasks. \\
+        Llama-3.1-8B-Instruct & 48.3 & 72.6 & 75.9 & Strong on instruction following, but weaker than Qwen2.5-7B on reasoning and coding benchmarks relevant to tool-rich agent behavior. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+From an engineering perspective, the most important result is family
+coherence. Standardizing on Qwen2.5 for both the small router and the
+larger local specialist avoids prompt-template drift, tool-format drift,
+and provider-specific behavior changes between agents.
+
+\subsection{Specialist Responsibilities}
+
+\paragraph{Orchestrator.}
+The orchestrator is implemented in
+\texttt{agents/orchestrator.py}. Its only job is to classify intent and
+delegate. This narrow scope is why a small model is sufficient.
+
+\paragraph{Device Control Agent.}
+The device-control specialist is implemented in
+\texttt{device\_agent.py}. It is the most tool-centric agent in
+the backend and therefore benefits most from a reduced action space and
+a parameterized tool schema.
+
+\paragraph{Sensor Analysis Agent.}
+The sensor specialist combines live MQTT state with concise natural
+language interpretation. It benefits from a larger model because it must
+explain numbers, thresholds, and current device state in human language.
+
+\paragraph{Anomaly Expert Agent.}
+The anomaly specialist currently mixes a deterministic rule layer with
+LLM-generated explanation. This is reasonable as long as the LLM is used
+for explanation only, not for safety-critical thresholding.
+
+\paragraph{Chat Agent.}
+The chat specialist is the fallback path for greetings, help messages,
+and non-actionable requests. It is intentionally tool-free.
+
+\subsection{Tool Schema Optimization}
+\label{sec:tool-schema-opt}
+
+The original backend exposed six device-control tools for only two
+physical lights:
+\begin{center}
+    \small
+    \texttt{turn\_on\_led}, \texttt{turn\_off\_led},
+    \texttt{turn\_on\_neo\_led}, \texttt{turn\_off\_neo\_led}, \\
+    \texttt{turn\_on\_all\_lights}, \texttt{turn\_off\_all\_lights}
+\end{center}
+This works, but it enlarges the tool vocabulary without increasing
+capability.
+
+The refactored design used in the backend collapses those tools into two
+parameterized actions:
+\begin{center}
+    \small
+    \texttt{turn\_on\_light(light\_target)} \\
+    \texttt{turn\_off\_light(light\_target)}
+\end{center}
+where
+\texttt{light\_target} is one of
+\texttt{main\_led}, \texttt{neo\_led}, or
+\texttt{all\_lights}.
+
+\begin{table}[H]
+    \centering
+    \caption{Tool-schema simplification for device control.}
+    \label{tab:tool-schema}
+    \renewcommand{\arraystretch}{1.2}
+    \small
+    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.4cm} X X @{}}
+        \toprule
+        \textbf{Aspect} & \textbf{Before} & \textbf{After} \\
+        \midrule
+        Tool count &
+        6 separate light-control tools &
+        2 tools + 1 parameter \\
+        LLM search space &
+        Larger; the model must choose both action and hardware variant from the function name &
+        Smaller; the action and hardware target are separated cleanly \\
+        Extensibility &
+        New device means new verb-like tool names &
+        New device means extending an enum or adding a new target family \\
+        Prompt cost &
+        Repeated descriptions for near-identical tools &
+        Shorter tool list and less duplicated description text \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+This optimization is small in code size but important in system design.
+It reduces prompt entropy, lowers the chance of wrong tool selection, and
+makes future expansion to fans, relays, or indexed devices much cleaner.
+
+\subsection{Practical Boundary Between LLM Logic and Deterministic Logic}
+
+Reading the backend reveals an important design boundary. Some decisions
+are naturally probabilistic and language-driven, while others should stay
+deterministic:
+\begin{itemize}
+    \item Intent routing and user-facing explanation are good LLM tasks.
+    \item Reading configurable safety thresholds from a JSON or config
+    file is not an LLM task.
+    \item Simple actuator execution is a tool task, not a reasoning task.
+\end{itemize}
+
+This distinction matters for the next chapter. Once customer-specific
+temperature and humidity limits become configurable, threshold alerts
+should be handled by deterministic rules. The TinyML model should be
+moved to a different problem where learning genuinely adds value.
+
+\subsection{Summary}
+
+The H.E.R.A backend is strongest when treated as a layered system:
+lightweight routing, constrained tool execution, larger-model
+explanation, and deterministic rule handling where appropriate. The
+benchmark tables justify the current choice of the Qwen2.5 family, while
+the parameterized tool schema shows how the backend can be simplified
+without weakening functionality.
