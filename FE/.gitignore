@@ -1,0 +1,54 @@
+# --- FE .gitignore ---
+
+# Python Virtual Environment Folder
+venv/
+.venv/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+dist-ssr/
+**/dist/
+**/build/
+**/out/
+**/dist-ssr/
+
+# Tool/cache
+.vite/
+**/.vite/
+.eslintcache
+.stylelintcache
+.parcel-cache/
+
+# Test coverage
+coverage/
+**/coverage/
+
+# Environment Variables / Secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# OS / editor local files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# Temp
+temp/
+tmp/
