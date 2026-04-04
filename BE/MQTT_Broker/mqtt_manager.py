@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
 
 # Set to True to enable MongoDB integration, False to disable
-ENABLE_MONGODB = True
+ENABLE_MONGODB = False
 
 if ENABLE_MONGODB:
     from pymongo import MongoClient

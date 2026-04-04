@@ -8,3 +8,4 @@ __pycache__/
 
 # Other files
 MQTT_Broker/test.py
+HERA/.env
