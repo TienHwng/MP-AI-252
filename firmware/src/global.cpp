@@ -10,8 +10,12 @@ String CORE_IOT_SERVER;
 String CORE_IOT_PORT;
 
 boolean isWifiConnected = false;
+
 boolean is_LED_on		= true;
 boolean is_NeoLED_on	= true;
+boolean is_ws2812_on	= false;
+boolean is_relay_on		= false;
+boolean is_mini_fan_on	= false;
 
 LcdScreen current_lcd_screen = SCREEN_ENV;
 
@@ -26,5 +30,10 @@ SemaphoreHandle_t xSensorDataMutex          = NULL;
 SemaphoreHandle_t xBinarySemaphoreInternet  = NULL;
 
 SemaphoreHandle_t xInferenceResultSemaphore = NULL;
+
 SemaphoreHandle_t xLedStateSemaphore		= NULL;
 SemaphoreHandle_t xNeoLedStateSemaphore		= NULL;
+SemaphoreHandle_t xWS2812StateSemaphore	    = NULL;
+
+SemaphoreHandle_t xRelayStateSemaphore		= NULL;
+SemaphoreHandle_t xFanStateSemaphore		= NULL;

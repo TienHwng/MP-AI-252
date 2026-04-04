@@ -57,6 +57,26 @@ PubSubClient client(espClient);
 
 String method_led_blinky = "setValueLedBlinky";
 String method_neo_led	 = "setValueNeoLed";
+String method_ws2812	 = "setValueWS2812";
+String method_relay		 = "setValueRelay";
+String method_mini_fan	 = "setValueMiniFan";
+
+static bool setActuatorState(SemaphoreHandle_t mutex, boolean &stateRef, bool state, uint8_t pin) {
+	if (mutex == NULL) {
+		return false;
+	}
+
+	if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+		return false;
+	}
+
+	stateRef = state ? true : false;
+	xSemaphoreGive(mutex);
+
+	pinMode(pin, OUTPUT);
+	digitalWrite(pin, state ? HIGH : LOW);
+	return true;
+}
 
 void callback(char *topic, byte *payload, unsigned int length) {
 
@@ -96,28 +116,53 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	// Handling device on/off based on method
 	StaticJsonDocument<512> responseDoc;
 	if (method == method_led_blinky.c_str()) {
-		// Gọi hàm bật/tắt LED thật ở đây (vd: digitalWrite(LED_PIN, params))
-		// turn_on(LED)
-
-		if (xSemaphoreTake(xLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
-			is_LED_on = params ? true : false;
-			xSemaphoreGive(xLedStateSemaphore);
+		setActuatorState(xLedStateSemaphore, is_LED_on, params, LED_PIN);
+		responseDoc["Led_Status"] = params;
+		
+		if (IS_SHOW_PAYLOAD) {
+			Serial.println(params ? "💡 Turning on normal LED" : "💡 Turning off normal LED");
 		}
-
-		Serial.println(params ? "💡 Turning on normal LED" : "💡 Turning off normal LED");
-		responseDoc["LedState"] = params;
 	}
+
 	else if (method == method_neo_led.c_str()) {
-		// Gọi hàm bật/tắt NeoPixel thật ở đây
-		// turn_on(NEOPIXEL)
-
-		if (xSemaphoreTake(xNeoLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
-			is_NeoLED_on = params ? true : false;
-			xSemaphoreGive(xNeoLedStateSemaphore);
+		setActuatorState(xNeoLedStateSemaphore, is_NeoLED_on, params, NEO_LED_PIN);
+		responseDoc["NeoLed_Status"] = params;
+		
+		if (IS_SHOW_PAYLOAD) {
+			Serial.println(params ? "🌈 Turning on NeoPixel" : "🌈 Turning off NeoPixel");
 		}
+	}
 
-		Serial.println(params ? "🌈 Turning on NeoPixel" : "🌈 Turning off NeoPixel");
-		responseDoc["NeoLedState"] = params;
+	else if (method == method_ws2812.c_str()) {
+		setActuatorState(xWS2812StateSemaphore, is_ws2812_on, params, WS2812_PIN);
+		responseDoc["WS2812_Status"] = params;
+		
+		if (IS_SHOW_PAYLOAD) {
+			Serial.println(params ? "🎇 Turning on WS2812" : "🎇 Turning off WS2812");
+		}
+	}
+
+	else if (method == method_relay.c_str()) {
+		setActuatorState(xRelayStateSemaphore, is_relay_on, params, RELAY_PIN);
+		responseDoc["Relay_Status"] = params;
+		
+		if (IS_SHOW_PAYLOAD) {
+			Serial.println(params ? "🔌 Turning on Relay" : "🔌 Turning off Relay");
+		}
+	}
+
+	else if (method == method_mini_fan.c_str()) {
+		setActuatorState(xFanStateSemaphore, is_mini_fan_on, params, MINI_FAN_PIN);
+		responseDoc["Fan_Status"] = params;
+
+		if (IS_SHOW_PAYLOAD) {
+			Serial.println(params ? "🌀 Turning on Fan" : "🌀 Turning off Fan");
+		}
+	}
+
+	else {
+		Serial.println("[MQTT] Unknown method: " + method);
+		responseDoc["error"] = "Unknown method";
 	}
 
 	// Respone to HERA
@@ -169,12 +214,49 @@ void publish_telemetry(float temp, float hum, float anomaly, bool led_state, boo
 	if (!client.connected())
 		return;
 
-	StaticJsonDocument<512> doc;
-	doc["temperature"]		= temp;
-	doc["humidity"]			= hum;
-	doc["inference_result"] = anomaly;
-	doc["led_state"]		= led_state;
-	doc["neo_led_state"]	= neo_state;
+	StaticJsonDocument<1024> doc;
+	const unsigned long now = millis();
+
+	// Flattened fields for compatibility with current backend parsing
+	// doc["temperature"] = temp;
+	// doc["humidity"] = hum;
+	// doc["inference_result"] = anomaly;
+	// doc["timestamp"] = now;
+
+	// doc["led_status"] = is_LED_on;
+	// doc["neo_led_status"] = is_NeoLED_on;
+	// doc["ws2812_status"] = is_ws2812_on;
+	// doc["relay_status"] = is_relay_on;
+	// doc["fan_status"] = is_mini_fan_on;
+
+	// // Additional network and runtime data
+	// doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+	// doc["wifi_rssi"] = WiFi.RSSI();
+	// doc["wifi_ip"] = WiFi.localIP().toString();
+	// doc["mqtt_connected"] = client.connected();
+	// doc["uptime_ms"] = now;
+
+	JsonObject network = doc.createNestedObject("network");
+	network["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+	network["wifi_rssi"] = WiFi.RSSI();
+	network["wifi_ip"] = WiFi.localIP().toString();
+	network["mqtt_connected"] = client.connected();
+	network["uptime_ms"] = now;
+	
+	JsonObject devices = doc.createNestedObject("devices");
+	devices["led_status"] = is_LED_on;
+	devices["neo_led_status"] = is_NeoLED_on;
+	devices["ws2812_status"] = is_ws2812_on;
+	devices["relay_status"] = is_relay_on;
+	devices["mini_fan_status"] = is_mini_fan_on;
+	
+	JsonObject sensors = doc.createNestedObject("sensors");
+	sensors["temperature"] = temp;
+	sensors["humidity"] = hum;
+	sensors["light"] = 90.0; // Placeholder for light sensor
+	
+	// doc["lcd_screen"] = static_cast<int>(current_lcd_screen);
+	// doc["anomaly"] = anomaly;
 
 	String payload;
 	serializeJson(doc, payload);

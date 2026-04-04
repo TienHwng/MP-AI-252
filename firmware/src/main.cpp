@@ -54,6 +54,10 @@ void semaphore_init() {
 	// Mutex cho state variables (đang dùng như lock)
 	xLedStateSemaphore		  = xSemaphoreCreateMutex();
 	xNeoLedStateSemaphore	  = xSemaphoreCreateMutex();
+	xWS2812StateSemaphore	  = xSemaphoreCreateMutex();
+	xRelayStateSemaphore	  = xSemaphoreCreateMutex();
+	xFanStateSemaphore		  = xSemaphoreCreateMutex();
+
 	xInferenceResultSemaphore = xSemaphoreCreateMutex();
 
 	// Internet “ready signal”: giữ binary cũng OK

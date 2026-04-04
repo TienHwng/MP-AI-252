@@ -2,3 +2,8 @@
 
 # Ignored files
 .clang-format
+
+# Ignored directories
+include/devices/
+include/sensors/
+include/digital_device.h

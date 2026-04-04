@@ -64,15 +64,16 @@ void digital_manager(void *pvParameters) {
                 lastStableRead = reading;
 
                 if (reading == LOW) { // Nhấn nút 1
-                    output1State = !output1State;
-                    output2State = !output2State;
-                    output3State = !output3State;
-                    output4State = !output4State;
+                    is_LED_on = !is_LED_on;
+                    is_NeoLED_on = !is_NeoLED_on;
+                    is_ws2812_on = !is_ws2812_on;
+                    is_mini_fan_on = !is_mini_fan_on;
+                    is_relay_on = !is_relay_on;
 
-                    ws2812_toggle();
-                    digitalWrite(MINI_FAN_PIN,      output2State ? HIGH : LOW);
-                    digitalWrite(IR_RECEIVE_PIN,    output3State ? HIGH : LOW);
-                    digitalWrite(RELAY_PIN,         output4State ? HIGH : LOW);
+                    // ws2812_toggle();
+                    // digitalWrite(MINI_FAN_PIN,      is_mini_fan_on ? HIGH : LOW);
+                    // digitalWrite(RELAY_PIN,         is_relay_on ? HIGH : LOW);
+                    // digitalWrite(IR_RECEIVE_PIN,    output3State ? HIGH : LOW);
                 }
             }
         }
@@ -102,6 +103,22 @@ void digital_manager(void *pvParameters) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10)); // Luồng quét nút nhấn quét rất nhanh (10ms)
+        // Code tam thoi, se cap nhat lai sau
+        if (xSemaphoreTake(xWS2812StateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {           
+            ws2812_set(is_ws2812_on);
+            xSemaphoreGive(xWS2812StateSemaphore);
+        }
+
+        if (xSemaphoreTake(xFanStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+            digitalWrite(MINI_FAN_PIN, is_mini_fan_on ? HIGH : LOW);
+            xSemaphoreGive(xFanStateSemaphore);
+        }
+
+        if (xSemaphoreTake(xRelayStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+            digitalWrite(RELAY_PIN, is_relay_on ? HIGH : LOW);
+            xSemaphoreGive(xRelayStateSemaphore);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(30)); // Luồng quét nút nhấn quét rất nhanh (10ms)
     }
 }

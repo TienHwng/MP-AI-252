@@ -47,7 +47,6 @@ int loopTimes[TEMP_STATE_COUNT] = {
 	2,				// TEMP_HOT
 	3   			// TEMP_WARNING
 };
-// clang-format on
 
 TempState getTempState(float temp) {
 	// The "low" temperature threshold should be lower.
@@ -58,6 +57,7 @@ TempState getTempState(float temp) {
 	else if (temp <= 35.0)	return TEMP_HOT;
 	else					return TEMP_WARNING;
 }
+// clang-format on
 
 void led_display(void *pvParameters) {
 	setup_led_display();

@@ -26,8 +26,14 @@ extern LcdScreen current_lcd_screen;
 extern SemaphoreHandle_t xBinarySemaphoreInternet;
 
 extern SemaphoreHandle_t xInferenceResultSemaphore;
+
 extern SemaphoreHandle_t xLedStateSemaphore;
 extern SemaphoreHandle_t xNeoLedStateSemaphore;
+extern SemaphoreHandle_t xWS2812StateSemaphore;
+
+extern SemaphoreHandle_t xRelayStateSemaphore;
+extern SemaphoreHandle_t xFanStateSemaphore;
+
 extern SemaphoreHandle_t xDHT20Semaphore;
 extern SemaphoreHandle_t xI2CMutex;
 extern SemaphoreHandle_t xSensorDataMutex;
@@ -45,6 +51,9 @@ extern String CORE_IOT_PORT;
 extern boolean isWifiConnected;
 extern boolean is_LED_on;
 extern boolean is_NeoLED_on;
+extern boolean is_ws2812_on;
+extern boolean is_relay_on;
+extern boolean is_mini_fan_on;
 
 extern float glob_inference_result;
 
