@@ -1,10 +1,11 @@
 ## GOM MQTT THÀNH 1 CLASS, BỎ 4 FILE KIA
 
 import asyncio
-import threading
-import time
+import copy
 import json
 import random
+import threading
+import time
 
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
@@ -52,6 +53,38 @@ class MQTTManager:
         self.latest_sensor_data = {}
         # self.latest_sensor_data = {"temperature": "25"}
 
+    @staticmethod
+    def _normalize_sensor_payload(payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return {}
+
+        network = payload.get("network") if isinstance(payload.get("network"), dict) else {}
+        devices = payload.get("devices") if isinstance(payload.get("devices"), dict) else {}
+        sensors = payload.get("sensors") if isinstance(payload.get("sensors"), dict) else {}
+
+        return {
+            "network": {
+                "wifi_connected": network.get("wifi_connected"),
+                "wifi_rssi": network.get("wifi_rssi"),
+                "wifi_ip": network.get("wifi_ip"),
+                "mqtt_connected": network.get("mqtt_connected"),
+                "uptime_ms": network.get("uptime_ms"),
+            },
+            "devices": {
+                "led_status": devices.get("led_status"),
+                "neo_led_status": devices.get("neo_led_status"),
+                "ws2812_status": devices.get("ws2812_status"),
+                "relay_status": devices.get("relay_status"),
+                "mini_fan_status": devices.get("mini_fan_status"),
+            },
+            "sensors": {
+                "temperature": sensors.get("temperature"),
+                "humidity": sensors.get("humidity"),
+                "light": sensors.get("light"),
+                "anomaly": sensors.get("anomaly"),
+            },
+        }
+
     @property
     def sensor_state(self) -> dict:
         """Compatibility property - returns latest_sensor_data"""
@@ -89,7 +122,11 @@ class MQTTManager:
             # print(f"📊 [Sensor data] {payload}")
             try:
                 # Cập nhật dữ liệu mới nhất vào bộ nhớ
-                self.latest_sensor_data = json.loads(payload)
+                
+                # self.latest_sensor_data = json.loads(payload)
+
+                parsed = json.loads(payload)
+                self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 
                 if ENABLE_MONGODB:
                     doc = {
@@ -167,7 +204,7 @@ class MQTTManager:
 
     def get_sensor_snapshot(self) -> dict:
         """Return a copy of the current sensor state - used by HERA"""
-        return dict(self.latest_sensor_data)
+        return copy.deepcopy(self.latest_sensor_data)
 
 # === Cách chạy thử file này ===
 if __name__ == "__main__":

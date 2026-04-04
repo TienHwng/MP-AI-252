@@ -31,14 +31,14 @@ def make_tool_def(name: str, desc: str, parameters: dict | None = None) -> dict:
 
 _LIGHT_TARGETS = {
     "main_led": [
-        ("setValueLedBlinky", "led_state"),
+        ("setValueLedBlinky", "led_status"),
     ],
     "neo_led": [
-        ("setValueNeoLed", "neo_led_state"),
+        ("setValueNeoLed", "neo_led_status"),
     ],
     "all_lights": [
-        ("setValueLedBlinky", "led_state"),
-        ("setValueNeoLed", "neo_led_state"),
+        ("setValueLedBlinky", "led_status"),
+        ("setValueNeoLed", "neo_led_status"),
     ],
 }
 
@@ -133,9 +133,10 @@ class ToolRegistry:
                 valid = ", ".join(_LIGHT_TARGETS)
                 return f"Invalid light_target. Use one of: {valid}."
 
-            for method, sensor_key in _LIGHT_TARGETS[target]:
+            for method, device_key in _LIGHT_TARGETS[target]:
                 mqtt.publish_rpc(method, state)
-                mqtt.sensor_state[sensor_key] = state
+                devices = mqtt.sensor_state.setdefault("devices", {})
+                devices[device_key] = state
 
             action = "ON" if state else "OFF"
             label = {

@@ -58,11 +58,26 @@ MAX_HISTORY = 8
 # ==================== TRẠNG THÁI CẢM BIẾN ====================
 
 sensor_state = {
-    "temperature": None,
-    "humidity": None,
-    "inference_result": None,
-    "led_state": None,
-    "neo_led_state": None,
+    "network": {
+        "wifi_connected": None,
+        "wifi_rssi": None,
+        "wifi_ip": None,
+        "mqtt_connected": None,
+        "uptime_ms": None,
+    },
+    "devices": {
+        "led_status": None,
+        "neo_led_status": None,
+        "ws2812_status": None,
+        "relay_status": None,
+        "mini_fan_status": None,
+    },
+    "sensors": {
+        "temperature": None,
+        "humidity": None,
+        "light": None,
+        "anomaly": None,
+    },
     "last_updated": None,
 }
 
@@ -87,17 +102,37 @@ def on_mqtt_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
         if msg.topic == TOPIC_TELEMETRY:
-            for key in ("temperature", "humidity", "inference_result",
-                        "led_state", "neo_led_state"):
-                if key in data:
-                    sensor_state[key] = data[key]
+            network = data.get("network") if isinstance(data.get("network"), dict) else {}
+            devices = data.get("devices") if isinstance(data.get("devices"), dict) else {}
+            sensors = data.get("sensors") if isinstance(data.get("sensors"), dict) else {}
+
+            sensor_state["network"].update({
+                "wifi_connected": network.get("wifi_connected"),
+                "wifi_rssi": network.get("wifi_rssi"),
+                "wifi_ip": network.get("wifi_ip"),
+                "mqtt_connected": network.get("mqtt_connected"),
+                "uptime_ms": network.get("uptime_ms"),
+            })
+            sensor_state["devices"].update({
+                "led_status": devices.get("led_status"),
+                "neo_led_status": devices.get("neo_led_status"),
+                "ws2812_status": devices.get("ws2812_status"),
+                "relay_status": devices.get("relay_status"),
+                "mini_fan_status": devices.get("mini_fan_status"),
+            })
+            sensor_state["sensors"].update({
+                "temperature": sensors.get("temperature"),
+                "humidity": sensors.get("humidity"),
+                "light": sensors.get("light"),
+                "anomaly": sensors.get("anomaly"),
+            })
             sensor_state["last_updated"] = datetime.now().strftime("%H:%M:%S")
         elif msg.topic == TOPIC_ATTRIBUTES:
             # RPC response dùng key PascalCase (LedState, NeoLedState)
             if "LedState" in data:
-                sensor_state["led_state"] = data["LedState"]
+                sensor_state["devices"]["led_status"] = data["LedState"]
             if "NeoLedState" in data:
-                sensor_state["neo_led_state"] = data["NeoLedState"]
+                sensor_state["devices"]["neo_led_status"] = data["NeoLedState"]
     except Exception as e:
         print(f"[MQTT] Lỗi parse: {e}")
 
@@ -123,13 +158,13 @@ def _publish_rpc(method: str, params) -> None:
 
 # Bảng ánh xạ tool đơn lẻ: name -> (rpc_method, params, state_key, state_val, response)
 _SINGLE_LED_TOOLS = {
-    "turn_on_led":      ("setValueLedBlinky", True,  "led_state",     True,
+    "turn_on_led":      ("setValueLedBlinky", True,  "led_status",     True,
                          "LED has been turned ON."),
-    "turn_off_led":     ("setValueLedBlinky", False, "led_state",     False,
+    "turn_off_led":     ("setValueLedBlinky", False, "led_status",     False,
                          "LED has been turned OFF."),
-    "turn_on_neo_led":  ("setValueNeoLed",    True,  "neo_led_state", True,
+    "turn_on_neo_led":  ("setValueNeoLed",    True,  "neo_led_status", True,
                          "NeoPixel LED has been turned ON."),
-    "turn_off_neo_led": ("setValueNeoLed",    False, "neo_led_state", False,
+    "turn_off_neo_led": ("setValueNeoLed",    False, "neo_led_status", False,
                          "NeoPixel LED has been turned OFF."),
 }
 
@@ -137,23 +172,23 @@ _SINGLE_LED_TOOLS = {
 def execute_tool(name: str, args: dict) -> str:
     """Thực thi tool và trả về kết quả text cho LLM."""
     if name in _SINGLE_LED_TOOLS:
-        method, params, state_key, state_val, msg = _SINGLE_LED_TOOLS[name]
+        method, params, device_key, state_val, msg = _SINGLE_LED_TOOLS[name]
         _publish_rpc(method, params)
-        sensor_state[state_key] = state_val
+        sensor_state["devices"][device_key] = state_val
         return msg
 
     if name == "turn_on_all_lights":
         _publish_rpc("setValueLedBlinky", True)
         _publish_rpc("setValueNeoLed", True)
-        sensor_state["led_state"] = True
-        sensor_state["neo_led_state"] = True
+        sensor_state["devices"]["led_status"] = True
+        sensor_state["devices"]["neo_led_status"] = True
         return "Both LEDs have been turned ON."
 
     if name == "turn_off_all_lights":
         _publish_rpc("setValueLedBlinky", False)
         _publish_rpc("setValueNeoLed", False)
-        sensor_state["led_state"] = False
-        sensor_state["neo_led_state"] = False
+        sensor_state["devices"]["led_status"] = False
+        sensor_state["devices"]["neo_led_status"] = False
         return "Both LEDs have been turned OFF."
 
     if name == "get_sensor_status":
@@ -348,13 +383,18 @@ async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Trạng thái cảm biến nhanh (không qua LLM)."""
     s = sensor_state
+    sensors = s.get("sensors", {})
+    devices = s.get("devices", {})
+    network = s.get("network", {})
     await update.message.reply_text(
         f"📊 *Raw sensor state*\n"
-        f"🌡 Temperature: `{s['temperature']}` °C\n"
-        f"💧 Humidity: `{s['humidity']}` %\n"
-        f"🤖 Anomaly: `{s['inference_result']}`\n"
-        f"💡 White LED: `{'ON' if s['led_state'] else 'OFF'}`\n"
-        f"🌈 NeoPixel: `{'ON' if s['neo_led_state'] else 'OFF'}`\n"
+        f"🌡 Temperature: `{sensors.get('temperature')}` °C\n"
+        f"💧 Humidity: `{sensors.get('humidity')}` %\n"
+        f"💡 Light: `{sensors.get('light')}`\n"
+        f"🤖 Anomaly: `{sensors.get('anomaly')}`\n"
+        f"💡 White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
+        f"🌈 NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
+        f"📶 WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
         f"🕐 Updated: `{s['last_updated'] or 'waiting…'}`",
         parse_mode="Markdown",
     )

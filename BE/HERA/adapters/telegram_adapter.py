@@ -77,14 +77,20 @@ class TelegramAdapter:
 
     async def cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         s = self._mqtt.get_sensor_snapshot()
+        sensors = s.get("sensors", {})
+        devices = s.get("devices", {})
+        network = s.get("network", {})
+        anomaly_score = sensors.get("anomaly")
         await update.message.reply_text(
             f"📊 *Sensor state*\n"
-            f"🌡 Temperature: `{s['temperature']}` °C\n"
-            f"💧 Humidity: `{s['humidity']}` %\n"
-            f"🤖 Anomaly: `{s['inference_result']}`\n"
-            f"💡 White LED: `{'ON' if s['led_state'] else 'OFF'}`\n"
-            f"🌈 NeoPixel: `{'ON' if s['neo_led_state'] else 'OFF'}`\n"
-            f"🕐 Updated: `{s['last_updated'] or 'waiting…'}`",
+            f"🌡 Temperature: `{sensors.get('temperature')}` °C\n"
+            f"💧 Humidity: `{sensors.get('humidity')}` %\n"
+            f"💡 Light: `{sensors.get('light')}`\n"
+            f"🤖 Anomaly: `{anomaly_score}`\n"
+            f"💡 White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
+            f"🌈 NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
+            f"📶 WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
+            f"🕐 Uptime: `{network.get('uptime_ms')}` ms",
             parse_mode="Markdown",
         )
 
@@ -94,7 +100,8 @@ class TelegramAdapter:
         """Background task: Check sensor state and alert on anomalies."""
         try:
             sensor_state = self._mqtt.get_sensor_snapshot()
-            current_score = sensor_state.get('inference_result') or 0  # Handle None values
+            sensors = sensor_state.get("sensors", {})
+            current_score = sensors.get("anomaly") or 0
 
             # Alert on every anomaly detection (score > 0.5) in real-time
             if current_score > 0.5:
@@ -103,8 +110,8 @@ class TelegramAdapter:
                     f"\n{'='*60}\n"
                     f"🚨 {severity} Environmental Anomaly Detected!\n"
                     f"{'='*60}\n"
-                    f"🌡 Temperature: {sensor_state['temperature']}°C\n"
-                    f"💧 Humidity: {sensor_state['humidity']}%\n"
+                    f"🌡 Temperature: {sensors.get('temperature')}°C\n"
+                    f"💧 Humidity: {sensors.get('humidity')}%\n"
                     f"📊 ML Score: {current_score:.4f}\n"
                     f"{'='*60}\n"
                 )

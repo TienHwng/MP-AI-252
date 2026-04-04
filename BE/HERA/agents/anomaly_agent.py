@@ -30,9 +30,10 @@ from config import (
 
 def classify_anomaly(sensor: dict) -> dict:
     """Lightweight rule-based classification (runs before LLM)."""
-    temp = sensor.get("temperature")
-    humi = sensor.get("humidity")
-    score = sensor.get("inference_result")
+    sensors = sensor.get("sensors", {})
+    temp = sensors.get("temperature")
+    humi = sensors.get("humidity")
+    score = sensors.get("anomaly")
 
     if temp is None or humi is None or score is None:
         return {"type": "unknown", "severity": "none",

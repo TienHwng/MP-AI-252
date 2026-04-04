@@ -144,15 +144,21 @@ def on_message(client, userdata, msg):
     global _main_led_on, _neo_led_on, _needs_update
     try:
         data = json.loads(msg.payload.decode())
-        for key, led_type in _LED_KEY_MAP.items():
-            if key not in data:
-                continue
-            new_state = bool(data[key])
-            if led_type == "main" and new_state != _main_led_on:
+
+        devices = data.get("devices") if isinstance(data.get("devices"), dict) else {}
+        main_state = devices.get("led_status")
+        neo_state = devices.get("neo_led_status")
+
+        if main_state is not None:
+            new_state = bool(main_state)
+            if new_state != _main_led_on:
                 _main_led_on = new_state
                 _needs_update = True
                 print(f"[OV] Main LED → {'ON' if new_state else 'OFF'}")
-            elif led_type == "neo" and new_state != _neo_led_on:
+
+        if neo_state is not None:
+            new_state = bool(neo_state)
+            if new_state != _neo_led_on:
                 _neo_led_on = new_state
                 _needs_update = True
                 print(f"[OV] Neo LED → {'ON' if new_state else 'OFF'}")
