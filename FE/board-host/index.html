@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H.E.R.A - System Portal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="overlay" class="overlay"></div>
+
+    <button id="menuBtn" class="menu-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h2>H.E.R.A</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="menu-item active" data-target="page-broker">Broker Configuration</li>
+            <li class="menu-item" data-target="page-dashboard">Dashboard & Control</li>
+        </ul>
+    </aside>
+
+    <div class="container">
+        <header>
+            <div class="header-titles">
+                <h1>Control Panel</h1>
+                <p class="subtitle">System Configuration & Management</p>
+                <div id="connection-status" class="status disconnected">Connecting...</div>
+            </div>
+        </header>
+
+        <main>
+            <div id="page-broker" class="page active">
+                <form id="configForm">
+                    <div class="layout-grid">
+                        <section class="card">
+                            <div class="card-header"><h2>WiFi Settings</h2></div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="wifi_ssid">Network Name (SSID)</label>
+                                    <input type="text" id="wifi_ssid" name="wifi_ssid" placeholder="e.g. Home_Network" class="input-field" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="wifi_pass">Password</label>
+                                    <input type="password" id="wifi_pass" name="wifi_pass" placeholder="Enter WiFi Password" class="input-field">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card">
+                            <div class="card-header"><h2>Server & MQTT</h2></div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="mqtt_broker">Broker IP/Domain</label>
+                                    <input type="text" id="mqtt_broker" name="mqtt_broker" placeholder="e.g. 192.168.1.100" class="input-field" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="mqtt_port">Port</label>
+                                        <input type="number" id="mqtt_port" name="mqtt_port" placeholder="1883" class="input-field" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sys_token">Auth Token</label>
+                                        <input type="text" id="sys_token" name="sys_token" placeholder="Optional" class="input-field">
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <button type="submit" class="btn primary-btn">Save Configuration & Restart</button>
+                </form>
+            </div>
+
+            <div id="page-dashboard" class="page">
+                
+                <div class="graphs-grid">
+                    <div class="graph-card">
+                        <div class="graph-header">
+                            <h5>Temperature</h5>
+                            <span class="val-text"><span id="val_temp">--</span>°C</span>
+                        </div>
+                        <canvas id="tempChart" width="300" height="80"></canvas>
+                    </div>
+                    <div class="graph-card">
+                        <div class="graph-header">
+                            <h5>Humidity</h5>
+                            <span class="val-text"><span id="val_humi">--</span>%</span>
+                        </div>
+                        <canvas id="humiChart" width="300" height="80"></canvas>
+                    </div>
+                    <div class="graph-card">
+                        <div class="graph-header">
+                            <h5>Light Level</h5>
+                            <span class="val-text"><span id="val_light">--</span> Lux</span>
+                        </div>
+                        <canvas id="lightChart" width="300" height="80"></canvas>
+                    </div>
+                </div>
+
+                <div class="controls-grid" id="controlPanel">
+                    <button type="button" class="control-btn active" data-id="led">
+                        <span class="indicator"></span>
+                        <div class="icon-wrapper">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                        </div>
+                        <h5>LED Light</h5>
+                        <p class="status-text">Active</p>
+                    </button>
+
+                    <button type="button" class="control-btn" data-id="neon">
+                        <span class="indicator"></span>
+                        <div class="icon-wrapper">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                        </div>
+                        <h5>Neon Light</h5>
+                        <p class="status-text">Inactive</p>
+                    </button>
+
+                    <button type="button" class="control-btn" data-id="fan">
+                        <span class="indicator"></span>
+                        <div class="icon-wrapper">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z"/><path d="M12 12v.01"/></svg>
+                        </div>
+                        <h5>Mini Fan</h5>
+                        <p class="status-text">Inactive</p>
+                    </button>
+
+                    <button type="button" class="control-btn active" data-id="relay">
+                        <span class="indicator"></span>
+                        <div class="icon-wrapper">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>
+                        </div>
+                        <h5>Relay Switch</h5>
+                        <p class="status-text">Active</p>
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

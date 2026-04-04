@@ -15,7 +15,7 @@ db = client["HERA"]
 collection = db["telemetry_points"]
 
 class MQTTManager:
-    def __init__(self, broker_address="192.168.1.34", port=1883):
+    def __init__(self, broker_address="10.128.23.2", port=1883):
         self.broker_address = broker_address
         self.port = port
         
