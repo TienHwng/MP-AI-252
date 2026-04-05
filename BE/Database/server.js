@@ -37,12 +37,9 @@ async function start() {
 						minute: "2-digit",
 						second: "2-digit",
 					}),
-					temp: doc.temperature ?? null,
-					humidity: doc.humidity ?? null,
-					light: doc.light ?? null,
-					inference_result: doc.inference_result ?? null,
-					led_state: doc.led_state ?? null,
-					neo_led_state: doc.neo_led_state ?? null,
+					temp: doc.sensors?.temperature ?? null,
+					humidity: doc.sensors?.humidity ?? null,
+					light: doc.sensors?.light ?? null,
 				};
 			});
 

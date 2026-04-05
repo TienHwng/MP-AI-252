@@ -54,6 +54,13 @@ const Home = () => {
     updatedAt: Date.now(),
     led_state: false,
     neo_led_state: false,
+    ws2812_status: false,
+    relay_status: false,
+    mini_fan_status: false,
+    wifi_connected: false,
+    mqtt_connected: false,
+    wifi_rssi: null,
+    uptime_ms: null,
     inference_result: null,
   });
 

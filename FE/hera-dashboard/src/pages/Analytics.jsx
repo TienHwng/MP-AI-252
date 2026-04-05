@@ -264,7 +264,7 @@ const Analytics = () => {
 			<div className="flex flex-col gap-6">
 				<ChartCard
 					title="Temperature"
-					value={latest.temp ?? "--"}
+					value={latest.temp == null ? "--" : formatMetric(latest.temp)}
 					unit="Celsius"
 					dataKey="temp"
 					color="#D6AFA6"
@@ -275,7 +275,7 @@ const Analytics = () => {
 
 				<ChartCard
 					title="Humidity"
-					value={latest.humidity ?? "--"}
+					value={latest.humidity == null ? "--" : formatMetric(latest.humidity)}
 					unit="Relative Humidity"
 					dataKey="humidity"
 					color="#8B9A84"
@@ -286,7 +286,7 @@ const Analytics = () => {
 
 				<ChartCard
 					title="Ambient Light"
-					value={latest.light ?? "--"}
+					value={latest.light == null ? "--" : formatMetric(latest.light)}
 					unit="Lux"
 					dataKey="light"
 					color="#F4D03F"
