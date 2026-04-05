@@ -74,7 +74,7 @@ CHAT_AGENT_MODEL_OPENROUTER = os.getenv("CHAT_AGENT_MODEL_OPENROUTER", OPENROUTE
 
 # ===================== MQTT =====================
 
-MQTT_BROKER = os.getenv("MQTT_BROKER", "10.128.23.2")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.1.34")
 MQTT_PORT = _env_int("MQTT_PORT", 1883)
 
 

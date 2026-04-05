@@ -9,7 +9,7 @@ import paho.mqtt.client as mqtt
 # =========================
 # CONFIG
 # =========================
-MQTT_SERVER = "192.168.1.2"
+MQTT_SERVER = "192.168.1.34"
 MQTT_PORT = 1883
 COREIOT_TOKEN = "ehehehe"
 
