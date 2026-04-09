@@ -3,7 +3,7 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
-import { fetchLatestSensorData } from '../services/api';
+import { fetchLatestSensorData, toggleLedLight, toggleNeoLight } from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
@@ -27,9 +27,12 @@ const getRelativeUpdatedLabel = (timestamp) => {
 
 const getAirQualityState = (aqi, temperature, humidity) => {
   const hasAqi = Number.isFinite(aqi) && aqi > 0;
+  const safeTemperature = Number.isFinite(temperature) ? temperature : 25;
+  const safeHumidity = Number.isFinite(humidity) ? humidity : 60;
+
   const score = hasAqi
     ? aqi
-    : Math.max(0, Math.min(100, (temperature - 20) * 3 + (humidity - 45) * 1.2));
+    : Math.max(0, Math.min(100, (safeTemperature - 20) * 3 + (safeHumidity - 45) * 1.2));
 
   if (score >= 70) return { level: 'danger', progress: 90 };
   if (score >= 40) return { level: 'warning', progress: 60 };
@@ -63,6 +66,7 @@ const Home = () => {
     uptime_ms: null,
     inference_result: null,
   });
+  const [isSubmittingControl, setIsSubmittingControl] = useState(false);
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -94,6 +98,42 @@ const Home = () => {
       clearInterval(intervalId);
     };
   }, []);
+
+  const handleToggleLed = async () => {
+    const nextValue = !sensorData.led_state;
+    setIsSubmittingControl(true);
+
+    try {
+      await toggleLedLight(nextValue);
+      setSensorData((prev) => ({
+        ...prev,
+        led_state: nextValue,
+        updatedAt: Date.now(),
+      }));
+    } catch (error) {
+      console.error('Failed to toggle LED light:', error);
+    } finally {
+      setIsSubmittingControl(false);
+    }
+  };
+
+  const handleToggleNeo = async () => {
+    const nextValue = !sensorData.neo_led_state;
+    setIsSubmittingControl(true);
+
+    try {
+      await toggleNeoLight(nextValue);
+      setSensorData((prev) => ({
+        ...prev,
+        neo_led_state: nextValue,
+        updatedAt: Date.now(),
+      }));
+    } catch (error) {
+      console.error('Failed to toggle neon light:', error);
+    } finally {
+      setIsSubmittingControl(false);
+    }
+  };
 
   const updatedLabel = getRelativeUpdatedLabel(sensorData.updatedAt);
   const airState = getAirQualityState(
@@ -158,7 +198,13 @@ const Home = () => {
 
         <section>
           <h4 className="font-medium mb-3">Quick Controls</h4>
-          <ControlCard />
+          <ControlCard
+            ledState={sensorData.led_state}
+            neoLedState={sensorData.neo_led_state}
+            isSubmitting={isSubmittingControl}
+            onToggleLed={handleToggleLed}
+            onToggleNeoLed={handleToggleNeo}
+          />
         </section>
       </div>
 

@@ -51,6 +51,27 @@ const filterDataByWindow = (data, windowKey) => {
 	return data.filter((item) => now - item.timestamp <= duration);
 };
 
+const getTemperatureStatus = (value) => {
+	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
+	if (value < 25) return { label: "Low temperature", className: "bg-blue-100 text-blue-700" };
+	if (value > 35) return { label: "High temperature", className: "bg-red-100 text-red-700" };
+	return { label: "Normal", className: "bg-green-100 text-green-700" };
+};
+
+const getHumidityStatus = (value) => {
+	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
+	if (value < 60) return { label: "Low humidity", className: "bg-yellow-100 text-yellow-700" };
+	if (value > 80) return { label: "High humidity", className: "bg-cyan-100 text-cyan-700" };
+	return { label: "Normal", className: "bg-green-100 text-green-700" };
+};
+
+const getLightStatus = (value) => {
+	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
+	if (value < 100) return { label: "Low light", className: "bg-indigo-100 text-indigo-700" };
+	if (value > 500) return { label: "High light", className: "bg-orange-100 text-orange-700" };
+	return { label: "Normal", className: "bg-green-100 text-green-700" };
+};
+
 const CustomTooltip = ({ active, payload, label }) => {
 	if (!active || !payload?.length) return null;
 
@@ -78,6 +99,7 @@ const ChartCard = ({
 	data,
 	Icon,
 	stats,
+	status,
 }) => {
 	return (
 		<div className="bg-white p-6 rounded-2xl shadow-sm">
@@ -87,7 +109,12 @@ const ChartCard = ({
 						<Icon size={20} strokeWidth={1.9} />
 					</div>
 					<div>
-						<h3 className="text-lg font-medium text-textMain">{title}</h3>
+						<div className="flex items-center gap-2 flex-wrap">
+							<h3 className="text-lg font-medium text-textMain">{title}</h3>
+							<span className={`px-2.5 py-1 rounded-full text-xs font-medium ${status.className}`}>
+								{status.label}
+							</span>
+						</div>
 						<p className="text-sm text-textMuted">Live data</p>
 					</div>
 				</div>
@@ -218,6 +245,10 @@ const Analytics = () => {
 
 	const latest = visibleData[visibleData.length - 1] || {};
 
+	const temperatureStatus = getTemperatureStatus(latest.temp);
+	const humidityStatus = getHumidityStatus(latest.humidity);
+	const lightStatus = getLightStatus(latest.light);
+
 	return (
 		<div className="p-6 lg:p-8 w-full h-full min-h-full">
 			<div className="mb-6 lg:mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -271,6 +302,7 @@ const Analytics = () => {
 					data={visibleData}
 					Icon={Thermometer}
 					stats={tempStats}
+					status={temperatureStatus}
 				/>
 
 				<ChartCard
@@ -282,6 +314,7 @@ const Analytics = () => {
 					data={visibleData}
 					Icon={Droplets}
 					stats={humidityStats}
+					status={humidityStatus}
 				/>
 
 				<ChartCard
@@ -293,6 +326,7 @@ const Analytics = () => {
 					data={visibleData}
 					Icon={Sun}
 					stats={lightStats}
+					status={lightStatus}
 				/>
 			</div>
 		</div>

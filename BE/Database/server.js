@@ -76,6 +76,28 @@ async function start() {
 	app.listen(3001, () => {
 		console.log("API running at http://localhost:3001");
 	});
+
+	app.post("/api/control/led", async (req, res) => {
+	try {
+		const enabled = Boolean(req.body.enabled);
+		mqttManager.send_rpc_command("setValueLedBlinky", enabled);
+		res.json({ success: true, enabled });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ error: "Failed to control LED light" });
+	}
+});
+
+app.post("/api/control/neon", async (req, res) => {
+	try {
+		const enabled = Boolean(req.body.enabled);
+		mqttManager.send_rpc_command("setValueNeoLed", enabled);
+		res.json({ success: true, enabled });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ error: "Failed to control neon light" });
+	}
+});
 }
 
 start().catch(console.error);

@@ -68,3 +68,35 @@ export const fetchLatestSensorData = async () => {
 
 	throw lastError || new Error('Unable to fetch latest sensor data');
 };
+
+export const toggleLedLight = async (enabled) => {
+	const response = await fetch(`${API_BASE_URL}/api/control/led`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ enabled }),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to toggle LED light: ${response.status}`);
+	}
+
+	return response.json();
+};
+
+export const toggleNeoLight = async (enabled) => {
+	const response = await fetch(`${API_BASE_URL}/api/control/neon`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ enabled }),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to toggle neon light: ${response.status}`);
+	}
+
+	return response.json();
+};

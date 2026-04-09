@@ -75,8 +75,8 @@
 // Grove's port devices
 #define WS2812_PIN                  DIGITAL_PORT_1_PIN
 #define MINI_FAN_PIN                DIGITAL_PORT_2_PIN
-#define IR_RECEIVE_PIN              DIGITAL_PORT_3_PIN
-#define RELAY_PIN                   DIGITAL_PORT_4_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_4_PIN
+#define RELAY_PIN                   DIGITAL_PORT_3_PIN
 
 #define LIGHT_SENSOR_PIN            ANALOG_PORT_1_PIN
 #define MQ2_SENSOR_PIN              ANALOG_PORT_2_PIN

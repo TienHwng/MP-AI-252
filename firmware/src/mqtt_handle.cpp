@@ -42,7 +42,7 @@ void forceConnectWiFi() {
 
 
 
-const char *mqtt_server	  = "192.168.1.34"; // IP cua may chay Mosquitto
+const char *mqtt_server	  = "172.20.10.2"; // IP cua may chay Mosquitto
 const int	mqtt_port	  = 1883;
 const char *coreIOT_Token = "ehehehe"; // device access Token
 
@@ -195,6 +195,7 @@ void reconnect() {
 void setup_mqtt() {
 	forceConnectWiFi();
 	Serial.println("[INIT] CoreIOT task created successfully.");
+	client.setBufferSize(1024);
 
 	// while (1) {
 	// 	// if (WiFi.status() == WL_CONNECTED) {

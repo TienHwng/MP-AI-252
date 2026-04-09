@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
 
 # Set to True to enable MongoDB integration, False to disable
-ENABLE_MONGODB = False
+ENABLE_MONGODB = True
 
 if ENABLE_MONGODB:
     from pymongo import MongoClient
@@ -22,7 +22,7 @@ if ENABLE_MONGODB:
     collection = db["telemetry_points"]
 
 class MQTTManager:
-    def __init__(self, broker_address="192.168.1.34", port=1883):
+    def __init__(self, broker_address="172.20.10.2", port=1883):
         self.broker_address = broker_address
         self.port = port
         
@@ -139,7 +139,7 @@ class MQTTManager:
                     }
 
                     collection.insert_one(doc)
-                    print(f"💾 [Database] Inserted sensor data: {doc}")
+                    # print(f"💾 [Database] Inserted sensor data: {doc}")
 
             except Exception as e:
                 print("JSON parse error:", e)

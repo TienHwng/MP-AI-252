@@ -43,7 +43,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-7b-instruct")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.1.34")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "172.20.10.2")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 
 # MQTT topics — phải khớp với firmware thật
