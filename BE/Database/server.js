@@ -8,11 +8,44 @@ app.use(express.json());
 
 const client = new MongoClient("mongodb://localhost:27017");
 let collection;
+let usersCollection;
 
 async function start() {
 	await client.connect();
 	const db = client.db("HERA");
 	collection = db.collection("telemetry_points");
+	usersCollection = db.collection("users");
+
+	app.post("/api/auth/login", async (req, res) => {
+		try {
+			const { email, password } = req.body;
+
+			if (!email || !password) {
+				return res.status(400).json({ error: "Email and password are required" });
+			}
+
+			const user = await usersCollection.findOne({
+				email,
+				password_hash: password,
+			});
+
+			if (!user) {
+				return res.status(401).json({ error: "Invalid email or password" });
+			}
+
+			return res.json({
+				success: true,
+				user: {
+					user_id: user.user_id,
+					full_name: user.full_name,
+					email: user.email,
+				},
+			});
+		} catch (err) {
+			console.error(err);
+			res.status(500).json({ error: "Failed to login" });
+		}
+	});
 
 	app.get("/api/telemetry", async (req, res) => {
 		try {
@@ -53,8 +86,7 @@ async function start() {
 	app.get("/api/sensors/latest", async (req, res) => {
 		try {
 			const deviceId = req.query.device_id || "device_0001";
-			
-			// Chỉ lấy 1 document mới nhất (limit: 1)
+
 			const docs = await collection
 				.find({ "metadata.device_id": deviceId })
 				.sort({ recorded_at: -1 })
@@ -65,7 +97,6 @@ async function start() {
 				return res.status(404).json({ error: "No sensor data found" });
 			}
 
-			// Trả về thẳng object đầu tiên (không nằm trong array)
 			res.json(docs[0]);
 		} catch (err) {
 			console.error(err);
@@ -76,28 +107,6 @@ async function start() {
 	app.listen(3001, () => {
 		console.log("API running at http://localhost:3001");
 	});
-
-	app.post("/api/control/led", async (req, res) => {
-	try {
-		const enabled = Boolean(req.body.enabled);
-		mqttManager.send_rpc_command("setValueLedBlinky", enabled);
-		res.json({ success: true, enabled });
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({ error: "Failed to control LED light" });
-	}
-});
-
-app.post("/api/control/neon", async (req, res) => {
-	try {
-		const enabled = Boolean(req.body.enabled);
-		mqttManager.send_rpc_command("setValueNeoLed", enabled);
-		res.json({ success: true, enabled });
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({ error: "Failed to control neon light" });
-	}
-});
 }
 
 start().catch(console.error);

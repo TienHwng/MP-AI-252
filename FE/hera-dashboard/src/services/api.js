@@ -48,6 +48,40 @@ const normalizeSensorData = (raw = {}) => {
 	};
 };
 
+export const loginUser = async (email, password) => {
+	const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ email, password }),
+	});
+
+	const payload = await response.json();
+
+	if (!response.ok) {
+		throw new Error(payload.error || 'Login failed');
+	}
+
+	localStorage.setItem('hera_user', JSON.stringify(payload.user));
+	return payload.user;
+};
+
+export const getStoredUser = () => {
+	const raw = localStorage.getItem('hera_user');
+	if (!raw) return null;
+
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+};
+
+export const logoutUser = () => {
+	localStorage.removeItem('hera_user');
+};
+
 export const fetchLatestSensorData = async () => {
 	let lastError = null;
 

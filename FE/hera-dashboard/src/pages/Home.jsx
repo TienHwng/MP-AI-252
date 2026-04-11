@@ -3,7 +3,7 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
-import { fetchLatestSensorData, toggleLedLight, toggleNeoLight } from '../services/api';
+import { fetchLatestSensorData, toggleLedLight, toggleNeoLight, logoutUser } from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
@@ -45,7 +45,7 @@ const getGasState = (gasPpm, gasDetected) => {
   return { level: 'good', progress: 20 };
 };
 
-const Home = () => {
+const Home = ({ user, onLogout }) => {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [sensorData, setSensorData] = useState({
     temperature: null,
@@ -135,6 +135,11 @@ const Home = () => {
     }
   };
 
+  const handleLogout = () => {
+    logoutUser();
+    onLogout();
+  };
+
   const updatedLabel = getRelativeUpdatedLabel(sensorData.updatedAt);
   const airState = getAirQualityState(
     sensorData.airQualityIndex,
@@ -148,7 +153,9 @@ const Home = () => {
       <div className="min-w-0 flex flex-col gap-8">
         <header className="flex justify-between items-end">
           <div>
-            <h2 className="text-3xl font-semibold text-textMain">Welcome Home, Neji !</h2>
+            <h2 className="text-3xl font-semibold text-textMain">
+              Welcome Home, {user?.full_name || 'Neji'} !
+            </h2>
             <p className="text-textMuted mt-1">
               {currentTime.toLocaleDateString('en-US', {
                 weekday: 'long',
@@ -168,10 +175,19 @@ const Home = () => {
                 hour12: true,
               })}
             </h3>
-            <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              All Systems Normal
-            </span>
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                All Systems Normal
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-xs bg-cardDark text-white px-3 py-1 rounded-full"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 

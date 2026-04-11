@@ -182,19 +182,19 @@ const ChartCard = ({
 				<div className="rounded-lg bg-gray-50 px-3 py-2">
 					<p className="text-textMuted">Min</p>
 					<p className="text-sm font-semibold text-textMain">
-						{formatMetric(stats.min)}
+						{stats.min == null ? "--" : formatMetric(stats.min)}
 					</p>
 				</div>
 				<div className="rounded-lg bg-gray-50 px-3 py-2">
 					<p className="text-textMuted">Avg</p>
 					<p className="text-sm font-semibold text-textMain">
-						{formatMetric(stats.avg)}
+						{stats.avg == null ? "--" : formatMetric(stats.avg)}
 					</p>
 				</div>
 				<div className="rounded-lg bg-gray-50 px-3 py-2">
 					<p className="text-textMuted">Max</p>
 					<p className="text-sm font-semibold text-textMain">
-						{formatMetric(stats.max)}
+						{stats.max == null ? "--" : formatMetric(stats.max)}
 					</p>
 				</div>
 			</div>
@@ -229,25 +229,37 @@ const Analytics = () => {
 		return filterDataByWindow(data, windowKey);
 	}, [data, windowKey]);
 
-	const tempSeries = visibleData
-		.map((entry) => entry.temp)
-		.filter((v) => v != null);
-	const humiditySeries = visibleData
-		.map((entry) => entry.humidity)
-		.filter((v) => v != null);
-	const lightSeries = visibleData
-		.map((entry) => entry.light)
-		.filter((v) => v != null);
+	const temperatureData = useMemo(
+		() => visibleData.filter((entry) => entry.temp != null),
+		[visibleData]
+	);
+
+	const humidityData = useMemo(
+		() => visibleData.filter((entry) => entry.humidity != null),
+		[visibleData]
+	);
+
+	const lightData = useMemo(
+		() => visibleData.filter((entry) => entry.light != null),
+		[visibleData]
+	);
+
+	const tempSeries = temperatureData.map((entry) => entry.temp);
+	const humiditySeries = humidityData.map((entry) => entry.humidity);
+	const lightSeries = lightData.map((entry) => entry.light);
 
 	const tempStats = getStats(tempSeries);
 	const humidityStats = getStats(humiditySeries);
 	const lightStats = getStats(lightSeries);
 
-	const latest = visibleData[visibleData.length - 1] || {};
+	const latestTemperature = temperatureData[temperatureData.length - 1] || {};
+	const latestHumidity = humidityData[humidityData.length - 1] || {};
+	const latestLight = lightData[lightData.length - 1] || {};
+	const latestRecord = visibleData[visibleData.length - 1] || {};
 
-	const temperatureStatus = getTemperatureStatus(latest.temp);
-	const humidityStatus = getHumidityStatus(latest.humidity);
-	const lightStatus = getLightStatus(latest.light);
+	const temperatureStatus = getTemperatureStatus(latestTemperature.temp);
+	const humidityStatus = getHumidityStatus(latestHumidity.humidity);
+	const lightStatus = getLightStatus(latestLight.light);
 
 	return (
 		<div className="p-6 lg:p-8 w-full h-full min-h-full">
@@ -288,18 +300,18 @@ const Analytics = () => {
 			<div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
 				<p className="text-sm text-textMuted">Latest Records</p>
 				<p className="mt-1 text-base text-textMain">
-					{latest.recorded_at ? formatFullDateTime(latest.recorded_at) : "--"}
+					{latestRecord.recorded_at ? formatFullDateTime(latestRecord.recorded_at) : "--"}
 				</p>
 			</div>
 
 			<div className="flex flex-col gap-6">
 				<ChartCard
 					title="Temperature"
-					value={latest.temp == null ? "--" : formatMetric(latest.temp)}
+					value={latestTemperature.temp == null ? "--" : formatMetric(latestTemperature.temp)}
 					unit="Celsius"
 					dataKey="temp"
 					color="#D6AFA6"
-					data={visibleData}
+					data={temperatureData}
 					Icon={Thermometer}
 					stats={tempStats}
 					status={temperatureStatus}
@@ -307,11 +319,11 @@ const Analytics = () => {
 
 				<ChartCard
 					title="Humidity"
-					value={latest.humidity == null ? "--" : formatMetric(latest.humidity)}
+					value={latestHumidity.humidity == null ? "--" : formatMetric(latestHumidity.humidity)}
 					unit="Relative Humidity"
 					dataKey="humidity"
 					color="#8B9A84"
-					data={visibleData}
+					data={humidityData}
 					Icon={Droplets}
 					stats={humidityStats}
 					status={humidityStatus}
@@ -319,11 +331,11 @@ const Analytics = () => {
 
 				<ChartCard
 					title="Ambient Light"
-					value={latest.light == null ? "--" : formatMetric(latest.light)}
+					value={latestLight.light == null ? "--" : formatMetric(latestLight.light)}
 					unit="Lux"
 					dataKey="light"
 					color="#F4D03F"
-					data={visibleData}
+					data={lightData}
 					Icon={Sun}
 					stats={lightStats}
 					status={lightStatus}

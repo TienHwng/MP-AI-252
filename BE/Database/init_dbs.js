@@ -184,6 +184,13 @@ db.users.insertMany([
 		email: "duc.tran789@hera.com",
 		password_hash: "123456789",
 	},
+
+	{
+		user_id: "user_0005",
+		full_name: "Neji",
+		email: "neji.kareshi@hera.com",
+		password_hash: "123456789",
+	},
 ]);
 
 print("User created successfully.");
