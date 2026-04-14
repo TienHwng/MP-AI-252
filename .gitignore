@@ -56,6 +56,7 @@ dist/
 # ===================== PlatformIO =====================
 .pio/
 .vscode/.browse.c_cpp.db*
+.clang-format
 
 # ===================== Logs & Temporary Files =====================
 *.log
@@ -63,6 +64,8 @@ temp/
 tmp/
 .env
 .env/
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
@@ -103,10 +106,11 @@ ehthumbs.db
 *.sqlite
 *.sqlite3
 
+# Repository-specific
+docs/report/
+
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 
-frontend/
-backend/

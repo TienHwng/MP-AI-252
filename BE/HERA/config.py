@@ -6,10 +6,12 @@ All modules import from here instead of reading .env directly.
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env file at startup
-load_dotenv()
+# Load root .env file at startup
+ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ROOT_ENV_PATH)
 
 
 # ===================== HELPER FUNCTIONS =====================

@@ -77,7 +77,7 @@ HERA uses a **multi-agent orchestrator pipeline** with provider-aware model rout
 
 ### Provider and Model Routing
 
-All provider/model selection is centralized in `backend/HERA/.env` and loaded by `backend/HERA/config.py`.
+All provider/model selection is centralized in `.env` and loaded by `backend/HERA/config.py`.
 
 - `LLM_PROVIDER` can lock provider (`ollama` or `openrouter`).
 - Orchestrator model keys:
@@ -727,3 +727,4 @@ python main.py
 ## License
 
 See individual library licenses in `lib/`. All custom code in this repository is for educational purposes (CO3107 course project at HCMUT).
+

@@ -22,7 +22,7 @@ if ENABLE_MONGODB:
     collection = db["telemetry_points"]
 
 class MQTTManager:
-    def __init__(self, broker_address="172.20.10.2", port=1883):
+    def __init__(self, broker_address="127.0.0.1", port=1883):
         self.broker_address = broker_address
         self.port = port
         
