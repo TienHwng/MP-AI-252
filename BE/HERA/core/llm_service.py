@@ -35,7 +35,7 @@ def filter_response(text: str) -> str:
     text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
     text = re.sub(r'https?://[^\s]+\.(jpg|jpeg|png|gif)', '', text)
     if any(m in text for m in _HALLUCINATION_MARKERS):
-        return "✅ Action completed successfully."
+        return "[OK] Action completed successfully."
     return text.strip()
 
 

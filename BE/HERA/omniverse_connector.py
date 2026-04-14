@@ -18,6 +18,9 @@ import json
 import atexit
 import time
 import random
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 try:
     import paho.mqtt.client as mqtt
@@ -33,8 +36,11 @@ from pxr import UsdLux, Gf
 
 # ==================== CONFIGURATION ====================
 
-MQTT_BROKER = "localhost"
-MQTT_PORT = 1883
+ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ROOT_ENV_PATH)
+
+MQTT_BROKER = os.getenv("MQTT_BROKER")
+MQTT_PORT = int(os.getenv("MQTT_PORT"))
 
 # White LED (MAIN LED) — control 4 prims at once
 MAIN_LED_PATHS = [
@@ -121,11 +127,11 @@ def on_connect(client, userdata, flags, rc, properties=None):
         _connection_attempts = 0
         client.subscribe("v1/devices/me/telemetry")
         client.subscribe("v1/devices/me/attributes")
-        print("[OV] ✅ MQTT connected")
+        print("[OV] [ OK ] MQTT connected")
     else:
         _is_connected = False
         _connection_attempts += 1
-        print(f"[OV] ❌ Connection failed rc={rc}")
+        print(f"[OV] [ ERROR ] Connection failed rc={rc}")
 
 
 def on_disconnect(client, userdata, flags, rc, properties=None):
@@ -134,9 +140,9 @@ def on_disconnect(client, userdata, flags, rc, properties=None):
     if rc != 0:
         _connection_attempts += 1
         if _connection_attempts <= 3:
-            print(f"[OV] 🔌 Disconnected (attempt {_connection_attempts})")
+            print(f"[OV] [ INFO ] Disconnected (attempt {_connection_attempts})")
     else:
-        print("[OV] 🔌 Disconnected (clean)")
+        print("[OV] [ INFO ] Disconnected (clean)")
 
 
 def on_message(client, userdata, msg):
@@ -187,11 +193,11 @@ def on_update(e):
             if _connection_attempts <= 10:
                 try:
                     if _connection_attempts == 1:
-                        print("[OV] 🔄 Attempting reconnect...")
+                        print("[OV] [ INFO ] Attempting reconnect...")
                     _mqtt_client.reconnect()
                 except Exception as e:
                     if _connection_attempts <= 3:
-                        print(f"[OV] ⚠️ Reconnect failed: {e}")
+                        print(f"[OV] [ WARNING ] Reconnect failed: {e}")
 
 
 # ==================== START / STOP ====================
@@ -204,7 +210,7 @@ def start():
         stop()
 
     print("=" * 50)
-    print("  🚀 Digital Twin — Dual LED (Auto-reconnect)")
+    print("  [ INFO ] Digital Twin — Dual LED (Auto-reconnect)")
     print("=" * 50)
     print(f"  White LED (4x): {', '.join(MAIN_LED_PATHS)} [intensity {MAIN_LED_INTENSITY}]")
     print(f"  Neo LED (1x)  : {NEO_LED_PATH} [intensity {NEO_LED_INTENSITY}]")
@@ -229,7 +235,7 @@ def start():
         _mqtt_client.connect(MQTT_BROKER, MQTT_PORT)
         _mqtt_client.loop_start()
     except Exception as e:
-        print(f"[OV] ❌ Không kết nối được: {e}")
+        print(f"[OV] [ ERROR ] Không kết nối được: {e}")
         return
 
     if not _update_sub:
@@ -238,8 +244,8 @@ def start():
             app.get_update_event_stream().create_subscription_to_pop(on_update)
         )
 
-    print("[OV] 🎯 Ready! Use the HERA bot to control.")
-    print("[OV] 🔄 Auto-reconnect enabled.\n")
+    print("[OV] [ INFO ] Ready! Use the HERA bot to control.")
+    print("[OV] [ INFO ] Auto-reconnect enabled.\n")
 
 
 def stop():
@@ -259,12 +265,12 @@ def stop():
             _mqtt_client = None
 
     _is_connected = False
-    print("[OV] ✅ Stopped.")
+    print("[OV] [ OK ] Stopped.")
 
 
 def restart():
     """Restart the connector — useful for debugging."""
-    print("[OV] 🔄 Restarting...")
+    print("[OV] [ INFO ] Restarting...")
     stop()
     start()
 
@@ -278,6 +284,6 @@ def _cleanup_on_exit():
 # ==================== AUTO-START ====================
 
 atexit.register(_cleanup_on_exit)
-print("[OV] 🎬 Starting Digital Twin connector...")
-print("[OV] 💡 Use restart() to reconnect if needed.")
+print("[OV] [ INFO ] Starting Digital Twin connector...")
+print("[OV] [ INFO ] Use restart() to reconnect if needed.")
 start()

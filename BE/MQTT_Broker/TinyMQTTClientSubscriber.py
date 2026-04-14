@@ -1,13 +1,20 @@
 import paho.mqtt.client as mqtt
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-broker_address = "127.0.0.1"
+ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ROOT_ENV_PATH)
+
+broker_address = os.environ["MQTT_BROKER"]
+broker_port = int(os.environ["MQTT_PORT"])
 topic = "#"  #listen to all topics
 
 def on_message(client, userdata, msg):
     print("Received:",msg.topic, msg.payload.decode("utf-8"))
 
 def on_subscribe(client, userdata, mid, granted_qos):
-    print("✅ Subscribed successfully.")
+    print(" Subscribed successfully.")
 
 def on_connect(client, userdata, flags, rc):
     print("Connected.")
@@ -19,5 +26,5 @@ client.on_subscribe = on_subscribe
 client.on_connect = on_connect
 
 
-client.connect(broker_address, 1883)
+client.connect(broker_address, broker_port)
 client.loop_forever()

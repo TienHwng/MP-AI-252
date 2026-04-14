@@ -1,6 +1,6 @@
-# 📌 KẾ HOẠCH TÓM TẮT – AI TRỢ LÝ ẢO (CO3107)
+# KẾ HOẠCH TÓM TẮT – AI TRỢ LÝ ẢO (CO3107)
 
-## 🧠 Mô tả chung
+## Mô tả chung
 Nhóm xây dựng một **AI trợ lý ảo điều khiển thiết bị gia dụng bằng giọng nói**.  
 Hệ thống có khả năng:
 - Nhận diện giọng nói / văn bản từ người dùng
@@ -18,7 +18,7 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-## 🔧 Quy ước hàng tuần
+## Quy ước hàng tuần
 - **Thứ 6**: Nhóm mình sẽ cập nhật tiến độ công việc, thảo luận các khó khăn gặp phải, định hướng xử lý và thống nhất kế hoạch tuần tiếp theo.  
 - **Thứ 7 – Chủ nhật**: Thời gian linh hoạt để fix các vấn đề phát sinh (nếu có); nếu hệ thống ổn định thì dành để nghỉ ngơi hoặc chạy deadline các môn khác.  
 - **Trước midterm**: Hoàn thành **Module 1–3** (tối đa **Module 4**) để đảm bảo có demo MVP.  
@@ -26,9 +26,9 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-## 🧭 Chia 4 giai đoạn
+## Chia 4 giai đoạn
 
-### 🔹 Giai đoạn 1 (9.2 → 22.3 – Midterm) – Lấy được raw data & điều khiển
+### Giai đoạn 1 (9.2 → 22.3 – Midterm) – Lấy được raw data & điều khiển
 **Phụ trách:** T. Hưng, K. Vy
 
 - Nhận & gửi dữ liệu:
@@ -57,7 +57,7 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-### 🔹 Giai đoạn 2 (9.2 → 22.3 – Midterm) – Dashboard (chắc phải làm thêm nhma tui chưa biết chia việc sao :Đ )
+### Giai đoạn 2 (9.2 → 22.3 – Midterm) – Dashboard (chắc phải làm thêm nhma tui chưa biết chia việc sao :Đ )
 **Phụ trách:** K. Hưng, Đức
 
 - Thiết kế & triển khai dashboard
@@ -72,7 +72,7 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-### 🔹 Giai đoạn 3 (22.3 → 17.5 – Final) – AI / NLP  
+### Giai đoạn 3 (22.3 → 17.5 – Final) – AI / NLP  
 **Phụ trách:** Đức + chưa biết (T.Hưng làm chân sai vặt)
 
 - Nhận giọng nói / văn bản
@@ -86,7 +86,7 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-### 🔹 Giai đoạn 4 (22.3 → 17.5 – Final) – Hoàn thiện  
+### Giai đoạn 4 (22.3 → 17.5 – Final) – Hoàn thiện  
 **Phụ trách:** Cả nhóm bàn lại xong giải quyết các vấn đề còn tồn đọng
 
 - Hoàn thiện dashboard
@@ -101,7 +101,7 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 
 ---
 
-## ⚠️ Nguyên tắc làm việc
+## Nguyên tắc làm việc
 - Ưu tiên **ổn định > thêm tính năng**
 - Không mở scope mới sát mốc báo cáo
 - Feature nâng cao chỉ làm khi core chạy tốt

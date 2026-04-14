@@ -1,25 +1,31 @@
 import json
+import os
 import time
 import random
 import threading
+from pathlib import Path
 
 import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
+
+ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ROOT_ENV_PATH)
 
 
 # =========================
 # CONFIG
 # =========================
-MQTT_SERVER = "172.20.10.2"
-MQTT_PORT = 1883
-COREIOT_TOKEN = "ehehehe"
+MQTT_SERVER = os.getenv("MQTT_BROKER")
+MQTT_PORT = int(os.getenv("MQTT_PORT"))
+COREIOT_TOKEN = os.getenv("COREIOT_TOKEN")
 
 TOPIC_TELEMETRY = "v1/devices/me/telemetry"
 TOPIC_RPC_REQUEST = "v1/devices/me/rpc/request/+"
 TOPIC_RPC_RESPONSE_PREFIX = "v1/devices/me/rpc/response/"
 TOPIC_ATTRIBUTES = "v1/devices/me/attributes"
 
-CLIENT_ID = "ESP32_AIoT_Core_Python_Simulator"
-TELEMETRY_INTERVAL = 5  # seconds
+CLIENT_ID = os.getenv("SIM_CLIENT_ID")
+TELEMETRY_INTERVAL = int(os.getenv("SIM_TELEMETRY_INTERVAL"))  # seconds
 
 
 # =========================
@@ -45,8 +51,8 @@ sensor_state = {
 
 network_state = {
     "wifi_connected": True,
-    "wifi_rssi": -55,
-    "wifi_ip": "192.168.1.50",
+    "wifi_rssi": int(os.getenv("SIM_WIFI_RSSI_MIN")),
+    "wifi_ip": os.getenv("SIM_WIFI_IP"),
     "mqtt_connected": False,
 }
 
@@ -63,11 +69,20 @@ def pretty_json(data) -> str:
 
 
 def update_fake_sensor_data():
+    temp_min = float(os.getenv("SIM_TEMP_MIN"))
+    temp_max = float(os.getenv("SIM_TEMP_MAX"))
+    humi_min = float(os.getenv("SIM_HUMI_MIN"))
+    humi_max = float(os.getenv("SIM_HUMI_MAX"))
+    light_min = float(os.getenv("SIM_LIGHT_MIN"))
+    light_max = float(os.getenv("SIM_LIGHT_MAX"))
+    rssi_min = int(os.getenv("SIM_WIFI_RSSI_MIN"))
+    rssi_max = int(os.getenv("SIM_WIFI_RSSI_MAX"))
+
     with state_lock:
-        sensor_state["temperature"] = round(random.uniform(25.0, 35.0), 2)
-        sensor_state["humidity"] = round(random.uniform(45.0, 80.0), 2)
-        sensor_state["light"] = round(random.uniform(10.0, 100.0), 2)
-        network_state["wifi_rssi"] = random.randint(-75, -40)
+        sensor_state["temperature"] = round(random.uniform(temp_min, temp_max), 2)
+        sensor_state["humidity"] = round(random.uniform(humi_min, humi_max), 2)
+        sensor_state["light"] = round(random.uniform(light_min, light_max), 2)
+        network_state["wifi_rssi"] = random.randint(rssi_min, rssi_max)
 
 
 # =========================
@@ -118,27 +133,27 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
     with state_lock:
         if method == "setValueLedBlinky":
             device_state["led_status"] = params
-            print("💡 Turning on normal LED" if params else "💡 Turning off normal LED")
+            print("[ACTION] Turning on normal LED" if params else "[ACTION] Turning off normal LED")
             response["LedState"] = params
 
         elif method == "setValueNeoLed":
             device_state["neo_led_status"] = params
-            print("🌈 Turning on NeoPixel" if params else "🌈 Turning off NeoPixel")
+            print("[ACTION] Turning on NeoPixel" if params else "[ACTION] Turning off NeoPixel")
             response["NeoLedState"] = params
 
         elif method == "setValueWS2812":
             device_state["ws2812_status"] = params
-            print("🎇 Turning on WS2812" if params else "🎇 Turning off WS2812")
+            print("[ACTION] Turning on WS2812" if params else "[ACTION] Turning off WS2812")
             response["WS2812State"] = params
 
         elif method == "setValueRelay":
             device_state["relay_status"] = params
-            print("🔌 Turning on Relay" if params else "🔌 Turning off Relay")
+            print("[ACTION] Turning on Relay" if params else "[ACTION] Turning off Relay")
             response["RelayState"] = params
 
         elif method == "setValueMiniFan":
             device_state["mini_fan_status"] = params
-            print("🌀 Turning on Fan" if params else "🌀 Turning off Fan")
+            print("[ACTION] Turning on Fan" if params else "[ACTION] Turning off Fan")
             response["FanState"] = params
 
         else:
@@ -209,7 +224,8 @@ def publish_telemetry_loop(client: mqtt.Client):
 # =========================
 def build_client() -> mqtt.Client:
     client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv311)
-    client.username_pw_set(COREIOT_TOKEN)
+    if COREIOT_TOKEN:
+        client.username_pw_set(COREIOT_TOKEN)
 
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect

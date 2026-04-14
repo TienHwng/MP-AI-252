@@ -120,7 +120,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		responseDoc["Led_Status"] = params;
 		
 		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "💡 Turning on normal LED" : "💡 Turning off normal LED");
+			Serial.println(params ? "[ACTION] Turning on normal LED" : "[ACTION] Turning off normal LED");
 		}
 	}
 
@@ -129,7 +129,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		responseDoc["NeoLed_Status"] = params;
 		
 		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "🌈 Turning on NeoPixel" : "🌈 Turning off NeoPixel");
+			Serial.println(params ? "[ACTION] Turning on NeoPixel" : "[ACTION] Turning off NeoPixel");
 		}
 	}
 
@@ -138,7 +138,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		responseDoc["WS2812_Status"] = params;
 		
 		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "🎇 Turning on WS2812" : "🎇 Turning off WS2812");
+			Serial.println(params ? "[ACTION] Turning on WS2812" : "[ACTION] Turning off WS2812");
 		}
 	}
 
@@ -147,7 +147,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		responseDoc["Relay_Status"] = params;
 		
 		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "🔌 Turning on Relay" : "🔌 Turning off Relay");
+			Serial.println(params ? "[ACTION] Turning on Relay" : "[ACTION] Turning off Relay");
 		}
 	}
 
@@ -156,7 +156,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		responseDoc["Fan_Status"] = params;
 
 		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "🌀 Turning on Fan" : "🌀 Turning off Fan");
+			Serial.println(params ? "[ACTION] Turning on Fan" : "[ACTION] Turning off Fan");
 		}
 	}
 

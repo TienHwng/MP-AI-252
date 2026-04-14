@@ -104,7 +104,7 @@ class SensorAnalysisAgent(AgentBase):
                 )
             )
             for tc in result["tool_calls"]:
-                print(f"  [SensorAgent] 📊 {tc['name']}")
+                print(f"  [SensorAgent] [TOOL] {tc['name']}")
                 tool_result = self._tools.execute(tc["name"], tc["args"])
                 tools_used.append(tc["name"])
                 messages.append(

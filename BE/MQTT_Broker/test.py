@@ -2,10 +2,16 @@ import paho.mqtt.client as mqtt
 import time
 import json
 import random
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ROOT_ENV_PATH)
 
 # === CẤU HÌNH KẾT NỐI ===
-BROKER_ADDRESS = "127.0.0.1"  # Kết nối tới Broker nội bộ (HERA) đang chạy
-PORT = 1884
+BROKER_ADDRESS = os.getenv("MQTT_BROKER")
+PORT = int(os.getenv("MQTT_PORT"))
 
 # Các topic giống hệt file C++
 TOPIC_TELEMETRY = "v1/devices/me/telemetry"
@@ -20,15 +26,15 @@ device_state = {
 
 # === CÁC HÀM CALLBACK CỦA MQTT ===
 def on_connect(client, userdata, flags, rc):
-    print("🔌 [ESP32 Simulator] Đã kết nối thành công tới HERA Broker!")
+    print("[OK] [ESP32 Simulator] Đã kết nối thành công tới HERA Broker!")
     # Đăng ký nhận lệnh từ HERA
     client.subscribe(TOPIC_RPC_REQUEST)
-    print(f"👂 [ESP32 Simulator] Đang lắng nghe lệnh tại: {TOPIC_RPC_REQUEST}")
+    print(f"[INFO] [ESP32 Simulator] Đang lắng nghe lệnh tại: {TOPIC_RPC_REQUEST}")
 
 def on_message(client, userdata, msg):
     topic = msg.topic
     payload = msg.payload.decode('utf-8')
-    print(f"\n📥 [ESP32 Simulator] Nhận lệnh từ HERA: {payload}")
+    print(f"\n[INFO] [ESP32 Simulator] Nhận lệnh từ HERA: {payload}")
     
     try:
         # Đọc JSON HERA gửi xuống
@@ -43,28 +49,28 @@ def on_message(client, userdata, msg):
         response_doc = {}
         if method == "setValueLedBlinky":
             device_state["led_blinky"] = params
-            print("💡" if params else "🌑", f"Đã {'BẬT' if params else 'TẮT'} LED thường.")
+            print("[ACTION]", f"Đã {'BẬT' if params else 'TẮT'} LED thường.")
             response_doc["LedState"] = params
             
         elif method == "setValueNeoLed":
             device_state["neo_led"] = params
-            print("🌈" if params else "🌑", f"Đã {'BẬT' if params else 'TẮT'} NeoPixel.")
+            print("[ACTION]", f"Đã {'BẬT' if params else 'TẮT'} NeoPixel.")
             response_doc["NeoLedState"] = params
 
         # Gửi phản hồi (response) lại cho HERA
         response_topic = f"{TOPIC_RPC_RESPONSE}{request_id}"
         client.publish(response_topic, json.dumps(response_doc))
-        print(f"📤 [ESP32 Simulator] Đã gửi phản hồi: {json.dumps(response_doc)}")
+        print(f"[INFO] [ESP32 Simulator] Đã gửi phản hồi: {json.dumps(response_doc)}")
         
     except json.JSONDecodeError:
-        print("❌ [ESP32 Simulator] Lỗi: Không thể đọc được JSON!")
+        print("[ ERROR ] [ESP32 Simulator] Lỗi: Không thể đọc được JSON!")
 
 # === KHỞI TẠO VÀ CHẠY MẠCH GIẢ LẬP ===
 client = mqtt.Client("ESP32_Simulator_Client")
 client.on_connect = on_connect
 client.on_message = on_message
 
-print("🚀 Khởi động Mạch ESP32 Giả lập...")
+print("[INFO] Khởi động Mạch ESP32 Giả lập...")
 client.connect(BROKER_ADDRESS, PORT)
 
 # Chạy loop_start để mạch lắng nghe ngầm mà không khóa vòng lặp chính
@@ -88,12 +94,12 @@ try:
         
         # Gửi lên HERA
         client.publish(TOPIC_TELEMETRY, json.dumps(telemetry_data))
-        # print(f"📡 [ESP32 Simulator] Gửi Telemetry: {telemetry_data}") 
+        # print(f"[ INFO ] [ESP32 Simulator] Gửi Telemetry: {telemetry_data}") 
         # (Em có thể bỏ comment dòng print trên nếu muốn xem chi tiết mạch gửi gì)
         
         # Mạch gửi dữ liệu mỗi 5 giây
         time.sleep(5)
         
 except KeyboardInterrupt:
-    print("\n🛑 Tắt mạch giả lập...")
+    print("\n[INFO] Tắt mạch giả lập...")
     client.disconnect()

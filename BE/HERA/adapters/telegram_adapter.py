@@ -56,14 +56,14 @@ class TelegramAdapter:
         
         model = OLLAMA_MODEL if self._provider == "ollama" else OPENROUTER_MODEL
         provider_label = (
-            f"🏠 Ollama ({model})" if self._provider == "ollama"
-            else f"☁️ OpenRouter ({model})"
+            f"Ollama ({model})" if self._provider == "ollama"
+            else f"OpenRouter ({model})"
         )
         await update.message.reply_text(
-            "👋 *Hi! I'm HERA* — your AI IoT assistant.\n\n"
-            f"🤖 *Provider:* {provider_label}\n"
-            "🧠 *Architecture:* Multi-Agent System\n\n"
-            "💡 *Two LEDs:*\n"
+            "*Hi! I'm HERA* — your AI IoT assistant.\n\n"
+            f"*Provider:* {provider_label}\n"
+            "*Architecture:* Multi-Agent System\n\n"
+            "*Two LEDs:*\n"
             "• White indicator LED\n"
             "• NeoPixel RGB LED\n\n"
             "Try: _\"What's the temperature?\"_, _\"Turn on all lights\"_\n\n"
@@ -73,7 +73,7 @@ class TelegramAdapter:
 
     async def cmd_reset(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         self._orch.reset_history(str(update.effective_chat.id))
-        await update.message.reply_text("🔄 Conversation history cleared.")
+        await update.message.reply_text("Conversation history cleared.")
 
     async def cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         s = self._mqtt.get_sensor_snapshot()
@@ -82,15 +82,15 @@ class TelegramAdapter:
         network = s.get("network", {})
         anomaly_score = sensors.get("anomaly")
         await update.message.reply_text(
-            f"📊 *Sensor state*\n"
-            f"🌡 Temperature: `{sensors.get('temperature')}` °C\n"
-            f"💧 Humidity: `{sensors.get('humidity')}` %\n"
-            f"💡 Light: `{sensors.get('light')}`\n"
-            f"🤖 Anomaly: `{anomaly_score}`\n"
-            f"💡 White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
-            f"🌈 NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
-            f"📶 WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
-            f"🕐 Uptime: `{network.get('uptime_ms')}` ms",
+            f"*Sensor state*\n"
+            f"Temperature: `{sensors.get('temperature')}` °C\n"
+            f"Humidity: `{sensors.get('humidity')}` %\n"
+            f"Light: `{sensors.get('light')}`\n"
+            f"Anomaly: `{anomaly_score}`\n"
+            f"White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
+            f"NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
+            f"WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
+            f"Uptime: `{network.get('uptime_ms')}` ms",
             parse_mode="Markdown",
         )
 
@@ -108,11 +108,11 @@ class TelegramAdapter:
                 severity = "CRITICAL" if current_score > 0.8 else "ABNORMAL"
                 alert_msg = (
                     f"\n{'='*60}\n"
-                    f"🚨 {severity} Environmental Anomaly Detected!\n"
+                    f"{severity} Environmental Anomaly Detected!\n"
                     f"{'='*60}\n"
-                    f"🌡 Temperature: {sensors.get('temperature')}°C\n"
-                    f"💧 Humidity: {sensors.get('humidity')}%\n"
-                    f"📊 ML Score: {current_score:.4f}\n"
+                    f"Temperature: {sensors.get('temperature')}°C\n"
+                    f"Humidity: {sensors.get('humidity')}%\n"
+                    f"ML Score: {current_score:.4f}\n"
                     f"{'='*60}\n"
                 )
                 
@@ -127,11 +127,11 @@ class TelegramAdapter:
                                 text=alert_msg,
                                 parse_mode="HTML"
                             )
-                            print(f"[TELEGRAM] 📤 Sent alert to chat {chat_id}")
+                            print(f"[TELEGRAM] Sent alert to chat {chat_id}")
                         except Exception as send_err:
                             print(f"[TELEGRAM] Failed to send to {chat_id}: {send_err}")
                 else:
-                    print("[ALERT] ⏸️ No registered users (need /start)")
+                    print("[ALERT] No registered users (need /start)")
 
         except Exception as e:
             print(f"[MONITOR] Error: {e}")
@@ -155,21 +155,21 @@ class TelegramAdapter:
             err = str(exc)
             if "400" in err:
                 reply = (
-                    "⚠️ Tool calling is not supported by this model."
+                    "[ WARNING ] Tool calling is not supported by this model."
                     if target_language == "en"
-                    else "⚠️ Model hien tai khong ho tro tool calling."
+                    else "[ WARNING ] Model hien tai khong ho tro tool calling."
                 )
             elif "401" in err:
                 reply = (
-                    "⚠️ API key is invalid. Please check your .env file."
+                    "[ WARNING ] API key is invalid. Please check your .env file."
                     if target_language == "en"
-                    else "⚠️ API key khong hop le. Vui long kiem tra file .env."
+                    else "[ WARNING ] API key khong hop le. Vui long kiem tra file .env."
                 )
             else:
                 reply = (
-                    f"⚠️ Error: {exc}"
+                    f"[ WARNING ] Error: {exc}"
                     if target_language == "en"
-                    else f"⚠️ Loi: {exc}"
+                    else f"[ WARNING ] Loi: {exc}"
                 )
             print(f"[Telegram] Error: {exc}")
 
