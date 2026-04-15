@@ -55,11 +55,10 @@ class DeviceControlAgent(AgentBase):
         self._llm = llm
         self._mqtt = mqtt
         self._tools = tools
-        self._model_override = (
-            DEVICE_AGENT_MODEL_OLLAMA
-            if llm.provider == "ollama"
-            else DEVICE_AGENT_MODEL_OPENROUTER
-        )
+        if llm.provider == "ollama":
+            self._model_override = DEVICE_AGENT_MODEL_OLLAMA
+        else:
+            self._model_override = DEVICE_AGENT_MODEL_OPENROUTER
 
     @property
     def name(self) -> str:

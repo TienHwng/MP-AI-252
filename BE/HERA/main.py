@@ -49,7 +49,16 @@ from adapters.telegram_adapter import TelegramAdapter
 
 # ===================== LOGGING SETUP =====================
 # Suppress verbose library logs
-for lib in ["httpx", "telegram", "apscheduler", "paho.mqtt", "urllib3", "openai"]:
+for lib in [
+    "httpx",
+    "telegram",
+    "apscheduler",
+    "paho.mqtt",
+    "urllib3",
+    "openai",
+    "amqtt",
+    "transitions",
+]:
     logging.getLogger(lib).setLevel(logging.WARNING)
 
 # Configure main app logging (HERA, MQTT only)
@@ -58,10 +67,28 @@ logging.basicConfig(
     format="%(message)s",  # Simple: just show [HERA] ... [MQTT] ...
 )
 
+# LiteLLM installs its own handler; disable propagation to avoid duplicate lines.
+litellm_logger = logging.getLogger("LiteLLM")
+litellm_logger.setLevel(logging.WARNING)
+litellm_logger.propagate = False
 
 def _validate_ollama() -> bool:
     try:
-        models = [m["name"] for m in ollama.list()["models"]]
+        listed = ollama.list()
+        raw_models = getattr(listed, "models", None)
+        if raw_models is None and isinstance(listed, dict):
+            raw_models = listed.get("models", [])
+        raw_models = raw_models or []
+
+        models: list[str] = []
+        for m in raw_models:
+            if isinstance(m, dict):
+                name = m.get("name") or m.get("model")
+            else:
+                name = getattr(m, "name", None) or getattr(m, "model", None)
+            if name:
+                models.append(name)
+
         ok = True
         for needed in (OLLAMA_MODEL, OLLAMA_ROUTER_MODEL):
             if needed in models:
@@ -162,11 +189,10 @@ def main() -> None:
         "chat": ChatAgent(llm_svc, mqtt_svc),
     }
 
-    router_model = (
-        ORCHESTRATOR_MODEL_OLLAMA
-        if provider == "ollama"
-        else ORCHESTRATOR_MODEL_OPENROUTER
-    )
+    if provider == "ollama":
+        router_model = ORCHESTRATOR_MODEL_OLLAMA
+    else:
+        router_model = ORCHESTRATOR_MODEL_OPENROUTER
     orchestrator = Orchestrator(llm_svc, agents, router_model=router_model)
 
     telegram = TelegramAdapter(orchestrator, mqtt_svc, provider)

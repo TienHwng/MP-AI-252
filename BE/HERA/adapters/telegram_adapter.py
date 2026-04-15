@@ -54,11 +54,12 @@ class TelegramAdapter:
         chat_id = update.effective_chat.id
         self._registered_chats.add(chat_id)  # Register this user for alerts
         
-        model = OLLAMA_MODEL if self._provider == "ollama" else OPENROUTER_MODEL
-        provider_label = (
-            f"Ollama ({model})" if self._provider == "ollama"
-            else f"OpenRouter ({model})"
-        )
+        if self._provider == "ollama":
+            model = OLLAMA_MODEL
+            provider_label = f"Ollama ({model})"
+        else:
+            model = OPENROUTER_MODEL
+            provider_label = f"OpenRouter ({model})"
         await update.message.reply_text(
             "*Hi! I'm HERA* — your AI IoT assistant.\n\n"
             f"*Provider:* {provider_label}\n"

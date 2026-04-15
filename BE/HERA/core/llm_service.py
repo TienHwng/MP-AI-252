@@ -1,7 +1,7 @@
 """
 LLM Service
 ============
-Provider-agnostic wrapper around Ollama (local) and OpenRouter (cloud).
+Provider-agnostic wrapper around LiteLLM.
 Returns a normalised response dict regardless of backend.
 """
 
@@ -10,12 +10,14 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from itertools import count
 
-import ollama
-import openai
+import litellm
+from litellm import completion as litellm_completion
 
 from config import (
-    OLLAMA_MODEL, OLLAMA_ROUTER_MODEL,
+    OLLAMA_MODEL,
+    OLLAMA_API_BASE,
     OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENROUTER_BASE_URL,
 )
 
@@ -55,8 +57,12 @@ class LLMService:
     provider : "ollama" | "openrouter"
     """
 
+    _call_counter = count(1)
+
     def __init__(self, provider: str) -> None:
         self.provider = provider
+        # Prevent LiteLLM from printing provider help banners to stdout.
+        litellm.suppress_debug_info = True
 
     # ── public API ────────────────────────────────────────────
 
@@ -74,71 +80,90 @@ class LLMService:
         model_override : use a specific model name (e.g. the small router model).
         """
         if self.provider == "ollama":
-            return self._ollama(messages, tools, model_override)
-        return self._openrouter(messages, tools, model_override)
-
-    # ── Ollama ────────────────────────────────────────────────
-
-    def _ollama(self, messages, tools, model_override) -> LLMResult:
-        model = model_override or OLLAMA_MODEL
-        kwargs: dict[str, Any] = {"model": model, "messages": messages}
-        if tools:
-            kwargs["tools"] = tools
-        resp = ollama.chat(**kwargs)
-        msg = resp.message
-        if not msg.tool_calls:
-            return {"content": msg.content, "tool_calls": None}
-        return {
-            "content": msg.content or "",
-            "tool_calls": [
-                {
-                    "id": f"call_{i}",
-                    "name": tc.function.name,
-                    "args": tc.function.arguments or {},
-                }
-                for i, tc in enumerate(msg.tool_calls)
-            ],
-        }
-
-    # ── OpenRouter ────────────────────────────────────────────
-
-    def _openrouter(self, messages, tools, model_override) -> LLMResult:
-        if not OPENROUTER_API_KEY:
-            raise ValueError("OPENROUTER_API_KEY is not set in .env")
-        client = openai.OpenAI(
-            base_url=OPENROUTER_BASE_URL, api_key=OPENROUTER_API_KEY,
+            default_model = OLLAMA_MODEL
+        else:
+            default_model = OPENROUTER_MODEL
+        raw_model = model_override or default_model
+        model = self._provider_model_name(raw_model, self.provider)
+        if self.provider == "ollama" and tools:
+            if model.startswith("ollama/"):
+                model = f"ollama_chat/{model.removeprefix('ollama/')}"
+            elif not model.startswith("ollama_chat/"):
+                model = f"ollama_chat/{model}"
+        call_id = next(self._call_counter)
+        tool_count = len(tools) if tools else 0
+        print(
+            f"[LLM] API call #{call_id} -> provider={self.provider} "
+            f"model={model} tools={tool_count} messages={len(messages)}"
         )
-        model = model_override or OPENROUTER_MODEL
-        kwargs: dict[str, Any] = {"model": model, "messages": messages}
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+        }
         if tools:
             kwargs["tools"] = tools
-        resp = client.chat.completions.create(**kwargs)
+            kwargs["tool_choice"] = "auto"
+        if self.provider == "ollama":
+            kwargs["api_base"] = OLLAMA_API_BASE
+        elif self.provider == "openrouter":
+            if not OPENROUTER_API_KEY:
+                raise ValueError("OPENROUTER_API_KEY is not set in .env")
+            kwargs["api_key"] = OPENROUTER_API_KEY
+            kwargs["api_base"] = OPENROUTER_BASE_URL
+            kwargs["custom_llm_provider"] = "openrouter"
+        resp = litellm_completion(**kwargs)
         msg = resp.choices[0].message
-        if not msg.tool_calls:
+        tool_calls = getattr(msg, "tool_calls", None)
+        if not tool_calls:
+            print(f"[LLM] API call #{call_id} <- tool_calls=0")
             return {"content": msg.content, "tool_calls": None}
+
+        normalized_tool_calls = []
+        for i, tc in enumerate(tool_calls):
+            fn = tc.function
+            args = fn.arguments
+            if isinstance(args, str):
+                if args:
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(
+                            f"Invalid tool arguments from model: {args!r}",
+                        ) from exc
+                else:
+                    args = {}
+            normalized_tool_calls.append(
+                {
+                    "id": tc.id or f"call_{i}",
+                    "name": fn.name,
+                    "args": args or {},
+                }
+            )
+        print(
+            f"[LLM] API call #{call_id} <- tool_calls={len(normalized_tool_calls)}"
+        )
         return {
             "content": msg.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "name": tc.function.name,
-                    "args": (
-                        json.loads(tc.function.arguments)
-                        if tc.function.arguments else {}
-                    ),
-                }
-                for tc in msg.tool_calls
-            ],
+            "tool_calls": normalized_tool_calls,
         }
 
-    # ── Message builders (provider-aware) ─────────────────────
+    @staticmethod
+    def _provider_model_name(model_name: str, provider: str) -> str:
+        if model_name.startswith(("ollama/", "ollama_chat/", "openrouter/")):
+            return model_name
+        if provider == "ollama":
+            return f"ollama/{model_name}"
+        return f"openrouter/{model_name}"
+
+    # ── Message builders (OpenAI-format, works across LiteLLM backends) ──
 
     def build_assistant_tool_msg(
         self, content: str, tool_calls: list[dict],
     ) -> dict:
-        msg: dict = {"role": "assistant", "content": content}
-        if self.provider == "openrouter":
-            msg["tool_calls"] = [
+        return {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": [
                 {
                     "id": tc["id"],
                     "type": "function",
@@ -148,16 +173,12 @@ class LLMService:
                     },
                 }
                 for tc in tool_calls
-            ]
-        else:
-            msg["tool_calls"] = [
-                {"function": {"name": tc["name"], "arguments": tc["args"]}}
-                for tc in tool_calls
-            ]
-        return msg
+            ],
+        }
 
     def build_tool_result_msg(self, tool_call_id: str, result: str) -> dict:
-        msg: dict = {"role": "tool", "content": result}
-        if self.provider == "openrouter":
-            msg["tool_call_id"] = tool_call_id
-        return msg
+        return {
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": result,
+        }

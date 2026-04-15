@@ -61,11 +61,10 @@ class Orchestrator:
     ) -> None:
         self._llm = llm
         self._agents = agents
-        default_router = (
-            ORCHESTRATOR_MODEL_OLLAMA
-            if llm.provider == "ollama"
-            else ORCHESTRATOR_MODEL_OPENROUTER
-        )
+        if llm.provider == "ollama":
+            default_router = ORCHESTRATOR_MODEL_OLLAMA
+        else:
+            default_router = ORCHESTRATOR_MODEL_OPENROUTER
         self._router_model = router_model or default_router
         # per-chat conversation history (only for chat agent)
         self._conversations: dict[str, list[dict]] = {}

@@ -48,6 +48,7 @@ LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "").strip().lower() or None
 # Default models
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 OLLAMA_ROUTER_MODEL = os.getenv("OLLAMA_ROUTER_MODEL")
+OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
 OPENROUTER_ROUTER_MODEL = os.getenv("OPENROUTER_ROUTER_MODEL")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")

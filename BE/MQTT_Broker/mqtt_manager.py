@@ -134,11 +134,12 @@ class MQTTManager:
     def on_connect(self, client, userdata, flags, rc):
         client.subscribe(MQTT_SUBSCRIBE_TOPIC, qos=0)
         # Vừa kết nối xong là đăng ký nhận (subscribe) tất cả các topic (#)
-        print("[ OK ] Client Connected.")
+        # print("[ OK ] Client Connected.")
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
         # Do smth ?
-        print("[ OK ] Subscribed successfully.")
+        # print("[ OK ] Subscribed successfully.")
+        pass
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic

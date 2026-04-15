@@ -46,11 +46,10 @@ class ChatAgent(AgentBase):
     def __init__(self, llm: LLMService, mqtt: MQTTService) -> None:
         self._llm = llm
         self._mqtt = mqtt
-        self._model_override = (
-            CHAT_AGENT_MODEL_OLLAMA
-            if llm.provider == "ollama"
-            else CHAT_AGENT_MODEL_OPENROUTER
-        )
+        if llm.provider == "ollama":
+            self._model_override = CHAT_AGENT_MODEL_OLLAMA
+        else:
+            self._model_override = CHAT_AGENT_MODEL_OPENROUTER
 
     @property
     def name(self) -> str:
