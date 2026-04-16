@@ -205,8 +205,11 @@ and provider-specific behavior changes between agents.
 
 \paragraph{Orchestrator.}
 The orchestrator is implemented in
-\texttt{agents/orchestrator.py}. Its only job is to classify intent and
-delegate. This narrow scope is why a small model is sufficient.
+\texttt{agents/orchestrator.py}. It classifies intent, delegates to
+specialist agents for device, sensor, and anomaly requests, and handles
+general conversation directly. For specialist requests, it also receives the
+specialist report and composes the final user-facing response, so all outward
+answers pass through the orchestrator.
 
 \paragraph{Device Control Agent.}
 The device-control specialist is implemented in
@@ -216,17 +219,18 @@ a parameterized tool schema.
 
 \paragraph{Sensor Analysis Agent.}
 The sensor specialist combines live MQTT state with concise natural
-language interpretation. It benefits from a larger model because it must
-explain numbers, thresholds, and current device state in human language.
+language interpretation by preparing a structured sensor report for the
+orchestrator. The orchestrator performs the final user-facing explanation.
 
 \paragraph{Anomaly Expert Agent.}
 The anomaly specialist currently mixes a deterministic rule layer with
-LLM-generated explanation. This is reasonable as long as the LLM is used
-for explanation only, not for safety-critical thresholding.
+structured reporting. This is reasonable because thresholding remains
+deterministic, while the orchestrator performs the final natural-language
+explanation.
 
-\paragraph{Chat Agent.}
-The chat specialist is the fallback path for greetings, help messages,
-and non-actionable requests. It is intentionally tool-free.
+\paragraph{General Conversation.}
+Greetings, help messages, and non-actionable requests are handled
+directly by the orchestrator instead of a separate chat agent.
 
 \subsection{Tool Schema Optimization}
 \label{sec:tool-schema-opt}

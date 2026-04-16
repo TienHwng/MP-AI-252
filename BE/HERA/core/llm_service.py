@@ -8,7 +8,6 @@ Returns a normalised response dict regardless of backend.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 from itertools import count
 
@@ -16,29 +15,10 @@ import litellm
 from litellm import completion as litellm_completion
 
 from config import (
-    OLLAMA_MODEL,
     OLLAMA_API_BASE,
-    OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENROUTER_BASE_URL,
+    OPENROUTER_API_KEY, OPENROUTER_BASE_URL,
 )
-
-
-# ── Hallucination filter ─────────────────────────────────────
-
-_HALLUCINATION_MARKERS = (
-    "![", "Image:", "Picture:", "Photo:",
-    "http://192.168.", "LED_ON.jpeg", "specific color you'd like for",
-)
-
-
-def filter_response(text: str) -> str:
-    """Strip hallucinated image URLs / markdown images."""
-    if not text:
-        return text
-    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
-    text = re.sub(r'https?://[^\s]+\.(jpg|jpeg|png|gif)', '', text)
-    if any(m in text for m in _HALLUCINATION_MARKERS):
-        return "[OK] Action completed successfully."
-    return text.strip()
+from core.runtime_settings import runtime_settings
 
 
 # ── Normalised result dict ────────────────────────────────────
@@ -57,7 +37,7 @@ class LLMService:
     provider : "ollama" | "openrouter"
     """
 
-    _call_counter = count(1)
+    call_counter = count(1)
 
     def __init__(self, provider: str) -> None:
         self.provider = provider
@@ -79,21 +59,23 @@ class LLMService:
         ----------
         model_override : use a specific model name (e.g. the small router model).
         """
-        if self.provider == "ollama":
-            default_model = OLLAMA_MODEL
-        else:
-            default_model = OPENROUTER_MODEL
-        raw_model = model_override or default_model
-        model = self._provider_model_name(raw_model, self.provider)
-        if self.provider == "ollama" and tools:
+        active_provider = runtime_settings.refresh_and_log()["provider"]
+        fallback_model = runtime_settings.get_model(active_provider, "orchestratorModel")
+        if not fallback_model:
+            raise ValueError(
+                f"Missing runtime orchestrator model for provider '{active_provider}'.",
+            )
+        raw_model = model_override or fallback_model
+        model = self.provider_model_name(raw_model, active_provider)
+        if active_provider == "ollama" and tools:
             if model.startswith("ollama/"):
                 model = f"ollama_chat/{model.removeprefix('ollama/')}"
             elif not model.startswith("ollama_chat/"):
                 model = f"ollama_chat/{model}"
-        call_id = next(self._call_counter)
+        call_id = next(self.call_counter)
         tool_count = len(tools) if tools else 0
         print(
-            f"[LLM] API call #{call_id} -> provider={self.provider} "
+            f"[LLM] API call #{call_id} -> provider={active_provider} "
             f"model={model} tools={tool_count} messages={len(messages)}"
         )
         kwargs: dict[str, Any] = {
@@ -103,9 +85,9 @@ class LLMService:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        if self.provider == "ollama":
+        if active_provider == "ollama":
             kwargs["api_base"] = OLLAMA_API_BASE
-        elif self.provider == "openrouter":
+        elif active_provider == "openrouter":
             if not OPENROUTER_API_KEY:
                 raise ValueError("OPENROUTER_API_KEY is not set in .env")
             kwargs["api_key"] = OPENROUTER_API_KEY
@@ -148,7 +130,7 @@ class LLMService:
         }
 
     @staticmethod
-    def _provider_model_name(model_name: str, provider: str) -> str:
+    def provider_model_name(model_name: str, provider: str) -> str:
         if model_name.startswith(("ollama/", "ollama_chat/", "openrouter/")):
             return model_name
         if provider == "ollama":

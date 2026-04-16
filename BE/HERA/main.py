@@ -1,55 +1,19 @@
-"""
-HERA - Multi-Agent IoT Telegram Bot
-===================================
-Entry point that wires together:
-  core services -> agents -> orchestrator -> Telegram adapter
-
-Run:
-    cd backend/HERA
-    python main.py
-"""
+"""Entry point for HERA Telegram bot runtime."""
 
 import logging
 
-import ollama
-import openai
-
-from config import (
-    TELEGRAM_BOT_TOKEN,
-    LLM_PROVIDER,
-    OLLAMA_MODEL,
-    OLLAMA_ROUTER_MODEL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_MODEL,
-    OPENROUTER_BASE_URL,
-    MQTT_BROKER,
-    MQTT_PORT,
-    ORCHESTRATOR_MODEL_OLLAMA,
-    ORCHESTRATOR_MODEL_OPENROUTER,
-    DEVICE_AGENT_MODEL_OLLAMA,
-    DEVICE_AGENT_MODEL_OPENROUTER,
-    SENSOR_AGENT_MODEL_OLLAMA,
-    SENSOR_AGENT_MODEL_OPENROUTER,
-    ANOMALY_AGENT_MODEL_OLLAMA,
-    ANOMALY_AGENT_MODEL_OPENROUTER,
-    CHAT_AGENT_MODEL_OLLAMA,
-    CHAT_AGENT_MODEL_OPENROUTER,
-)
+from adapters.telegram_adapter import TelegramAdapter
+from agents.anomaly_agent import AnomalyExpertAgent
+from agents.device_agent import DeviceControlAgent
+from agents.orchestrator import Orchestrator
+from agents.sensor_agent import SensorAnalysisAgent
+from config import MQTT_BROKER, MQTT_PORT, TELEGRAM_BOT_TOKEN
 from core.llm_service import LLMService
 from core.mqtt_service import MQTTService
+from core.runtime_settings import runtime_settings
 from core.tool_registry import ToolRegistry
 
-from agents.orchestrator import Orchestrator
-from agents.device_agent import DeviceControlAgent
-from agents.sensor_agent import SensorAnalysisAgent
-from agents.anomaly_agent import AnomalyExpertAgent
-from agents.chat_agent import ChatAgent
-
-from adapters.telegram_adapter import TelegramAdapter
-
-# ===================== LOGGING SETUP =====================
-# Suppress verbose library logs
-for lib in [
+NOISY_LOGGERS = (
     "httpx",
     "telegram",
     "apscheduler",
@@ -58,172 +22,91 @@ for lib in [
     "openai",
     "amqtt",
     "transitions",
-]:
-    logging.getLogger(lib).setLevel(logging.WARNING)
-
-# Configure main app logging (HERA, MQTT only)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",  # Simple: just show [HERA] ... [MQTT] ...
 )
 
-# LiteLLM installs its own handler; disable propagation to avoid duplicate lines.
-litellm_logger = logging.getLogger("LiteLLM")
-litellm_logger.setLevel(logging.WARNING)
-litellm_logger.propagate = False
 
-def _validate_ollama() -> bool:
-    try:
-        listed = ollama.list()
-        raw_models = getattr(listed, "models", None)
-        if raw_models is None and isinstance(listed, dict):
-            raw_models = listed.get("models", [])
-        raw_models = raw_models or []
-
-        models: list[str] = []
-        for m in raw_models:
-            if isinstance(m, dict):
-                name = m.get("name") or m.get("model")
-            else:
-                name = getattr(m, "name", None) or getattr(m, "model", None)
-            if name:
-                models.append(name)
-
-        ok = True
-        for needed in (OLLAMA_MODEL, OLLAMA_ROUTER_MODEL):
-            if needed in models:
-                print(f"  OK {needed}")
-            else:
-                print(f"  MISSING {needed}. Run: ollama pull {needed}")
-                ok = False
-        if not ok:
-            print(f"  Available: {', '.join(models)}")
-        return ok
-    except Exception as exc:
-        print(f"  Ollama unavailable: {exc}")
-        return False
+def configure_logging() -> None:
+    for lib in NOISY_LOGGERS:
+        logging.getLogger(lib).setLevel(logging.WARNING)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    litellm_logger = logging.getLogger("LiteLLM")
+    litellm_logger.setLevel(logging.WARNING)
+    litellm_logger.propagate = False
 
 
-def _validate_openrouter() -> bool:
-    if not OPENROUTER_API_KEY:
-        print("  OPENROUTER_API_KEY not set in .env")
-        return False
-    try:
-        print("  Verifying OpenRouter key ...")
-        client = openai.OpenAI(
-            base_url=OPENROUTER_BASE_URL,
-            api_key=OPENROUTER_API_KEY,
-        )
-        client.chat.completions.create(
-            model=OPENROUTER_MODEL,
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=5,
-        )
-        print(f"  OpenRouter OK: {OPENROUTER_MODEL}")
-        return True
-    except Exception as exc:
-        print(f"  OpenRouter error: {exc}")
-        return False
-
-
-# -- Provider selection -----------------------------------------
-def select_llm_provider() -> str:
-    print("\n" + "=" * 50)
-    print("   HERA - Select LLM Provider")
-    print("=" * 50)
-
-    auto = LLM_PROVIDER if LLM_PROVIDER in {"ollama", "openrouter"} else None
-    if auto:
-        print(f"[HERA] Provider from .env: {auto}")
-        if auto == "ollama" and _validate_ollama():
-            return "ollama"
-        if auto == "openrouter" and _validate_openrouter():
-            return "openrouter"
-        raise ValueError("Configured LLM_PROVIDER failed validation. Check .env")
-
-    while True:
-        print("\n1. Ollama (Local)")
-        print("2. OpenRouter (Cloud)")
-        choice = input("\nChoose (1/2): ").strip()
-
-        if choice == "1":
-            if _validate_ollama():
-                return "ollama"
-            continue
-
-        if choice == "2":
-            if _validate_openrouter():
-                return "openrouter"
-            continue
-
-        print("  Enter 1 or 2.")
-
-
-# -- Bootstrap --------------------------------------------------
-def main() -> None:
+def print_banner() -> None:
     print("=" * 50)
     print("   HERA - Multi-Agent IoT Telegram Bot")
     print("=" * 50)
+
+
+def load_runtime_settings() -> tuple[dict, str]:
+    settings = runtime_settings.get()
+    provider = settings["provider"]
+    if provider not in {"ollama", "openrouter"}:
+        raise ValueError(
+            "Invalid runtime provider in model_settings. Use 'ollama' or 'openrouter'.",
+        )
+    return settings, provider
+
+
+def connect_mqtt() -> MQTTService | None:
+    mqtt_svc = MQTTService(
+        broker_address=MQTT_BROKER,
+        port=MQTT_PORT,
+        persist_telemetry=False,
+    )
+    try:
+        mqtt_svc.connect_client_only()
+    except ConnectionRefusedError:
+        print("Cannot connect to MQTT broker")
+        return None
+    print(f"[MQTT] Connected {MQTT_BROKER}:{MQTT_PORT}")
+    return mqtt_svc
+
+
+def build_agents(llm_svc: LLMService, mqtt_svc: MQTTService) -> dict:
+    tool_reg = ToolRegistry(mqtt_svc)
+    return {
+        "device_control": DeviceControlAgent(llm_svc, mqtt_svc, tool_reg),
+        "sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
+        "anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc),
+    }
+
+
+def print_runtime_summary(settings: dict, agents: dict) -> None:
+    active_provider = settings["provider"]
+    provider_models = settings["models"][active_provider]
+    print(f"[HERA] Provider: {active_provider}")
+    print(f"[HERA] Orchestrator model: {provider_models['orchestratorModel']}")
+    print(
+        "[HERA] Agent models: "
+        f"device_control={provider_models['deviceControlModel']}, "
+        f"sensor_analysis={provider_models['sensorAnalysisModel']}, "
+        f"anomaly_expert={provider_models['anomalyExpertModel']}"
+    )
+    print(f"[HERA] Agents: {', '.join(agents)}")
+    print("[HERA] Bot running ... (Ctrl+C to stop)\n")
+
+
+def main() -> None:
+    configure_logging()
+    print_banner()
 
     if not TELEGRAM_BOT_TOKEN:
         print("TELEGRAM_BOT_TOKEN not set in .env")
         return
 
-    provider = select_llm_provider()
-
-    mqtt_svc = MQTTService(broker_address=MQTT_BROKER, port=MQTT_PORT)
-    try:
-        mqtt_svc.connect()
-        print(f"[MQTT] Connected {MQTT_BROKER}:{MQTT_PORT}")
-    except ConnectionRefusedError:
-        print("Cannot connect to MQTT broker")
+    settings, provider = load_runtime_settings()
+    mqtt_svc = connect_mqtt()
+    if mqtt_svc is None:
         return
 
     llm_svc = LLMService(provider)
-    tool_reg = ToolRegistry(mqtt_svc)
-
-    agents = {
-        "device_control": DeviceControlAgent(llm_svc, mqtt_svc, tool_reg),
-        "sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
-        "anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc),
-        "chat": ChatAgent(llm_svc, mqtt_svc),
-    }
-
-    if provider == "ollama":
-        router_model = ORCHESTRATOR_MODEL_OLLAMA
-    else:
-        router_model = ORCHESTRATOR_MODEL_OPENROUTER
-    orchestrator = Orchestrator(llm_svc, agents, router_model=router_model)
-
-    telegram = TelegramAdapter(orchestrator, mqtt_svc, provider)
-
-    if provider == "ollama":
-        default_model = OLLAMA_MODEL
-        agent_models = {
-            "device_control": DEVICE_AGENT_MODEL_OLLAMA,
-            "sensor_analysis": SENSOR_AGENT_MODEL_OLLAMA,
-            "anomaly_expert": ANOMALY_AGENT_MODEL_OLLAMA,
-            "chat": CHAT_AGENT_MODEL_OLLAMA,
-        }
-    else:
-        default_model = OPENROUTER_MODEL
-        agent_models = {
-            "device_control": DEVICE_AGENT_MODEL_OPENROUTER,
-            "sensor_analysis": SENSOR_AGENT_MODEL_OPENROUTER,
-            "anomaly_expert": ANOMALY_AGENT_MODEL_OPENROUTER,
-            "chat": CHAT_AGENT_MODEL_OPENROUTER,
-        }
-
-    print(f"[HERA] Provider: {provider} | Default model: {default_model}")
-    print(f"[HERA] Router model: {router_model}")
-    print(
-        "[HERA] Agent models: "
-        + ", ".join(f"{k}={v}" for k, v in agent_models.items())
-    )
-    print(f"[HERA] Agents: {', '.join(agents)}")
-    print("[HERA] Bot running ... (Ctrl+C to stop)\n")
-
-    telegram.run()
+    agents = build_agents(llm_svc, mqtt_svc)
+    orchestrator = Orchestrator(llm_svc, agents, mqtt_svc, orchestrator_model=None)
+    print_runtime_summary(settings, agents)
+    TelegramAdapter(orchestrator, mqtt_svc, provider).run()
 
 
 if __name__ == "__main__":

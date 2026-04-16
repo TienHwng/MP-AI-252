@@ -31,7 +31,7 @@ class VoiceAdapter:
     """
 
     def __init__(self, orchestrator: Orchestrator) -> None:
-        self._orch = orchestrator
+        self.orch = orchestrator
 
     async def handle_audio(self, audio_bytes: bytes, chat_id: str = "voice") -> str:
         """Transcribe → orchestrate → return text for TTS."""

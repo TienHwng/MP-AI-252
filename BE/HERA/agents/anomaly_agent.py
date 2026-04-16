@@ -2,17 +2,15 @@
 Anomaly Expert Agent
 ====================
 Specialised in interpreting anomaly scores from the on-device TinyML model.
-Combines rule-based severity assessment with LLM explanation.
+Builds a rule-based anomaly report for the orchestrator.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 from agents.base import AgentBase
-from core.llm_service import LLMService, filter_response
-from core.language_policy import build_language_policy, enforce_language_output
+from core.llm_service import LLMService
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from config import (
@@ -22,8 +20,6 @@ from config import (
     NORMAL_HUMI_MAX,
     ANOMALY_THRESHOLD,
     ANOMALY_CRITICAL_THRESHOLD,
-    ANOMALY_AGENT_MODEL_OLLAMA,
-    ANOMALY_AGENT_MODEL_OPENROUTER,
 )
 
 # ── Rule engine ───────────────────────────────────────────────
@@ -83,37 +79,10 @@ def classify_anomaly(sensor: dict) -> dict:
     }
 
 
-SYSTEM_PROMPT = """\
-You are the Anomaly Analysis module of HERA, an IoT environmental monitor.
-
-### Current sensor data
-{sensor_context}
-
-### Anomaly classification (rule-engine)
-{anomaly_context}
-
-### Reference values
-- Normal temperature: 25–35 °C
-- Normal humidity: 60–80 %
-- Anomaly score > 0.5 = abnormal (on-device ML), > 0.8 = critical
-
-### Rules
-- ALWAYS respond in the SAME LANGUAGE as the user
-- Explain the anomaly in simple terms: what is wrong, possible causes, recommendation
-- If severity is high, suggest immediate action
-- Be concise and actionable
-- NEVER output Chinese/Mandarin
-"""
-
-
 class AnomalyExpertAgent(AgentBase):
     def __init__(self, llm: LLMService, mqtt: MQTTService) -> None:
-        self._llm = llm
-        self._mqtt = mqtt
-        if llm.provider == "ollama":
-            self._model_override = ANOMALY_AGENT_MODEL_OLLAMA
-        else:
-            self._model_override = ANOMALY_AGENT_MODEL_OPENROUTER
+        self.llm = llm
+        self.mqtt = mqtt
 
     @property
     def name(self) -> str:
@@ -126,37 +95,29 @@ class AnomalyExpertAgent(AgentBase):
     async def process(
         self, message: UserMessage, context: dict,
     ) -> AgentResponse:
-        target_language = context.get("target_language", "en")
-        snapshot = self._mqtt.get_sensor_snapshot()
+        snapshot = self.mqtt.get_sensor_snapshot()
         classification = classify_anomaly(snapshot)
-        system_prompt = (
-            SYSTEM_PROMPT.format(
-                sensor_context=json.dumps(snapshot, indent=2),
-                anomaly_context=json.dumps(classification, indent=2),
-            )
-            .replace("25–35", f"{NORMAL_TEMP_MIN:g}-{NORMAL_TEMP_MAX:g}")
-            .replace("60–80", f"{NORMAL_HUMI_MIN:g}-{NORMAL_HUMI_MAX:g}")
-            .replace("> 0.5", f"> {ANOMALY_THRESHOLD:g}")
-            .replace("> 0.8", f"> {ANOMALY_CRITICAL_THRESHOLD:g}")
-            + "\n\n"
-            + build_language_policy(target_language)
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message.text},
-        ]
-
-        result = await asyncio.to_thread(
-            self._llm.completion, messages, None, self._model_override,
-        )
-        reply = enforce_language_output(
-            filter_response(result["content"] or "(no analysis)"),
-            target_language,
-        )
+        report = {
+            "user_message": message.text,
+            "snapshot": snapshot,
+            "classification": classification,
+            "reference": {
+                "temperature_c": {
+                    "min": NORMAL_TEMP_MIN,
+                    "max": NORMAL_TEMP_MAX,
+                },
+                "humidity_percent": {
+                    "min": NORMAL_HUMI_MIN,
+                    "max": NORMAL_HUMI_MAX,
+                },
+                "anomaly_threshold": ANOMALY_THRESHOLD,
+                "anomaly_critical_threshold": ANOMALY_CRITICAL_THRESHOLD,
+            },
+        }
+        print(f"  [AnomalyAgent] type={classification['type']} severity={classification['severity']}")
 
         return AgentResponse(
-            text=reply,
+            text=json.dumps(report, ensure_ascii=False),
             agent_name=self.name,
-            metadata={"anomaly": classification},
+            metadata=report,
         )

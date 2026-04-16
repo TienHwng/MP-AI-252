@@ -65,25 +65,25 @@ NEO_LED_COLOR = Gf.Vec3f(0.2, 0.8, 1.0)    # Cyan (simulated RGB)
 
 # ==================== STATE ====================
 
-_mqtt_client = None
-_update_sub = None
-_main_led_on = False
-_neo_led_on = False
-_needs_update = False
-_is_connected = False
-_reconnect_timer = 0
-_connection_attempts = 0
+mqtt_client = None
+update_sub = None
+main_led_on = False
+neo_led_on = False
+needs_update = False
+is_connected = False
+reconnect_timer = 0
+connection_attempts = 0
 
 
 # ==================== HELPERS ====================
 
-def _get_stage():
+def get_stage():
     return omni.usd.get_context().get_stage()
 
 
-def _set_sphere_light(prim_path: str, on: bool, intensity: float, color: Gf.Vec3f):
+def set_sphere_light(prim_path: str, on: bool, intensity: float, color: Gf.Vec3f):
     """Set intensity and color for a SphereLight prim."""
-    stage = _get_stage()
+    stage = get_stage()
     if not stage:
         return
     prim = stage.GetPrimAtPath(prim_path)
@@ -97,20 +97,20 @@ def _set_sphere_light(prim_path: str, on: bool, intensity: float, color: Gf.Vec3
         light.GetColorAttr().Set(color)
 
 
-def _update_all_main_leds(on: bool):
+def update_all_main_leds(on: bool):
     """Update all 4 white indicator LEDs at once."""
     for prim_path in MAIN_LED_PATHS:
-        _set_sphere_light(prim_path, on, MAIN_LED_INTENSITY, MAIN_LED_COLOR)
+        set_sphere_light(prim_path, on, MAIN_LED_INTENSITY, MAIN_LED_COLOR)
 
 
-def _update_all_neo_leds(on: bool):
+def update_all_neo_leds(on: bool):
     """Update the NeoPixel RGB LED."""
-    _set_sphere_light(NEO_LED_PATH, on, NEO_LED_INTENSITY, NEO_LED_COLOR)
+    set_sphere_light(NEO_LED_PATH, on, NEO_LED_INTENSITY, NEO_LED_COLOR)
 
 
 # Map MQTT keys → led_type
 # Telemetry uses snake_case, RPC responses use PascalCase
-_LED_KEY_MAP = {
+LED_KEY_MAP = {
     "led_state": "main",
     "LedState":  "main",
     "neo_led_state": "neo",
@@ -121,33 +121,33 @@ _LED_KEY_MAP = {
 # ==================== MQTT CALLBACKS ====================
 
 def on_connect(client, userdata, flags, rc, properties=None):
-    global _is_connected, _connection_attempts
+    global is_connected, connection_attempts
     if rc == 0:
-        _is_connected = True
-        _connection_attempts = 0
+        is_connected = True
+        connection_attempts = 0
         client.subscribe("v1/devices/me/telemetry")
         client.subscribe("v1/devices/me/attributes")
         print("[OV] [ OK ] MQTT connected")
     else:
-        _is_connected = False
-        _connection_attempts += 1
+        is_connected = False
+        connection_attempts += 1
         print(f"[OV] [ ERROR ] Connection failed rc={rc}")
 
 
 def on_disconnect(client, userdata, flags, rc, properties=None):
-    global _is_connected, _connection_attempts
-    _is_connected = False
+    global is_connected, connection_attempts
+    is_connected = False
     if rc != 0:
-        _connection_attempts += 1
-        if _connection_attempts <= 3:
-            print(f"[OV] [ INFO ] Disconnected (attempt {_connection_attempts})")
+        connection_attempts += 1
+        if connection_attempts <= 3:
+            print(f"[OV] [ INFO ] Disconnected (attempt {connection_attempts})")
     else:
         print("[OV] [ INFO ] Disconnected (clean)")
 
 
 def on_message(client, userdata, msg):
     """Update LED state from telemetry / attributes."""
-    global _main_led_on, _neo_led_on, _needs_update
+    global main_led_on, neo_led_on, needs_update
     try:
         data = json.loads(msg.payload.decode())
 
@@ -157,16 +157,16 @@ def on_message(client, userdata, msg):
 
         if main_state is not None:
             new_state = bool(main_state)
-            if new_state != _main_led_on:
-                _main_led_on = new_state
-                _needs_update = True
+            if new_state != main_led_on:
+                main_led_on = new_state
+                needs_update = True
                 print(f"[OV] Main LED → {'ON' if new_state else 'OFF'}")
 
         if neo_state is not None:
             new_state = bool(neo_state)
-            if new_state != _neo_led_on:
-                _neo_led_on = new_state
-                _needs_update = True
+            if new_state != neo_led_on:
+                neo_led_on = new_state
+                needs_update = True
                 print(f"[OV] Neo LED → {'ON' if new_state else 'OFF'}")
     except Exception as e:
         print(f"[OV] Parse error: {e}")
@@ -176,37 +176,37 @@ def on_message(client, userdata, msg):
 
 def on_update(e):
     """Per-frame callback — apply LED changes on Omniverse main thread."""
-    global _needs_update, _reconnect_timer
+    global needs_update, reconnect_timer
 
-    if _needs_update:
-        _needs_update = False
-        _update_all_main_leds(_main_led_on)
-        _update_all_neo_leds(_neo_led_on)
+    if needs_update:
+        needs_update = False
+        update_all_main_leds(main_led_on)
+        update_all_neo_leds(neo_led_on)
 
     # Auto-reconnect với exponential backoff
-    if _mqtt_client and not _is_connected:
-        _reconnect_timer += 1
+    if mqtt_client and not is_connected:
+        reconnect_timer += 1
         # Backoff: 5s, 10s, 15s (tối đa) — đơn vị frame ≈ 60fps
-        delay = min(_connection_attempts * 300, 900)
-        if _reconnect_timer >= delay:
-            _reconnect_timer = 0
-            if _connection_attempts <= 10:
+        delay = min(connection_attempts * 300, 900)
+        if reconnect_timer >= delay:
+            reconnect_timer = 0
+            if connection_attempts <= 10:
                 try:
-                    if _connection_attempts == 1:
+                    if connection_attempts == 1:
                         print("[OV] [ INFO ] Attempting reconnect...")
-                    _mqtt_client.reconnect()
+                    mqtt_client.reconnect()
                 except Exception as e:
-                    if _connection_attempts <= 3:
+                    if connection_attempts <= 3:
                         print(f"[OV] [ WARNING ] Reconnect failed: {e}")
 
 
 # ==================== START / STOP ====================
 
 def start():
-    global _mqtt_client, _update_sub, _is_connected
-    global _reconnect_timer, _connection_attempts
+    global mqtt_client, update_sub, is_connected
+    global reconnect_timer, connection_attempts
 
-    if _mqtt_client:
+    if mqtt_client:
         stop()
 
     print("=" * 50)
@@ -216,31 +216,31 @@ def start():
     print(f"  Neo LED (1x)  : {NEO_LED_PATH} [intensity {NEO_LED_INTENSITY}]")
     print(f"  Broker        : {MQTT_BROKER}:{MQTT_PORT}\n")
 
-    _is_connected = False
-    _reconnect_timer = 0
-    _connection_attempts = 0
+    is_connected = False
+    reconnect_timer = 0
+    connection_attempts = 0
 
     # Unique client ID — avoid conflicts with broker
     ts = int(time.time() * 1000) % 100000
     rid = random.randint(1000, 9999)
-    _mqtt_client = mqtt.Client(
+    mqtt_client = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2, f"OV_{ts}_{rid}"
     )
-    _mqtt_client.on_connect = on_connect
-    _mqtt_client.on_message = on_message
-    _mqtt_client.on_disconnect = on_disconnect
-    _mqtt_client.reconnect_delay_set(min_delay=2, max_delay=30)
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
+    mqtt_client.on_disconnect = on_disconnect
+    mqtt_client.reconnect_delay_set(min_delay=2, max_delay=30)
 
     try:
-        _mqtt_client.connect(MQTT_BROKER, MQTT_PORT)
-        _mqtt_client.loop_start()
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT)
+        mqtt_client.loop_start()
     except Exception as e:
         print(f"[OV] [ ERROR ] Không kết nối được: {e}")
         return
 
-    if not _update_sub:
+    if not update_sub:
         app = omni.kit.app.get_app()
-        _update_sub = (
+        update_sub = (
             app.get_update_event_stream().create_subscription_to_pop(on_update)
         )
 
@@ -249,22 +249,22 @@ def start():
 
 
 def stop():
-    global _mqtt_client, _update_sub, _is_connected
+    global mqtt_client, update_sub, is_connected
 
-    if _update_sub:
-        _update_sub.unsubscribe()
-        _update_sub = None
+    if update_sub:
+        update_sub.unsubscribe()
+        update_sub = None
 
-    if _mqtt_client:
+    if mqtt_client:
         try:
-            _mqtt_client.loop_stop()
-            _mqtt_client.disconnect()
+            mqtt_client.loop_stop()
+            mqtt_client.disconnect()
         except Exception:
             pass
         finally:
-            _mqtt_client = None
+            mqtt_client = None
 
-    _is_connected = False
+    is_connected = False
     print("[OV] [ OK ] Stopped.")
 
 
@@ -275,15 +275,15 @@ def restart():
     start()
 
 
-def _cleanup_on_exit():
+def cleanup_on_exit():
     """Cleanup when Omniverse exits."""
-    if _mqtt_client:
+    if mqtt_client:
         stop()
 
 
 # ==================== AUTO-START ====================
 
-atexit.register(_cleanup_on_exit)
+atexit.register(cleanup_on_exit)
 print("[OV] [ INFO ] Starting Digital Twin connector...")
 print("[OV] [ INFO ] Use restart() to reconnect if needed.")
 start()

@@ -8,6 +8,7 @@ import random
 import threading
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
@@ -41,17 +42,24 @@ MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv("MQTT_RPC_REQUEST_TOPIC_PREFIX").rstri
 
 if ENABLE_MONGODB:
     from pymongo import MongoClient
-    from datetime import datetime, timezone
 
     mongo_client = MongoClient(MONGODB_URI)
     db = mongo_client[MONGODB_DB]
     collection = db[MONGODB_COLLECTION]
 
 class MQTTManager:
-    def __init__(self, broker_address=None, port=None, broker_bind_host=None):
+    def __init__(
+        self,
+        broker_address=None,
+        port=None,
+        broker_bind_host=None,
+        *,
+        persist_telemetry: bool | None = None,
+    ):
         self.broker_address = broker_address or os.getenv("MQTT_BROKER")
         self.port = port if port is not None else _env_int("MQTT_PORT", 1883)
         self.broker_bind_host = broker_bind_host or os.getenv("MQTT_BROKER_BIND_HOST")
+        self.persist_telemetry = ENABLE_MONGODB if persist_telemetry is None else bool(persist_telemetry)
         
         # === Cấu hình Broker ===
         self.broker_config = {
@@ -156,7 +164,7 @@ class MQTTManager:
                 parsed = json.loads(payload)
                 self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 
-                if ENABLE_MONGODB:
+                if self.persist_telemetry and ENABLE_MONGODB:
                     doc = {
                         "recorded_at": datetime.now(timezone.utc),
                         "metadata": {
@@ -196,6 +204,11 @@ class MQTTManager:
         # Dùng loop_start() chạy ngầm thay vì loop_forever() để không khóa luồng chính
         self.client.loop_start()
 
+    def connect_client_only(self):
+        """Chỉ kết nối MQTT client, không tự chạy broker nội bộ."""
+        self.client.connect(self.broker_address, self.port)
+        self.client.loop_start()
+
     # Alias for HERA compatibility
     def connect(self):
         """Alias for start() - used by HERA"""
@@ -233,6 +246,18 @@ class MQTTManager:
     def get_sensor_snapshot(self) -> dict:
         """Return a copy of the current sensor state - used by HERA"""
         return copy.deepcopy(self.latest_sensor_data)
+
+    def get_device_snapshot(self) -> dict:
+        """Return a copy of the latest device states."""
+        return copy.deepcopy(self.latest_sensor_data.get("devices", {}))
+
+    def get_network_snapshot(self) -> dict:
+        """Return a copy of the latest network state."""
+        return copy.deepcopy(self.latest_sensor_data.get("network", {}))
+
+    def get_sensor_readings_snapshot(self) -> dict:
+        """Return a copy of the latest physical sensor readings."""
+        return copy.deepcopy(self.latest_sensor_data.get("sensors", {}))
 
 # === Cách chạy thử file này ===
 if __name__ == "__main__":

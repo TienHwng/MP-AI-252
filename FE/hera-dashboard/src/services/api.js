@@ -134,3 +134,54 @@ export const toggleNeoLight = async (enabled) => {
 
 	return response.json();
 };
+
+const MODEL_SETTING_FIELDS = [
+	'orchestratorModel',
+	'deviceControlModel',
+	'sensorAnalysisModel',
+	'anomalyExpertModel',
+];
+
+const normalizeProviderModels = (providerModels = {}) => {
+	const normalized = {};
+	for (const field of MODEL_SETTING_FIELDS) {
+		normalized[field] = typeof providerModels[field] === 'string' ? providerModels[field] : '';
+	}
+	return normalized;
+};
+
+const normalizeModelSettings = (payload = {}) => {
+	const provider = payload.provider === 'ollama' ? 'ollama' : 'openrouter';
+	return {
+		provider,
+		models: {
+			ollama: normalizeProviderModels(payload.models?.ollama),
+			openrouter: normalizeProviderModels(payload.models?.openrouter),
+		},
+		updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : '',
+	};
+};
+
+export const fetchModelSettings = async () => {
+	const response = await fetch(`${API_BASE_URL}/api/settings/models`);
+	const payload = await response.json();
+	if (!response.ok) {
+		throw new Error(payload.error || 'Failed to fetch model settings');
+	}
+	return normalizeModelSettings(payload);
+};
+
+export const updateModelSettings = async (settings) => {
+	const response = await fetch(`${API_BASE_URL}/api/settings/models`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(settings),
+	});
+	const payload = await response.json();
+	if (!response.ok) {
+		throw new Error(payload.error || 'Failed to save model settings');
+	}
+	return normalizeModelSettings(payload.settings || settings);
+};

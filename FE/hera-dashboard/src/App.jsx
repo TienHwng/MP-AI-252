@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
 import Sidebar from './components/layout/Sidebar';
 import { getStoredUser } from './services/api';
 
@@ -9,12 +10,6 @@ import { getStoredUser } from './services/api';
 const Devices = () => (
   <div className="p-8 text-2xl font-semibold text-textMain">
     Device Management Coming Soon...
-  </div>
-);
-
-const Settings = () => (
-  <div className="p-8 text-2xl font-semibold text-textMain">
-    Settings Panel Coming Soon...
   </div>
 );
 

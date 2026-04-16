@@ -40,7 +40,7 @@ The system is divided into **three layers**, communicating via **MQTT**.
 
 ## AI Runtime Pipeline
 
-HERA uses a **multi-agent orchestrator pipeline** with provider-aware model routing and strict language policy enforcement.
+HERA uses a **multi-agent orchestrator pipeline** with provider-aware model routing.
 
 ### End-to-End Flow
 
@@ -50,14 +50,17 @@ HERA uses a **multi-agent orchestrator pipeline** with provider-aware model rout
     - `sensor_query`
     - `anomaly_query`
     - `general`
-3. Orchestrator routes to specialist agent:
+3. Orchestrator routes to specialist behavior:
     - `device_control` -> `DeviceControlAgent`
     - `sensor_query` -> `SensorAnalysisAgent`
     - `anomaly_query` -> `AnomalyExpertAgent`
-    - `general` -> `ChatAgent`
-4. Specialist optionally executes tool calls through `ToolRegistry` (max bounded loop).
+    - `general` -> handled directly by `Orchestrator`
+4. Specialist agents optionally execute tool calls through `ToolRegistry` and
+   return a specialist report. They do not send the final user-facing message.
 5. `MQTTService` publishes RPC or reads telemetry/attributes state.
-6. Agent response returns to Telegram, with latency and intent metadata.
+6. Orchestrator receives the specialist report and writes the final user-facing
+   response.
+7. Telegram sends the orchestrator response, with latency and intent metadata.
 
 ### Runtime Modules
 
@@ -68,16 +71,16 @@ HERA uses a **multi-agent orchestrator pipeline** with provider-aware model rout
    - `backend/HERA/agents/device_agent.py`
    - `backend/HERA/agents/sensor_agent.py`
    - `backend/HERA/agents/anomaly_agent.py`
-   - `backend/HERA/agents/chat_agent.py`
 - Core services:
    - `backend/HERA/core/llm_service.py`
    - `backend/HERA/core/mqtt_service.py`
    - `backend/HERA/core/tool_registry.py`
-   - `backend/HERA/core/language_policy.py`
 
 ### Provider and Model Routing
 
-All provider/model selection is centralized in `.env` and loaded by `backend/HERA/config.py`.
+Provider/model selection is stored in the `model_settings` MongoDB document and
+can be edited from the dashboard Settings page. Legacy `.env` model keys are
+only used to seed the first settings document if MongoDB has no saved settings.
 
 - `LLM_PROVIDER` can lock provider (`ollama` or `openrouter`).
 - Orchestrator model keys:
@@ -87,7 +90,6 @@ All provider/model selection is centralized in `.env` and loaded by `backend/HER
    - `DEVICE_AGENT_MODEL_*`
    - `SENSOR_AGENT_MODEL_*`
    - `ANOMALY_AGENT_MODEL_*`
-   - `CHAT_AGENT_MODEL_*`
 
 ### Tool Execution Policy
 
@@ -99,15 +101,20 @@ All provider/model selection is centralized in `.env` and loaded by `backend/HER
 
 ```bash
 # Terminal 1
-cd backend/HERA
-python device_simulator.py
+cd BE/MQTT_Broker
+python mqtt_manager.py
 
 # Terminal 2
-cd backend/HERA
+cd BE/HERA
 python main.py
+
+# Terminal 3 (optional, no hardware)
+cd BE/HERA
+python device_simulator.py
 ```
 
-Use `main.py` as the active bot runtime. Do not run multiple bot runtimes in parallel.
+`mqtt_manager.py` is the dedicated MQTT broker/ingest process.
+`main.py` now connects as a client only (no internal broker startup).
 
 ### 2. Low-Level Layer — `firmware/src/` (PlatformIO firmware)
 - **Role:** Execution & Sensing

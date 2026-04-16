@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -20,13 +19,11 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from agents.orchestrator import Orchestrator
-from core.language_policy import detect_user_language
 from core.message import AgentResponse, MessageSource, UserMessage
 from core.mqtt_service import MQTTService
+from core.runtime_settings import runtime_settings
 from config import (
     TELEGRAM_BOT_TOKEN,
-    OLLAMA_MODEL,
-    OPENROUTER_MODEL,
     TELEGRAM_READ_TIMEOUT,
     TELEGRAM_WRITE_TIMEOUT,
     TELEGRAM_CONNECT_TIMEOUT,
@@ -42,24 +39,26 @@ class TelegramAdapter:
         mqtt: MQTTService,
         provider: str,
     ) -> None:
-        self._orch = orchestrator
-        self._mqtt = mqtt
-        self._provider = provider
-        self._app = None
-        self._registered_chats = set()  # Track users who started the bot
+        self.orch = orchestrator
+        self.mqtt = mqtt
+        self.provider = provider
+        self.app = None
+        self.registered_chats = set()  # Track users who started the bot
 
     # ── command handlers ──────────────────────────────────────
 
     async def cmd_start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
-        self._registered_chats.add(chat_id)  # Register this user for alerts
-        
-        if self._provider == "ollama":
-            model = OLLAMA_MODEL
-            provider_label = f"Ollama ({model})"
-        else:
-            model = OPENROUTER_MODEL
-            provider_label = f"OpenRouter ({model})"
+        self.registered_chats.add(chat_id)  # Register this user for alerts
+
+        settings = runtime_settings.get()
+        active_provider = settings["provider"]
+        model = settings["models"][active_provider]["orchestratorModel"]
+        provider_label = (
+            f"Ollama ({model})"
+            if active_provider == "ollama"
+            else f"OpenRouter ({model})"
+        )
         await update.message.reply_text(
             "*Hi! I'm HERA* — your AI IoT assistant.\n\n"
             f"*Provider:* {provider_label}\n"
@@ -73,14 +72,13 @@ class TelegramAdapter:
         )
 
     async def cmd_reset(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        self._orch.reset_history(str(update.effective_chat.id))
+        self.orch.reset_history(str(update.effective_chat.id))
         await update.message.reply_text("Conversation history cleared.")
 
     async def cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        s = self._mqtt.get_sensor_snapshot()
-        sensors = s.get("sensors", {})
-        devices = s.get("devices", {})
-        network = s.get("network", {})
+        sensors = self.mqtt.get_sensor_readings_snapshot()
+        devices = self.mqtt.get_device_snapshot()
+        network = self.mqtt.get_network_snapshot()
         anomaly_score = sensors.get("anomaly")
         await update.message.reply_text(
             f"*Sensor state*\n"
@@ -90,6 +88,9 @@ class TelegramAdapter:
             f"Anomaly: `{anomaly_score}`\n"
             f"White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
             f"NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
+            f"WS2812: `{'ON' if devices.get('ws2812_status') else 'OFF'}`\n"
+            f"Relay: `{'ON' if devices.get('relay_status') else 'OFF'}`\n"
+            f"Mini fan: `{'ON' if devices.get('mini_fan_status') else 'OFF'}`\n"
             f"WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
             f"Uptime: `{network.get('uptime_ms')}` ms",
             parse_mode="Markdown",
@@ -100,7 +101,7 @@ class TelegramAdapter:
     async def monitor_anomalies(self, context):
         """Background task: Check sensor state and alert on anomalies."""
         try:
-            sensor_state = self._mqtt.get_sensor_snapshot()
+            sensor_state = self.mqtt.get_sensor_snapshot()
             sensors = sensor_state.get("sensors", {})
             current_score = sensors.get("anomaly") or 0
 
@@ -120,10 +121,10 @@ class TelegramAdapter:
                 print(alert_msg)
                 
                 # Send alert to all registered Telegram users
-                if self._registered_chats and self._app:
-                    for chat_id in self._registered_chats:
+                if self.registered_chats and self.app:
+                    for chat_id in self.registered_chats:
                         try:
-                            await self._app.bot.send_message(
+                            await self.app.bot.send_message(
                                 chat_id=chat_id,
                                 text=alert_msg,
                                 parse_mode="HTML"
@@ -140,8 +141,6 @@ class TelegramAdapter:
     # ── message handler ───────────────────────────────────────
 
     async def handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        target_language = detect_user_language(update.message.text or "")
-
         user_msg = UserMessage(
             text=update.message.text,
             chat_id=str(update.effective_chat.id),
@@ -150,28 +149,16 @@ class TelegramAdapter:
         )
 
         try:
-            response: AgentResponse = await self._orch.handle(user_msg)
+            response: AgentResponse = await self.orch.handle(user_msg)
             reply = response.text
         except Exception as exc:
             err = str(exc)
             if "400" in err:
-                reply = (
-                    "[ WARNING ] Tool calling is not supported by this model."
-                    if target_language == "en"
-                    else "[ WARNING ] Model hien tai khong ho tro tool calling."
-                )
+                reply = "[ WARNING ] Model hien tai khong ho tro tool calling."
             elif "401" in err:
-                reply = (
-                    "[ WARNING ] API key is invalid. Please check your .env file."
-                    if target_language == "en"
-                    else "[ WARNING ] API key khong hop le. Vui long kiem tra file .env."
-                )
+                reply = "[ WARNING ] API key khong hop le. Vui long kiem tra file .env."
             else:
-                reply = (
-                    f"[ WARNING ] Error: {exc}"
-                    if target_language == "en"
-                    else f"[ WARNING ] Loi: {exc}"
-                )
+                reply = f"[ WARNING ] Loi: {exc}"
             print(f"[Telegram] Error: {exc}")
 
         try:
@@ -207,7 +194,7 @@ class TelegramAdapter:
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message),
         )
-        self._app = app
+        self.app = app
 
         # Start background anomaly monitoring (5-second interval)
         app.job_queue.run_repeating(
