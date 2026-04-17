@@ -1,11 +1,14 @@
 """
 HERA Configuration
 ==================
-Centralized settings loaded from environment variables (.env).
-All modules import from here instead of reading .env directly.
+Centralized settings for HERA.
+All modules should import from here instead of reading .env directly.
 """
 
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -49,11 +52,23 @@ OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL")
 
 # ===================== MQTT =====================
 
-MQTT_BROKER = os.getenv("MQTT_BROKER")
-MQTT_BROKER_BIND_HOST = os.getenv("MQTT_BROKER_BIND_HOST")
+# Core MQTT connection
+MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.1.34")
+MQTT_BROKER_BIND_HOST = os.getenv("MQTT_BROKER_BIND_HOST", "192.168.1.34")
 MQTT_PORT = env_int("MQTT_PORT", 1883)
-MQTT_SUBSCRIBE_TOPIC = os.getenv("MQTT_SUBSCRIBE_TOPIC")
-MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv("MQTT_RPC_REQUEST_TOPIC_PREFIX")
+
+# MQTT topics (migrated from old .env)
+TOPIC_TELEMETRY = os.getenv("TOPIC_TELEMETRY", "v1/devices/me/telemetry")
+TOPIC_RPC_REQUEST = os.getenv("TOPIC_RPC_REQUEST", "v1/devices/me/rpc/request/")
+TOPIC_RPC_RESPONSE = os.getenv("TOPIC_RPC_RESPONSE", "v1/devices/me/rpc/response/")
+TOPIC_ATTRIBUTES = os.getenv("TOPIC_ATTRIBUTES", "v1/devices/me/attributes")
+
+# Backward-compatible aliases for existing modules
+MQTT_SUBSCRIBE_TOPIC = os.getenv("MQTT_SUBSCRIBE_TOPIC", TOPIC_TELEMETRY)
+MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv(
+    "MQTT_RPC_REQUEST_TOPIC_PREFIX",
+    TOPIC_RPC_REQUEST.rstrip("/"),
+).rstrip("/")
 
 
 # ===================== AI THRESHOLDS =====================

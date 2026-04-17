@@ -66,6 +66,7 @@ db.createCollection("devices", {
 				category: { bsonType: "string" },
 				status: { bsonType: "string" },
 				anomaly_score: { bsonType: ["double", "int"] },
+                current_user_id: { bsonType: ["string", "null"], description: "User đang log in và sở hữu data hiện tại" }
 			},
 		},
 	},
@@ -137,8 +138,8 @@ db.createCollection("activity_logs", {
 
 db.createCollection("telemetry_points", {
 	timeseries: {
-		timeField: "recorded_at", // Trường lưu thời gian (Recorded_at)
-		metaField: "metadata", // Cấu trúc chứa các Foreign Keys
+		timeField: "recorded_at", 
+		metaField: "metadata", 
 		granularity: "seconds",
 	},
 });
@@ -149,48 +150,39 @@ db.interaction_sessions.createIndex({ user_id: 1 });
 db.interaction_sessions.createIndex({ env_id: 1 });
 db.activity_logs.createIndex({ user_id: 1 });
 db.activity_logs.createIndex({ device_id: 1 });
-// Với Time Series, tạo index trên trường nằm trong metadata
+
+// Cập nhật index cho telemetry_points để query theo thiết bị và người dùng
 db.telemetry_points.createIndex({ "metadata.device_id": 1 });
+db.telemetry_points.createIndex({ "metadata.user_id": 1 });
+db.telemetry_points.createIndex({ "metadata.device_id": 1, "metadata.user_id": 1 });
 
 print("Database initialized with collections and indexes.");
 
-print("Starting user creation process...");
+print("Starting default data creation process...");
 
-db.users.insertMany([
-	{
-		user_id: "user_0001",
-		full_name: "Nguyen Khanh Hung",
-		email: "hung.nguyen1@hera.com",
-		password_hash: "123456789",
-	},
-
-	{
-		user_id: "user_0002",
-		full_name: "Nguyen Tien Hung",
-		email: "hung.nguyen2@hera.com",
-		password_hash: "123456789",
-	},
-
-	{
-		user_id: "user_0003",
-		full_name: "Ho Lam Khanh Vy",
-		email: "vy.ho123@hera.com",
-		password_hash: "123456789",
-	},
-
-	{
-		user_id: "user_0004",
-		full_name: "Tran Anh Duc",
-		email: "duc.tran789@hera.com",
-		password_hash: "123456789",
-	},
-
-	{
-		user_id: "user_0005",
-		full_name: "Neji",
-		email: "neji.kareshi@hera.com",
-		password_hash: "123456789",
-	},
+// Khởi tạo Environment và Device mặc định
+db.environments.insertMany([
+    { env_id: "env_0001", name: "Main Room", description: "Default testing environment" }
 ]);
 
-print("User created successfully.");
+db.devices.insertMany([
+    { 
+        device_id: "device_0001", 
+        env_id: "env_0001", 
+        name: "Yolo Uno", 
+        category: "IoT Board", 
+        status: "active", 
+        anomaly_score: 0.0,
+        current_user_id: null 
+    }
+]);
+
+db.users.insertMany([
+	{ user_id: "user_0001", full_name: "Nguyen Khanh Hung", email: "hung.nguyen1@hera.com", password_hash: "123456789" },
+	{ user_id: "user_0002", full_name: "Nguyen Tien Hung", email: "hung.nguyen2@hera.com", password_hash: "123456789" },
+	{ user_id: "user_0003", full_name: "Ho Lam Khanh Vy", email: "vy.ho123@hera.com", password_hash: "123456789" },
+	{ user_id: "user_0004", full_name: "Tran Anh Duc", email: "duc.tran789@hera.com", password_hash: "123456789" },
+	{ user_id: "user_0005", full_name: "Neji", email: "neji.kareshi@hera.com", password_hash: "123456789" },
+]);
+
+print("Users and defaults created successfully.");

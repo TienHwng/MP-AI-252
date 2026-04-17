@@ -82,12 +82,33 @@ export const logoutUser = () => {
 	localStorage.removeItem('hera_user');
 };
 
+// Khai báo việc User này vừa tiếp quản thiết bị
+export const claimDevice = async (userId, deviceId = 'device_0001') => {
+	try {
+		await fetch(`${API_BASE_URL}/api/device/claim`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ user_id: userId, device_id: deviceId }),
+		});
+	} catch (error) {
+		console.error("Failed to claim device:", error);
+	}
+};
+
 export const fetchLatestSensorData = async () => {
 	let lastError = null;
+    const user = getStoredUser();
+    
+    if (!user) {
+        throw new Error('User not logged in');
+    }
+
+    // Đính kèm user_id vào params để lọc data đúng user
+    const queryParams = `?user_id=${user.user_id}&device_id=device_0001`;
 
 	for (const endpoint of SENSOR_ENDPOINTS) {
 		try {
-			const response = await fetch(`${API_BASE_URL}${endpoint}`);
+			const response = await fetch(`${API_BASE_URL}${endpoint}${queryParams}`);
 			if (!response.ok) {
 				lastError = new Error(`Request failed: ${response.status}`);
 				continue;

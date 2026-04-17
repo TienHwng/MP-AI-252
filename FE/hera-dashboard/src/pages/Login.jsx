@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LogIn, Mail, Lock } from 'lucide-react';
-import { loginUser } from '../services/api';
+import { loginUser, claimDevice } from '../services/api';
 
 const Login = ({ onLoginSuccess }) => {
 	const [email, setEmail] = useState('');
@@ -15,6 +15,9 @@ const Login = ({ onLoginSuccess }) => {
 
 		try {
 			const user = await loginUser(email, password);
+            // Báo cho backend biết User này đang sở hữu thiết bị
+            await claimDevice(user.user_id, 'device_0001');
+            
 			onLoginSuccess(user);
 		} catch (err) {
 			setError(err.message || 'Login failed');

@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import random
+import sys
 import threading
 import time
 from pathlib import Path
@@ -12,19 +13,18 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
-from dotenv import load_dotenv
 
-# Load root .env once for this module
-ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=ROOT_ENV_PATH)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name))
-    except (TypeError, ValueError):
-        return default
-
+from BE.HERA.config import (
+    MQTT_BROKER,
+    MQTT_BROKER_BIND_HOST,
+    MQTT_PORT,
+    MQTT_RPC_REQUEST_TOPIC_PREFIX,
+    MQTT_SUBSCRIBE_TOPIC,
+)
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -34,11 +34,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 ENABLE_MONGODB = _env_bool("MQTT_ENABLE_MONGODB", True)
-MONGODB_URI = os.getenv("MONGODB_URI")
-MONGODB_DB = os.getenv("MONGODB_DB")
-MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION")
-MQTT_SUBSCRIBE_TOPIC = os.getenv("MQTT_SUBSCRIBE_TOPIC")
-MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv("MQTT_RPC_REQUEST_TOPIC_PREFIX").rstrip("/")
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
+MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
 
 if ENABLE_MONGODB:
     from pymongo import MongoClient
@@ -46,6 +44,8 @@ if ENABLE_MONGODB:
     mongo_client = MongoClient(MONGODB_URI)
     db = mongo_client[MONGODB_DB]
     collection = db[MONGODB_COLLECTION]
+    devices_collection = db["devices"]
+
 
 class MQTTManager:
     def __init__(
@@ -56,9 +56,9 @@ class MQTTManager:
         *,
         persist_telemetry: bool | None = None,
     ):
-        self.broker_address = broker_address or os.getenv("MQTT_BROKER")
-        self.port = port if port is not None else _env_int("MQTT_PORT", 1883)
-        self.broker_bind_host = broker_bind_host or os.getenv("MQTT_BROKER_BIND_HOST")
+        self.broker_address = broker_address or MQTT_BROKER
+        self.port = port if port is not None else MQTT_PORT
+        self.broker_bind_host = broker_bind_host or MQTT_BROKER_BIND_HOST
         self.persist_telemetry = ENABLE_MONGODB if persist_telemetry is None else bool(persist_telemetry)
         
         # === Cấu hình Broker ===
@@ -165,11 +165,21 @@ class MQTTManager:
                 self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 
                 if self.persist_telemetry and ENABLE_MONGODB:
+                    current_user_id = None
+                    try:
+                        device_info = devices_collection.find_one({"device_id": "device_0001"})
+                        if device_info:
+                            current_user_id = device_info.get("current_user_id")
+                    except Exception as e:
+                        print(f"[ WARNING ] Could not fetch device owner: {e}")
+
                     doc = {
                         "recorded_at": datetime.now(timezone.utc),
                         "metadata": {
                             "device_id": "device_0001",
-                            "env_id": "env_0001"
+                            "env_id": "env_0001",
+                            "user_id": current_user_id
+
                         },
                         **{k: v for k, v in self.latest_sensor_data.items() if v is not None}
                     }

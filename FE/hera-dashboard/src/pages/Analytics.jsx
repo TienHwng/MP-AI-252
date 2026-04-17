@@ -10,6 +10,8 @@ import {
 	CartesianGrid,
 } from "recharts";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
 const getStats = (series) => {
 	if (!series.length) {
 		return { min: 0, max: 0, avg: 0 };
@@ -90,17 +92,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 	);
 };
 
-const ChartCard = ({
-	title,
-	value,
-	unit,
-	dataKey,
-	color,
-	data,
-	Icon,
-	stats,
-	status,
-}) => {
+const ChartCard = ({ title, value, unit, dataKey, color, data, Icon, stats, status }) => {
 	return (
 		<div className="bg-white p-6 rounded-2xl shadow-sm">
 			<div className="flex flex-col gap-4 mb-6 md:flex-row md:items-start md:justify-between">
@@ -127,18 +119,9 @@ const ChartCard = ({
 
 			<div className="h-[280px] w-full">
 				<ResponsiveContainer width="100%" height="100%">
-					<AreaChart
-						data={data}
-						margin={{ top: 10, right: 12, left: -20, bottom: 18 }}
-					>
+					<AreaChart data={data} margin={{ top: 10, right: 12, left: -20, bottom: 18 }}>
 						<defs>
-							<linearGradient
-								id={`color${dataKey}`}
-								x1="0"
-								y1="0"
-								x2="0"
-								y2="1"
-							>
+							<linearGradient id={`color${dataKey}`} x1="0" y1="0" x2="0" y2="1">
 								<stop offset="5%" stopColor={color} stopOpacity={0.3} />
 								<stop offset="95%" stopColor={color} stopOpacity={0} />
 							</linearGradient>
@@ -208,9 +191,15 @@ const Analytics = () => {
 
 	useEffect(() => {
 		const fetchTelemetry = async () => {
+            // Lấy thông tin User hiện tại từ LocalStorage
+            const storedUser = localStorage.getItem('hera_user');
+            if (!storedUser) return;
+            const user = JSON.parse(storedUser);
+
 			try {
+                // Truyền user_id vào URL để Backend chỉ trả về data của user này
 				const res = await fetch(
-					"http://localhost:3001/api/telemetry?device_id=device_0001&limit=500",
+					`${API_BASE_URL}/api/telemetry?device_id=device_0001&limit=500&user_id=${user.user_id}`
 				);
 				const json = await res.json();
 				setData(Array.isArray(json) ? json : []);
@@ -229,20 +218,9 @@ const Analytics = () => {
 		return filterDataByWindow(data, windowKey);
 	}, [data, windowKey]);
 
-	const temperatureData = useMemo(
-		() => visibleData.filter((entry) => entry.temp != null),
-		[visibleData]
-	);
-
-	const humidityData = useMemo(
-		() => visibleData.filter((entry) => entry.humidity != null),
-		[visibleData]
-	);
-
-	const lightData = useMemo(
-		() => visibleData.filter((entry) => entry.light != null),
-		[visibleData]
-	);
+	const temperatureData = useMemo(() => visibleData.filter((entry) => entry.temp != null), [visibleData]);
+	const humidityData = useMemo(() => visibleData.filter((entry) => entry.humidity != null), [visibleData]);
+	const lightData = useMemo(() => visibleData.filter((entry) => entry.light != null), [visibleData]);
 
 	const tempSeries = temperatureData.map((entry) => entry.temp);
 	const humiditySeries = humidityData.map((entry) => entry.humidity);

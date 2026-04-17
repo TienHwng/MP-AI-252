@@ -9,9 +9,11 @@ app.use(cors());
 app.use(express.json());
 
 const client = new MongoClient("mongodb://localhost:27017");
-let collection;
+let collection; // telemetry_points
 let usersCollection;
 let modelSettingsCollection;
+let devicesCollection; // Thêm collection devices
+
 const ENV_PATH = path.resolve(__dirname, "../../.env");
 const MODEL_SETTINGS_DOC_ID = "hera_model_settings";
 const ANSI = {
@@ -222,6 +224,7 @@ async function start() {
 	collection = db.collection("telemetry_points");
 	usersCollection = db.collection("users");
 	modelSettingsCollection = db.collection("model_settings");
+	devicesCollection = db.collection("devices"); // Init thiết bị
 
 	app.post("/api/auth/login", async (req, res) => {
 		try {
@@ -254,13 +257,40 @@ async function start() {
 		}
 	});
 
+    // API mới: Gán thiết bị cho user đang hoạt động
+    app.post("/api/device/claim", async (req, res) => {
+        try {
+            const { device_id, user_id } = req.body;
+            if (!device_id || !user_id) {
+                return res.status(400).json({ error: "device_id and user_id are required" });
+            }
+            await devicesCollection.updateOne(
+                { device_id: device_id },
+                { $set: { current_user_id: user_id } }
+            );
+            res.json({ success: true, message: `Device ${device_id} is now claimed by ${user_id}` });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: "Failed to claim device" });
+        }
+    });
+
 	app.get("/api/telemetry", async (req, res) => {
 		try {
 			const deviceId = req.query.device_id || "device_0001";
+            const userId = req.query.user_id; // Bắt buộc nhận user_id
 			const limit = Math.min(Number(req.query.limit || 300), 5000);
 
+            if (!userId) {
+                return res.status(400).json({ error: "user_id parameter is required to fetch personalized data" });
+            }
+
+            // Chỉ lấy data thuộc về user này
 			const docs = await collection
-				.find({ "metadata.device_id": deviceId })
+				.find({ 
+                    "metadata.device_id": deviceId,
+                    "metadata.user_id": userId 
+                })
 				.sort({ recorded_at: -1 })
 				.limit(limit)
 				.toArray();
@@ -293,15 +323,23 @@ async function start() {
 	app.get("/api/sensors/latest", async (req, res) => {
 		try {
 			const deviceId = req.query.device_id || "device_0001";
+            const userId = req.query.user_id;
+
+            if (!userId) {
+                return res.status(400).json({ error: "user_id parameter is required" });
+            }
 
 			const docs = await collection
-				.find({ "metadata.device_id": deviceId })
+				.find({ 
+                    "metadata.device_id": deviceId,
+                    "metadata.user_id": userId
+                })
 				.sort({ recorded_at: -1 })
 				.limit(1)
 				.toArray();
 
 			if (docs.length === 0) {
-				return res.status(404).json({ error: "No sensor data found" });
+				return res.status(404).json({ error: "No sensor data found for this user" });
 			}
 
 			res.json(docs[0]);

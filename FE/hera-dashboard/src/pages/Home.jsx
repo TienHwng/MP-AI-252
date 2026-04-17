@@ -81,6 +81,7 @@ const Home = ({ user, onLogout }) => {
 
     const loadLatestData = async () => {
       try {
+        // Hàm này bên api.js đã được cấu hình tự lấy user_id của user đang login
         const latest = await fetchLatestSensorData();
         if (!cancelled) {
           setSensorData(latest);
@@ -154,7 +155,7 @@ const Home = ({ user, onLogout }) => {
         <header className="flex justify-between items-end">
           <div>
             <h2 className="text-3xl font-semibold text-textMain">
-              Welcome Home, {user?.full_name || 'Neji'} !
+              Welcome Home, {user?.full_name || 'User'} !
             </h2>
             <p className="text-textMuted mt-1">
               {currentTime.toLocaleDateString('en-US', {

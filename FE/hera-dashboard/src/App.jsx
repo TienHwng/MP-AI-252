@@ -4,7 +4,7 @@ import Login from './pages/Login';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Sidebar from './components/layout/Sidebar';
-import { getStoredUser } from './services/api';
+import { getStoredUser, logoutUser } from './services/api';
 
 // Tạo tạm 2 component rỗng cho Devices và Settings để code không bị lỗi
 const Devices = () => (
@@ -14,7 +14,7 @@ const Devices = () => (
 );
 
 const App = () => {
-  const [user, setUser] = useState(() => getStoredUser());
+  const [user, setUser] = useState(() => (import.meta.env.DEV ? null : getStoredUser()));
   const [activePage, setActivePage] = useState('home');
 
   if (!user) {
@@ -22,6 +22,7 @@ const App = () => {
   }
 
   const handleLogout = () => {
+    logoutUser();
     setUser(null);
     setActivePage('home');
   };
