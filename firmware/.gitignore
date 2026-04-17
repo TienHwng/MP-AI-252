@@ -1,0 +1,4 @@
+# --- Firmware .gitignore ---
+include/devices/
+include/sensors/
+include/digital_device.h

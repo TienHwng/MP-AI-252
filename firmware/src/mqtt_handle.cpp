@@ -176,16 +176,36 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 void reconnect() {
 	while (!client.connected()) {
-		Serial.print("[MQTT] Attempting to connect to Broker...");
-		if (client.connect("ESP32_AIoT_Core")) {
+		Serial.print("[MQTT] Attempting to connect to Broker ");
+        Serial.print(mqtt_server);
+        Serial.print(":");
+        Serial.print(mqtt_port);
+        Serial.println(" ...");
+
+        String clientId = "ESP32_AIoT_Core-";
+        clientId += String(random(0xffff), HEX);
+
+		if (client.connect(clientId.c_str())) {
 			Serial.println(" Success !");
 
 			// Đăng ký nhận lệnh RPC
 			client.subscribe(TOPIC_RPC_REQUEST);
 		}
 		else {
-			Serial.print(" Failed, error code =");
-			Serial.print(client.state());
+			Serial.print("[MQTT] Failed, state = ");
+            Serial.println(client.state());
+
+            switch (client.state()) {
+                case -4: Serial.println("MQTT_CONNECTION_TIMEOUT"); break;
+                case -3: Serial.println("MQTT_CONNECTION_LOST"); break;
+                case -2: Serial.println("MQTT_CONNECT_FAILED"); break;
+                case -1: Serial.println("MQTT_DISCONNECTED"); break;
+                case 1:  Serial.println("MQTT_CONNECT_BAD_PROTOCOL"); break;
+                case 2:  Serial.println("MQTT_CONNECT_BAD_CLIENT_ID"); break;
+                case 3:  Serial.println("MQTT_CONNECT_UNAVAILABLE"); break;
+                case 4:  Serial.println("MQTT_CONNECT_BAD_CREDENTIALS"); break;
+                case 5:  Serial.println("MQTT_CONNECT_UNAUTHORIZED"); break;
+            }
 			Serial.println(" Try again after 5s ...");
 			delay(5000);
 		}
@@ -219,23 +239,23 @@ void publish_telemetry(float temp, float hum, float anomaly, bool led_state, boo
 	const unsigned long now = millis();
 
 	// Flattened fields for compatibility with current backend parsing
-	// doc["temperature"] = temp;
-	// doc["humidity"] = hum;
-	// doc["inference_result"] = anomaly;
-	// doc["timestamp"] = now;
+	doc["temperature"] = temp;
+	doc["humidity"] = hum;
+	doc["inference_result"] = anomaly;
+	doc["timestamp"] = now;
 
-	// doc["led_status"] = is_LED_on;
-	// doc["neo_led_status"] = is_NeoLED_on;
-	// doc["ws2812_status"] = is_ws2812_on;
-	// doc["relay_status"] = is_relay_on;
-	// doc["fan_status"] = is_mini_fan_on;
+	doc["led_status"] = is_LED_on;
+	doc["neo_led_status"] = is_NeoLED_on;
+	doc["ws2812_status"] = is_ws2812_on;
+	doc["relay_status"] = is_relay_on;
+	doc["fan_status"] = is_mini_fan_on;
 
-	// // Additional network and runtime data
-	// doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
-	// doc["wifi_rssi"] = WiFi.RSSI();
-	// doc["wifi_ip"] = WiFi.localIP().toString();
-	// doc["mqtt_connected"] = client.connected();
-	// doc["uptime_ms"] = now;
+	// Additional network and runtime data
+	doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+	doc["wifi_rssi"] = WiFi.RSSI();
+	doc["wifi_ip"] = WiFi.localIP().toString();
+	doc["mqtt_connected"] = client.connected();
+	doc["uptime_ms"] = now;
 
 	JsonObject network = doc.createNestedObject("network");
 	network["wifi_connected"] = (WiFi.status() == WL_CONNECTED);

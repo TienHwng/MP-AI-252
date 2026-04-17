@@ -1,8 +1,11 @@
 # --- Global .gitignore ---
 
-# ===================== Operating System =====================
+# ===================== Operating System specific =====================
 .DS_Store
+.AppleDouble
+.LSOverride
 Thumbs.db
+ehthumbs.db
 
 # ===================== IDE / Editor Configuration =====================
 .vscode/
@@ -14,10 +17,10 @@ Thumbs.db
 
 # ===================== Python =====================
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
-.venv
 __pycache__/
 *.py[cod]
 *$py.class
@@ -51,12 +54,9 @@ yarn-error.log*
 .eslintcache
 .next/
 out/
-dist/
 
 # ===================== PlatformIO =====================
 .pio/
-.vscode/.browse.c_cpp.db*
-.clang-format
 
 # ===================== Logs & Temporary Files =====================
 *.log
@@ -80,12 +80,6 @@ tmp/
 *.synctex.gz
 *.run.xml
 
-# ===================== OS-specific =====================
-.DS_Store
-.AppleDouble
-.LSOverride
-ehthumbs.db
-
 # ===================== IDE-specific =====================
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
@@ -108,9 +102,3 @@ ehthumbs.db
 
 # Repository-specific
 docs/report/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-

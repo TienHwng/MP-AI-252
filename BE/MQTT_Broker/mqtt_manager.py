@@ -288,6 +288,7 @@ if __name__ == "__main__":
             print("0. Exit program")
             print("="*35)
             
+        while True:
             # Lấy lựa chọn từ người dùng
             choice = input("[ INPUT ] Please choose an option (0-14): ").strip()
             

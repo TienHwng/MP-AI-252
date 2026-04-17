@@ -13,7 +13,7 @@ boolean isWifiConnected = false;
 
 boolean is_LED_on		= true;
 boolean is_NeoLED_on	= true;
-boolean is_ws2812_on	= false;
+boolean is_ws2812_on	= true;
 boolean is_relay_on		= false;
 boolean is_mini_fan_on	= false;
 
