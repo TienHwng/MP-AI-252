@@ -18,24 +18,24 @@ from agents.orchestrator import Orchestrator
 
 
 class VoiceAdapter:
-    """
-    Stub — will be implemented when STT/TTS engines are integrated.
+	"""
+	Stub — will be implemented when STT/TTS engines are integrated.
 
-    Example future flow::
+	Example future flow::
 
-        audio_bytes = mic.record(duration=5)
-        text = stt_engine.transcribe(audio_bytes)
-        msg = UserMessage(text=text, chat_id="voice_local", source=MessageSource.VOICE)
-        response = await orchestrator.handle(msg)
-        tts_engine.speak(response.text)
-    """
+	    audio_bytes = mic.record(duration=5)
+	    text = stt_engine.transcribe(audio_bytes)
+	    msg = UserMessage(text=text, chat_id="voice_local", source=MessageSource.VOICE)
+	    response = await orchestrator.handle(msg)
+	    tts_engine.speak(response.text)
+	"""
 
-    def __init__(self, orchestrator: Orchestrator) -> None:
-        self.orch = orchestrator
+	def __init__(self, orchestrator: Orchestrator) -> None:
+		self.orch = orchestrator
 
-    async def handle_audio(self, audio_bytes: bytes, chat_id: str = "voice") -> str:
-        """Transcribe → orchestrate → return text for TTS."""
-        raise NotImplementedError(
-            "Voice adapter not yet implemented. "
-            "Integrate Whisper (STT) and edge-tts/Piper (TTS) here."
-        )
+	async def handle_audio(self, audio_bytes: bytes, chat_id: str = "voice") -> str:
+		"""Transcribe → orchestrate → return text for TTS."""
+		raise NotImplementedError(
+			"Voice adapter not yet implemented. "
+			"Integrate Whisper (STT) and edge-tts/Piper (TTS) here."
+		)

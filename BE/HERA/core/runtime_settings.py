@@ -12,39 +12,35 @@ YELLOW = "\033[93m"
 RESET = "\033[0m"
 
 DEFAULT_SETTINGS = {
- "provider": "openrouter",
- "models": {
-  "ollama": {
-   "orchestratorModel": "qwen2.5:1.5b",
-   "deviceControlModel": "qwen2.5:7b",
-   "sensorAnalysisModel": "qwen2.5:7b",
-   "anomalyExpertModel": "qwen2.5:7b",
-  },
-  "openrouter": {
-   "orchestratorModel": "qwen/qwen-2.5-7b-instruct",
-   "deviceControlModel": "qwen/qwen-2.5-7b-instruct",
-   "sensorAnalysisModel": "qwen/qwen-2.5-7b-instruct",
-   "anomalyExpertModel": "qwen/qwen-2.5-7b-instruct",
-  },
- },
+	"provider": "openrouter",
+	"models": {
+		"ollama": {
+			"orchestratorModel": "qwen2.5:1.5b",
+			"deviceControlModel": "qwen2.5:7b",
+			"sensorAnalysisModel": "qwen2.5:7b",
+			"anomalyExpertModel": "qwen2.5:7b",
+		},
+		"openrouter": {
+			"orchestratorModel": "qwen/qwen-2.5-7b-instruct",
+			"deviceControlModel": "qwen/qwen-2.5-7b-instruct",
+			"sensorAnalysisModel": "qwen/qwen-2.5-7b-instruct",
+			"anomalyExpertModel": "qwen/qwen-2.5-7b-instruct",
+		},
+	},
 }
 
 MODEL_FIELDS = (
- "orchestratorModel",
- "deviceControlModel",
- "sensorAnalysisModel",
- "anomalyExpertModel",
+	"orchestratorModel",
+	"deviceControlModel",
+	"sensorAnalysisModel",
+	"anomalyExpertModel",
 )
 
 
 def deep_merge(default: dict, override: dict) -> dict:
 	result = dict(default)
 	for key, value in override.items():
-		if (
-		 key in result
-		 and isinstance(result[key], dict)
-		 and isinstance(value, dict)
-		):
+		if key in result and isinstance(result[key], dict) and isinstance(value, dict):
 			result[key] = deep_merge(result[key], value)
 		else:
 			result[key] = value
@@ -58,20 +54,20 @@ def env_to_settings() -> dict:
 def prune_settings(settings: dict) -> dict:
 	provider = settings.get("provider")
 	result = {
-	 "provider": provider if provider in {"ollama", "openrouter"} else DEFAULT_SETTINGS["provider"],
-	 "models": {},
+		"provider": provider
+		if provider in {"ollama", "openrouter"}
+		else DEFAULT_SETTINGS["provider"],
+		"models": {},
 	}
 	models = settings.get("models") if isinstance(settings.get("models"), dict) else {}
 	for provider in ("ollama", "openrouter"):
 		provider_models = (
-		 models.get(provider)
-		 if isinstance(models.get(provider), dict)
-		 else {}
+			models.get(provider) if isinstance(models.get(provider), dict) else {}
 		)
 		result["models"][provider] = {
-		 field: value
-		 for field, value in provider_models.items()
-		 if field in MODEL_FIELDS
+			field: value
+			for field, value in provider_models.items()
+			if field in MODEL_FIELDS
 		}
 	return result
 
@@ -100,10 +96,12 @@ class RuntimeSettingsStore:
 		doc = self.collection.find_one({"_id": "hera_model_settings"})
 		if not doc:
 			return None
-		return prune_settings({
-		 "provider": doc.get("provider"),
-		 "models": doc.get("models", {}),
-		})
+		return prune_settings(
+			{
+				"provider": doc.get("provider"),
+				"models": doc.get("models", {}),
+			}
+		)
 
 	def start_watch_thread(self) -> None:
 		if self.collection is None:
@@ -112,14 +110,14 @@ class RuntimeSettingsStore:
 		def watch() -> None:
 			try:
 				with self.collection.watch(
-				 [{"$match": {"fullDocument._id": "hera_model_settings"}}],
-				 full_document="updateLookup",
+					[{"$match": {"fullDocument._id": "hera_model_settings"}}],
+					full_document="updateLookup",
 				) as stream:
 					for change in stream:
 						full_document = change.get("fullDocument") or {}
 						next_settings = {
-						 "provider": full_document.get("provider"),
-						 "models": full_document.get("models", {}),
+							"provider": full_document.get("provider"),
+							"models": full_document.get("models", {}),
 						}
 						next_settings = prune_settings(next_settings)
 						with self.lock:
@@ -128,11 +126,11 @@ class RuntimeSettingsStore:
 							current_provider = self.cache.get("provider")
 						if current_provider != prev_provider:
 							print(
-							 f"{YELLOW}[HERA][MODEL] Switched to provider: "
-							 f"{current_provider}{RESET}",
+								f"{YELLOW}[HERA][MODEL] Switched to provider: "
+								f"{current_provider}{RESET}",
 							)
 			except PyMongoError:
-			 # Keep runtime resilient if change stream is unavailable.
+				# Keep runtime resilient if change stream is unavailable.
 				return
 
 		thread = threading.Thread(target=watch, daemon=True)
@@ -170,8 +168,8 @@ class RuntimeSettingsStore:
 			current_provider = self.cache.get("provider")
 			if current_provider != prev_provider:
 				print(
-				 f"{YELLOW}[HERA][MODEL] Switched to provider: "
-				 f"{current_provider}{RESET}",
+					f"{YELLOW}[HERA][MODEL] Switched to provider: "
+					f"{current_provider}{RESET}",
 				)
 			return deep_merge({}, self.cache)
 

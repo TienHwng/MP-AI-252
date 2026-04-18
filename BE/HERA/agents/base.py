@@ -16,28 +16,28 @@ from core.message import AgentResponse, UserMessage
 
 
 class AgentBase(ABC):
-    """Contract that all specialist agents fulfil."""
+	"""Contract that all specialist agents fulfil."""
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Short identifier, e.g. ``'device_control'``."""
+	@property
+	@abstractmethod
+	def name(self) -> str:
+		"""Short identifier, e.g. ``'device_control'``."""
 
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """One-line summary used by the orchestrator prompt."""
+	@property
+	@abstractmethod
+	def description(self) -> str:
+		"""One-line summary used by the orchestrator prompt."""
 
-    @abstractmethod
-    async def process(
-        self,
-        message: UserMessage,
-        context: dict,
-    ) -> AgentResponse:
-        """
-        Handle *message* and return a response.
+	@abstractmethod
+	async def process(
+		self,
+		message: UserMessage,
+		context: dict,
+	) -> AgentResponse:
+		"""
+		Handle *message* and return a response.
 
-        Parameters
-        ----------
-        context : mutable dict carrying ``sensor_state``, ``history``, etc.
-        """
+		Parameters
+		----------
+		context : mutable dict carrying ``sensor_state``, ``history``, etc.
+		"""

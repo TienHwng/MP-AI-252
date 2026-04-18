@@ -15,25 +15,27 @@ from typing import Any
 
 
 class MessageSource(str, Enum):
-    TELEGRAM = "telegram"
-    VOICE = "voice"
-    REST = "rest"
+	TELEGRAM = "telegram"
+	VOICE = "voice"
+	REST = "rest"
 
 
 @dataclass(slots=True)
 class UserMessage:
-    """Canonical inbound message — adapter-agnostic."""
-    text: str
-    chat_id: str
-    source: MessageSource
-    timestamp: datetime = field(default_factory=datetime.now)
+	"""Canonical inbound message — adapter-agnostic."""
+
+	text: str
+	chat_id: str
+	source: MessageSource
+	timestamp: datetime = field(default_factory=datetime.now)
 
 
 @dataclass(slots=True)
 class AgentResponse:
-    """Canonical outbound message returned by any agent."""
-    text: str
-    agent_name: str
-    tools_used: list[str] = field(default_factory=list)
-    confidence: float = 1.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+	"""Canonical outbound message returned by any agent."""
+
+	text: str
+	agent_name: str
+	tools_used: list[str] = field(default_factory=list)
+	confidence: float = 1.0
+	metadata: dict[str, Any] = field(default_factory=dict)

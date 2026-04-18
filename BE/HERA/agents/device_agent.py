@@ -56,136 +56,139 @@ Do not include any other keys.
 Do not output Chinese, Mandarin, Japanese, or Korean text anywhere.
 """
 
+
 def extract_json_object(raw_text: str | None) -> dict:
-    text = (raw_text or "").strip()
-    if not text:
-        return {}
+	text = (raw_text or "").strip()
+	if not text:
+		return {}
 
-    if text.startswith("```"):
-        text = text.strip("`")
-        if "\n" in text:
-            text = text.split("\n", 1)[1]
+	if text.startswith("```"):
+		text = text.strip("`")
+		if "\n" in text:
+			text = text.split("\n", 1)[1]
 
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return {}
+	start = text.find("{")
+	end = text.rfind("}")
+	if start == -1 or end == -1 or end <= start:
+		return {}
 
-    try:
-        parsed = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+	try:
+		parsed = json.loads(text[start : end + 1])
+	except json.JSONDecodeError:
+		return {}
+	return parsed if isinstance(parsed, dict) else {}
 
 
 def normalise_command(parsed: dict[str, Any]) -> dict:
-    action = parsed.get("action")
-    target = parsed.get("target")
-    if action not in {"turn_on", "turn_off", "status", "unknown"}:
-        action = "unknown"
-    if target not in DEVICE_TARGETS:
-        target = None
-    if action in {"turn_on", "turn_off", "status"} and target is None:
-        action = "unknown"
-    return {
-        "action": action,
-        "target": target,
-        "confidence": parsed.get("confidence"),
-    }
+	action = parsed.get("action")
+	target = parsed.get("target")
+	if action not in {"turn_on", "turn_off", "status", "unknown"}:
+		action = "unknown"
+	if target not in DEVICE_TARGETS:
+		target = None
+	if action in {"turn_on", "turn_off", "status"} and target is None:
+		action = "unknown"
+	return {
+		"action": action,
+		"target": target,
+		"confidence": parsed.get("confidence"),
+	}
 
 
 class DeviceControlAgent(AgentBase):
-    def __init__(
-        self, llm: LLMService, mqtt: MQTTService, tools: ToolRegistry,
-    ) -> None:
-        self.llm = llm
-        self.mqtt = mqtt
-        self.tools = tools
+	def __init__(
+		self,
+		llm: LLMService,
+		mqtt: MQTTService,
+		tools: ToolRegistry,
+	) -> None:
+		self.llm = llm
+		self.mqtt = mqtt
+		self.tools = tools
 
-    @property
-    def name(self) -> str:
-        return "device_control"
+	@property
+	def name(self) -> str:
+		return "device_control"
 
-    @property
-    def description(self) -> str:
-        return "Controls LEDs and actuators on the ESP32 device."
+	@property
+	def description(self) -> str:
+		return "Controls LEDs and actuators on the ESP32 device."
 
-    async def parse_command(self, message: UserMessage) -> dict:
-        model_override = runtime_settings.get_active_model("deviceControlModel")
-        device_context = json.dumps(self.tools.get_device_status_report(), indent=2)
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    COMMAND_PARSER_PROMPT
-                    + "\n\nCurrent device snapshot:\n"
-                    + device_context
-                ),
-            },
-            {"role": "user", "content": message.text},
-        ]
-        result = await asyncio.to_thread(
-            self.llm.completion,
-            messages,
-            None,
-            model_override,
-        )
-        parsed = extract_json_object(result["content"])
-        return normalise_command(parsed)
+	async def parse_command(self, message: UserMessage) -> dict:
+		model_override = runtime_settings.get_active_model("deviceControlModel")
+		device_context = json.dumps(self.tools.get_device_status_report(), indent=2)
+		messages = [
+			{
+				"role": "system",
+				"content": (
+					COMMAND_PARSER_PROMPT
+					+ "\n\nCurrent device snapshot:\n"
+					+ device_context
+				),
+			},
+			{"role": "user", "content": message.text},
+		]
+		result = await asyncio.to_thread(
+			self.llm.completion,
+			messages,
+			None,
+			model_override,
+		)
+		parsed = extract_json_object(result["content"])
+		return normalise_command(parsed)
 
-    def execute_command(self, command: dict) -> tuple[dict, list[str]]:
-        action = command["action"]
-        target = command["target"]
+	def execute_command(self, command: dict) -> tuple[dict, list[str]]:
+		action = command["action"]
+		target = command["target"]
 
-        if action == "turn_on":
-            result = self.tools.control_device_state(target, True)
-            return result, ["turn_on_device"] if result.get("ok") else []
+		if action == "turn_on":
+			result = self.tools.control_device_state(target, True)
+			return result, ["turn_on_device"] if result.get("ok") else []
 
-        if action == "turn_off":
-            result = self.tools.control_device_state(target, False)
-            return result, ["turn_off_device"] if result.get("ok") else []
+		if action == "turn_off":
+			result = self.tools.control_device_state(target, False)
+			return result, ["turn_off_device"] if result.get("ok") else []
 
-        if action == "status":
-            return (
-                {
-                    "ok": True,
-                    "reason": "status_requested",
-                    "target": target,
-                    "device_status": self.tools.get_device_status_report(),
-                    "commands_sent": [],
-                },
-                ["get_device_status"],
-            )
+		if action == "status":
+			return (
+				{
+					"ok": True,
+					"reason": "status_requested",
+					"target": target,
+					"device_status": self.tools.get_device_status_report(),
+					"commands_sent": [],
+				},
+				["get_device_status"],
+			)
 
-        return (
-            {
-                "ok": False,
-                "reason": "unknown_or_ambiguous_command",
-                "target": target,
-                "device_status": self.tools.get_device_status_report(),
-                "commands_sent": [],
-            },
-            [],
-        )
+		return (
+			{
+				"ok": False,
+				"reason": "unknown_or_ambiguous_command",
+				"target": target,
+				"device_status": self.tools.get_device_status_report(),
+				"commands_sent": [],
+			},
+			[],
+		)
 
-    async def process(
-        self, message: UserMessage, context: dict,
-    ) -> AgentResponse:
-        command = await self.parse_command(message)
-        execution_result, tools_used = self.execute_command(command)
-        print(
-            f"  [DeviceAgent] action={command['action']} "
-            f"target={command['target']}"
-        )
+	async def process(
+		self,
+		message: UserMessage,
+		context: dict,
+	) -> AgentResponse:
+		command = await self.parse_command(message)
+		execution_result, tools_used = self.execute_command(command)
+		print(f"  [DeviceAgent] action={command['action']} target={command['target']}")
 
-        report = {
-            "parsed_command": command,
-            "execution_result": execution_result,
-        }
+		report = {
+			"parsed_command": command,
+			"execution_result": execution_result,
+		}
 
-        return AgentResponse(
-            text=json.dumps(report, ensure_ascii=False),
-            agent_name=self.name,
-            tools_used=tools_used,
-            metadata=report,
-        )
+		return AgentResponse(
+			text=json.dumps(report, ensure_ascii=False),
+			agent_name=self.name,
+			tools_used=tools_used,
+			metadata=report,
+		)

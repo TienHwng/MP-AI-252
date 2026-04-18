@@ -8,17 +8,21 @@ load_dotenv(dotenv_path=ROOT_ENV_PATH)
 
 broker_address = os.environ["MQTT_BROKER"]
 broker_port = int(os.environ["MQTT_PORT"])
-topic = "#"  #listen to all topics
+topic = "#"  # listen to all topics
+
 
 def on_message(client, userdata, msg):
-    print("Received:",msg.topic, msg.payload.decode("utf-8"))
+	print("Received:", msg.topic, msg.payload.decode("utf-8"))
+
 
 def on_subscribe(client, userdata, mid, granted_qos):
-    print(" Subscribed successfully.")
+	print(" Subscribed successfully.")
+
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected.")
-    client.subscribe(topic, qos=0)
+	print("Connected.")
+	client.subscribe(topic, qos=0)
+
 
 client = mqtt.Client("PythonSubscriber")
 client.on_message = on_message

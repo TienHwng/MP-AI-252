@@ -19,20 +19,21 @@ load_dotenv(dotenv_path=ROOT_ENV_PATH)
 
 # ===================== HELPER FUNCTIONS =====================
 
+
 def env_int(name: str, default: int) -> int:
-    """Parse environment variable as integer."""
-    try:
-        return int(os.getenv(name))
-    except (TypeError, ValueError):
-        return default
+	"""Parse environment variable as integer."""
+	try:
+		return int(os.getenv(name))
+	except TypeError, ValueError:
+		return default
 
 
 def env_float(name: str, default: float) -> float:
-    """Parse environment variable as float."""
-    try:
-        return float(os.getenv(name))
-    except (TypeError, ValueError):
-        return default
+	"""Parse environment variable as float."""
+	try:
+		return float(os.getenv(name))
+	except TypeError, ValueError:
+		return default
 
 
 # ===================== TELEGRAM =====================
@@ -66,8 +67,8 @@ TOPIC_ATTRIBUTES = os.getenv("TOPIC_ATTRIBUTES", "v1/devices/me/attributes")
 # Backward-compatible aliases for existing modules
 MQTT_SUBSCRIBE_TOPIC = os.getenv("MQTT_SUBSCRIBE_TOPIC", TOPIC_TELEMETRY)
 MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv(
-    "MQTT_RPC_REQUEST_TOPIC_PREFIX",
-    TOPIC_RPC_REQUEST.rstrip("/"),
+	"MQTT_RPC_REQUEST_TOPIC_PREFIX",
+	TOPIC_RPC_REQUEST.rstrip("/"),
 ).rstrip("/")
 
 
@@ -90,4 +91,3 @@ ANOMALY_CRITICAL_THRESHOLD = env_float("ANOMALY_CRITICAL_THRESHOLD", 0.8)
 
 MAX_TOOL_ITERATIONS = env_int("MAX_TOOL_ITERATIONS", 5)
 MAX_HISTORY = env_int("MAX_HISTORY", 8)
-

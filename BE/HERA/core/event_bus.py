@@ -19,15 +19,15 @@ EventHandler = Callable[..., Coroutine[Any, Any, None]]
 
 
 class EventBus:
-    def __init__(self) -> None:
-        self.handlers: dict[str, list[EventHandler]] = defaultdict(list)
+	def __init__(self) -> None:
+		self.handlers: dict[str, list[EventHandler]] = defaultdict(list)
 
-    def subscribe(self, event: str, handler: EventHandler) -> None:
-        self.handlers[event].append(handler)
+	def subscribe(self, event: str, handler: EventHandler) -> None:
+		self.handlers[event].append(handler)
 
-    async def publish(self, event: str, data: Any = None) -> None:
-        for handler in self.handlers.get(event, []):
-            try:
-                await handler(data)
-            except Exception as exc:
-                print(f"[EventBus] handler error on '{event}': {exc}")
+	async def publish(self, event: str, data: Any = None) -> None:
+		for handler in self.handlers.get(event, []):
+			try:
+				await handler(data)
+			except Exception as exc:
+				print(f"[EventBus] handler error on '{event}': {exc}")

@@ -13,26 +13,26 @@ topic = "/test/topic1"
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected.")
+	print("Connected.")
 
 
 def on_publish(client, userdata, mid):
-    print(f"[ OK ] Message ID {mid} published successfully")
+	print(f"[ OK ] Message ID {mid} published successfully")
 
 
-#client = mqtt.Client("PythonPublisher")
+# client = mqtt.Client("PythonPublisher")
 client = mqtt.Client()
 mqtt_username = os.getenv("MQTT_USERNAME")
 mqtt_password = os.getenv("MQTT_PASSWORD")
 if mqtt_username:
-    client.username_pw_set(mqtt_username, mqtt_password)
+	client.username_pw_set(mqtt_username, mqtt_password)
 client.on_connect = on_connect
 client.on_publish = on_publish
 client.connect(broker_address, broker_port)
 client.loop_start()
 
 while True:
-    client.publish(topic, "ABC .....")
-    print("Sent a message")
-    time.sleep(5)
+	client.publish(topic, "ABC .....")
+	print("Sent a message")
+	time.sleep(5)
 client.disconnect()
