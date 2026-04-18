@@ -143,6 +143,53 @@ function Find-Python314 {
     return $null
 }
 
+function Test-Python314Installed {
+    $pythonPath = Find-Python314
+    return -not [string]::IsNullOrWhiteSpace($pythonPath)
+}
+
+function Install-Python314IfMissing {
+    if (Test-Python314Installed) {
+        $pythonPath = Find-Python314
+        $pythonVersion = & $pythonPath --version
+        Write-Ok "Python 3.14 detected: $pythonVersion"
+        Add-Summary "Python" $pythonVersion
+        return
+    }
+
+    Write-Warn "Python 3.14.x was not found."
+    Write-Info "Attempting to install the latest available Python 3.14.x with winget..."
+
+    if (-not (Test-CommandExists "winget")) {
+        Write-Err "winget is not available."
+        Write-Host "Please install Python 3.14 manually, then run this script again." -ForegroundColor Yellow
+        exit 1
+    }
+
+    try {
+        winget install --id Python.Python.3.14 --exact --source winget --accept-package-agreements --accept-source-agreements | Out-Null
+    } catch {
+        Write-Err "Automatic Python 3.14.x installation failed."
+        Write-Host "Please install Python 3.14 manually, then run this script again." -ForegroundColor Yellow
+        exit 1
+    }
+
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+
+    $pythonPath = Find-Python314
+    if (-not $pythonPath) {
+        Write-Err "Python 3.14.x seems installed, but is not available in PATH yet."
+        Write-Host "Please reopen the terminal and run this script again." -ForegroundColor Yellow
+        exit 1
+    }
+
+    $pythonVersion = & $pythonPath --version
+    Write-Ok "Python installed successfully: $pythonVersion"
+    Add-Summary "Python" $pythonVersion
+}
+
 function Test-VenvIsPython314 {
     param([string]$PythonExe)
 
@@ -404,18 +451,9 @@ Add-Summary "Project root" $projectRoot
 Write-Step "Checking Git"
 Install-GitIfMissing
 
-Write-Step "Checking Python 3.14"
+Write-Step "Checking Python 3.14.x"
+Install-Python314IfMissing
 $python314 = Find-Python314
-
-if (-not $python314) {
-    Write-Err "Python 3.14 was not found on this machine."
-    Write-Host "Please install Python 3.14, then run this script again." -ForegroundColor Yellow
-    exit 1
-}
-
-$pythonVersion = & $python314 --version
-Write-Ok "Detected $pythonVersion"
-Add-Summary "Python" $pythonVersion
 
 Write-Step "Preparing virtual environment"
 $needCreateVenv = $true
@@ -523,16 +561,15 @@ if ($MyInvocation.InvocationName -eq ".") {
     Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
 
-    Write-Warn "You ran the script with: .\setup.ps1"
+    Write-Warn "You are running the script with: .\setup.ps1"
     Write-Warn "In this mode, PowerShell cannot keep .venv activated in the current terminal after the script finishes."
     Write-Host ""
 
-    Write-Host "Manual activation command" -ForegroundColor Cyan
+    Write-Host "To activate the virtual environment manually, run:" -ForegroundColor Cyan
     Write-Host "  .\.venv\Scripts\Activate.ps1" -ForegroundColor White
     Write-Host ""
 
-    Write-Host "Want automatic activation in the current terminal?" -ForegroundColor Cyan
-    Write-Host "Run the script like this instead:" -ForegroundColor Cyan
+    Write-Host "If you want the script to activate .venv automatically in the current terminal, run it with:" -ForegroundColor Cyan
     Write-Host "  . .\setup.ps1" -ForegroundColor White
     Write-Host ""
 }
