@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Analytics from './pages/Analytics';
@@ -13,9 +13,19 @@ const Devices = () => (
   </div>
 );
 
+const DASHBOARD_PAGE_KEY = 'hera_active_page';
+const VALID_PAGES = new Set(['home', 'analytics', 'devices', 'settings']);
+
 const App = () => {
-  const [user, setUser] = useState(() => (import.meta.env.DEV ? null : getStoredUser()));
-  const [activePage, setActivePage] = useState('home');
+  const [user, setUser] = useState(() => getStoredUser());
+  const [activePage, setActivePage] = useState(() => {
+    const savedPage = localStorage.getItem(DASHBOARD_PAGE_KEY);
+    return VALID_PAGES.has(savedPage) ? savedPage : 'home';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_PAGE_KEY, activePage);
+  }, [activePage]);
 
   if (!user) {
     return <Login onLoginSuccess={setUser} />;
@@ -23,6 +33,7 @@ const App = () => {
 
   const handleLogout = () => {
     logoutUser();
+    localStorage.removeItem(DASHBOARD_PAGE_KEY);
     setUser(null);
     setActivePage('home');
   };

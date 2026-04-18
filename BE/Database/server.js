@@ -266,7 +266,8 @@ async function start() {
             }
             await devicesCollection.updateOne(
                 { device_id: device_id },
-                { $set: { current_user_id: user_id } }
+                { $set: { current_user_id: user_id } },
+                { upsert: true }
             );
             res.json({ success: true, message: `Device ${device_id} is now claimed by ${user_id}` });
         } catch (err) {

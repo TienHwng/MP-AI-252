@@ -183,7 +183,8 @@ class MQTTManager:
 			# Log dữ liệu cảm biến nhận được từ ESP32 (để debug)
 			# print(f"[ INFO ] [Sensor data] {payload}")
 			try:
-				# Cập nhật dữ liệu mới nhất vào bộ nhớ
+				parsed = json.loads(payload)
+				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 
 				if self.persist_telemetry and ENABLE_MONGODB:
 					current_user_id = None
@@ -203,20 +204,6 @@ class MQTTManager:
 							"env_id": "env_0001",
 							"user_id": current_user_id,
 						},
-						**{
-							k: v
-							for k, v in self.latest_sensor_data.items()
-							if v is not None
-						},
-					}
-
-				parsed = json.loads(payload)
-				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
-
-				if self.persist_telemetry and ENABLE_MONGODB:
-					doc = {
-						"recorded_at": datetime.now(UTC),
-						"metadata": {"device_id": "device_0001", "env_id": "env_0001"},
 						**{
 							k: v
 							for k, v in self.latest_sensor_data.items()
