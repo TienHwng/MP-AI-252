@@ -1,15 +1,19 @@
-## GOM MQTT THÀNH 1 CLASS, BỎ 4 FILE KIA
+import sys
+from pathlib import Path
+
+# Phải setup sys.path TRƯỚC khi import từ BE
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+	sys.path.append(str(PROJECT_ROOT))
 
 import asyncio
 import copy
 import json
 import os
 import random
-import sys
 import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
@@ -21,10 +25,6 @@ from BE.HERA.config import (
 	MQTT_RPC_REQUEST_TOPIC_PREFIX,
 	MQTT_SUBSCRIBE_TOPIC,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-	sys.path.append(str(PROJECT_ROOT))
 
 
 def _env_bool(name: str, default: bool) -> bool:
