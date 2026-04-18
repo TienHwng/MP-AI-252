@@ -170,7 +170,7 @@ class TelegramAdapter:
 					await asyncio.sleep(1)
 					await update.message.reply_text(reply)
 				except Exception:
-					print(f"[Telegram] Failed to send reply after retry")
+					print("[Telegram] Failed to send reply after retry")
 			else:
 				print(f"[Telegram] Send error: {send_err}")
 
