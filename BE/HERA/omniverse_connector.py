@@ -14,12 +14,13 @@ Usage:
     3. In Omniverse: Window → Script Editor → paste → Run
 """
 
-import json
 import atexit
-import time
-import random
+import json
 import os
+import random
+import time
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 try:
@@ -29,12 +30,12 @@ except ImportError:
 	print('    import omni.kit.pipapi; omni.kit.pipapi.install("paho-mqtt")')
 	raise
 
-import omni.usd
 import omni.kit.app
-from pxr import UsdLux, Gf
-
+import omni.usd
+from pxr import Gf, UsdLux
 
 # ==================== CONFIGURATION ====================
+
 
 ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ROOT_ENV_PATH)
@@ -64,6 +65,7 @@ NEO_LED_COLOR = Gf.Vec3f(0.2, 0.8, 1.0)  # Cyan (simulated RGB)
 
 
 # ==================== STATE ====================
+
 
 mqtt_client = None
 update_sub = None
@@ -284,6 +286,7 @@ def cleanup_on_exit():
 
 
 # ==================== AUTO-START ====================
+
 
 atexit.register(cleanup_on_exit)
 print("[OV] [ INFO ] Starting Digital Twin connector...")

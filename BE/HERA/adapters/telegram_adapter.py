@@ -11,26 +11,26 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+
+from agents.orchestrator import Orchestrator
+from config import (
+	TELEGRAM_BOT_TOKEN,
+	TELEGRAM_CONNECT_TIMEOUT,
+	TELEGRAM_READ_TIMEOUT,
+	TELEGRAM_WRITE_TIMEOUT,
+)
+from core.message import AgentResponse, MessageSource, UserMessage
+from core.mqtt_service import MQTTService
+from core.runtime_settings import runtime_settings
 from telegram import Update
 from telegram.ext import (
 	Application,
 	CommandHandler,
+	ContextTypes,
 	MessageHandler,
 	filters,
-	ContextTypes,
 )
 from telegram.request import HTTPXRequest
-
-from agents.orchestrator import Orchestrator
-from core.message import AgentResponse, MessageSource, UserMessage
-from core.mqtt_service import MQTTService
-from core.runtime_settings import runtime_settings
-from config import (
-	TELEGRAM_BOT_TOKEN,
-	TELEGRAM_READ_TIMEOUT,
-	TELEGRAM_WRITE_TIMEOUT,
-	TELEGRAM_CONNECT_TIMEOUT,
-)
 
 
 class TelegramAdapter:

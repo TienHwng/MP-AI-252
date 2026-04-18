@@ -7,9 +7,7 @@ All modules should import from here instead of reading .env directly.
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Load root .env file at startup

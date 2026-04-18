@@ -1,13 +1,12 @@
 import asyncio
-from turtledemo.forest import start
-
-from hbmqtt.broker import Broker
+import os
 import threading
 import time
-import paho.mqtt.client as mqtt
-import os
 from pathlib import Path
+
+import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
+from hbmqtt.broker import Broker
 
 ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ROOT_ENV_PATH)

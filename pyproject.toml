@@ -40,7 +40,7 @@ quote-style = "double"
 indent-style = "tab"
 # line-ending = "auto"
 line-ending = "lf"
-docstring-code-format = true
+docstring-code-format = false
 skip-magic-trailing-comma = false
 
 [tool.mypy]

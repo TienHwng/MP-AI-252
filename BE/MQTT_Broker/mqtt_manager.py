@@ -8,15 +8,11 @@ import random
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-	sys.path.append(str(PROJECT_ROOT))
 
 from BE.HERA.config import (
 	MQTT_BROKER,
@@ -25,6 +21,10 @@ from BE.HERA.config import (
 	MQTT_RPC_REQUEST_TOPIC_PREFIX,
 	MQTT_SUBSCRIBE_TOPIC,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+	sys.path.append(str(PROJECT_ROOT))
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -197,7 +197,7 @@ class MQTTManager:
 						print(f"[ WARNING ] Could not fetch device owner: {e}")
 
 					doc = {
-						"recorded_at": datetime.now(timezone.utc),
+						"recorded_at": datetime.now(UTC),
 						"metadata": {
 							"device_id": "device_0001",
 							"env_id": "env_0001",
@@ -336,7 +336,6 @@ if __name__ == "__main__":
 			print("0. Exit program")
 			print("=" * 35)
 
-		while True:
 			# Lấy lựa chọn từ người dùng
 			choice = input("[ INPUT ] Please choose an option (0-14): ").strip()
 
@@ -461,7 +460,7 @@ if __name__ == "__main__":
 
 			else:
 				print("[ WARNING ] Invalid choice. Please enter a number from 0 to 14.")
-			None
+
 	except KeyboardInterrupt:
 		print("Closing connection...")
 	finally:

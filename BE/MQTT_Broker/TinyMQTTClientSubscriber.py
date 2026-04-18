@@ -1,6 +1,7 @@
-import paho.mqtt.client as mqtt
 import os
 from pathlib import Path
+
+import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 
 ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"

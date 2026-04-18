@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 import threading
 from pathlib import Path
-from pymongo.errors import PyMongoError
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 YELLOW = "\033[93m"
 RESET = "\033[0m"

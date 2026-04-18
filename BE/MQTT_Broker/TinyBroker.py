@@ -1,6 +1,7 @@
-from hbmqtt.broker import Broker
 import asyncio
 import logging
+
+from hbmqtt.broker import Broker
 
 logging.basicConfig(level=logging.DEBUG)
 

@@ -13,8 +13,8 @@ Because the Orchestrator works purely with text, no agent changes are needed.
 
 from __future__ import annotations
 
-from core.message import MessageSource, UserMessage
 from agents.orchestrator import Orchestrator
+from core.message import MessageSource, UserMessage
 
 
 class VoiceAdapter:
@@ -23,11 +23,13 @@ class VoiceAdapter:
 
 	Example future flow::
 
-	    audio_bytes = mic.record(duration=5)
-	    text = stt_engine.transcribe(audio_bytes)
-	    msg = UserMessage(text=text, chat_id="voice_local", source=MessageSource.VOICE)
-	    response = await orchestrator.handle(msg)
-	    tts_engine.speak(response.text)
+		audio_bytes = mic.record(duration=5)
+		text = stt_engine.transcribe(audio_bytes)
+		msg = UserMessage(
+			text=text, chat_id="voice_local", source=MessageSource.VOICE
+		)
+		response = await orchestrator.handle(msg)
+		tts_engine.speak(response.text)
 	"""
 
 	def __init__(self, orchestrator: Orchestrator) -> None:

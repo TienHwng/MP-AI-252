@@ -8,19 +8,18 @@ Returns a normalised response dict regardless of backend.
 from __future__ import annotations
 
 import json
-from typing import Any
 from itertools import count
+from typing import Any
 
 import litellm
-from litellm import completion as litellm_completion
-
 from config import (
 	OLLAMA_API_BASE,
 	OPENROUTER_API_KEY,
 	OPENROUTER_BASE_URL,
 )
-from core.runtime_settings import runtime_settings
+from litellm import completion as litellm_completion
 
+from core.runtime_settings import runtime_settings
 
 # ── Normalised result dict ────────────────────────────────────
 

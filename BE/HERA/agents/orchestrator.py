@@ -14,14 +14,15 @@ import asyncio
 import json
 import time
 
-from agents.base import AgentBase
+from config import (
+	MAX_HISTORY,
+)
 from core.llm_service import LLMService
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
-from config import (
-	MAX_HISTORY,
-)
+
+from agents.base import AgentBase
 
 # ── Intent taxonomy ───────────────────────────────────────────
 

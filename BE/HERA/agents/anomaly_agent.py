@@ -9,18 +9,19 @@ from __future__ import annotations
 
 import json
 
-from agents.base import AgentBase
+from config import (
+	ANOMALY_CRITICAL_THRESHOLD,
+	ANOMALY_THRESHOLD,
+	NORMAL_HUMI_MAX,
+	NORMAL_HUMI_MIN,
+	NORMAL_TEMP_MAX,
+	NORMAL_TEMP_MIN,
+)
 from core.llm_service import LLMService
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
-from config import (
-	NORMAL_TEMP_MIN,
-	NORMAL_TEMP_MAX,
-	NORMAL_HUMI_MIN,
-	NORMAL_HUMI_MAX,
-	ANOMALY_THRESHOLD,
-	ANOMALY_CRITICAL_THRESHOLD,
-)
+
+from agents.base import AgentBase
 
 # ── Rule engine ───────────────────────────────────────────────
 

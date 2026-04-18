@@ -11,12 +11,13 @@ import asyncio
 import json
 from typing import Any
 
-from agents.base import AgentBase
 from core.llm_service import LLMService
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
 from core.tool_registry import DEVICE_TARGETS, ToolRegistry
+
+from agents.base import AgentBase
 
 COMMAND_PARSER_PROMPT = """\
 You are a command parser for HERA's ESP32 actuators.
