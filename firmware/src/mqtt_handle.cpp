@@ -238,24 +238,24 @@ void publish_telemetry(float temp, float hum, float anomaly, bool led_state, boo
 	StaticJsonDocument<1024> doc;
 	const unsigned long now = millis();
 
-	// Flattened fields for compatibility with current backend parsing
-	doc["temperature"] = temp;
-	doc["humidity"] = hum;
-	doc["inference_result"] = anomaly;
-	doc["timestamp"] = now;
+	// // Flattened fields for compatibility with current backend parsing
+	// doc["temperature"] = temp;
+	// doc["humidity"] = hum;
+	// doc["inference_result"] = anomaly;
+	// doc["timestamp"] = now;
 
-	doc["led_status"] = is_LED_on;
-	doc["neo_led_status"] = is_NeoLED_on;
-	doc["ws2812_status"] = is_ws2812_on;
-	doc["relay_status"] = is_relay_on;
-	doc["fan_status"] = is_mini_fan_on;
+	// doc["led_status"] = is_LED_on;
+	// doc["neo_led_status"] = is_NeoLED_on;
+	// doc["ws2812_status"] = is_ws2812_on;
+	// doc["relay_status"] = is_relay_on;
+	// doc["fan_status"] = is_mini_fan_on;
 
-	// Additional network and runtime data
-	doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
-	doc["wifi_rssi"] = WiFi.RSSI();
-	doc["wifi_ip"] = WiFi.localIP().toString();
-	doc["mqtt_connected"] = client.connected();
-	doc["uptime_ms"] = now;
+	// // Additional network and runtime data
+	// doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+	// doc["wifi_rssi"] = WiFi.RSSI();
+	// doc["wifi_ip"] = WiFi.localIP().toString();
+	// doc["mqtt_connected"] = client.connected();
+	// doc["uptime_ms"] = now;
 
 	JsonObject network = doc.createNestedObject("network");
 	network["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
