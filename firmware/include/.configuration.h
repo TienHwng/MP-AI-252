@@ -55,10 +55,10 @@
 #define DIGITAL_PORT_4_PIN          6       // D3
 
 // Analog Ports
-#define ANALOG_PORT_1_PIN           3       // A3
-#define ANALOG_PORT_2_PIN           4       // A2
-#define ANALOG_PORT_3_PIN           5       // A1
-#define ANALOG_PORT_4_PIN           6       // A0
+#define ANALOG_PORT_1_PIN           4       // A3
+#define ANALOG_PORT_2_PIN           3       // A2
+#define ANALOG_PORT_3_PIN           2       // A1
+#define ANALOG_PORT_4_PIN           1       // A0
 
 // I2C Pins
 #define I2C_SDA_PIN                 11      // A4
@@ -75,10 +75,10 @@
 // Grove's port devices
 #define WS2812_PIN                  DIGITAL_PORT_1_PIN
 #define MINI_FAN_PIN                DIGITAL_PORT_2_PIN
-#define IR_RECEIVE_PIN              DIGITAL_PORT_4_PIN
 #define RELAY_PIN                   DIGITAL_PORT_3_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_4_PIN
 
-#define ANALOG_GPIO_PIN             ANALOG_PORT_2_PIN
+#define ANALOG_GPIO_PIN             ANALOG_PORT_1_PIN
 #define LIGHT_SENSOR_PIN            ANALOG_PORT_2_PIN
 #define MQ2_SENSOR_PIN              ANALOG_PORT_3_PIN
 #define SOIL_MOISTURE_PIN           ANALOG_PORT_4_PIN

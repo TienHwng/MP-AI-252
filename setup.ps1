@@ -595,4 +595,4 @@ if ($MyInvocation.InvocationName -eq ".") {
     Write-Host ""
 }
 
-# Show-FinishTransition -WillExit ($MyInvocation.InvocationName -ne ".")
+Show-FinishTransition -WillExit ($MyInvocation.InvocationName -ne ".")
