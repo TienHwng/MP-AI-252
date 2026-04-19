@@ -433,6 +433,27 @@ function Enable-VenvInCurrentSession {
     Write-Ok "Virtual environment activated in current terminal."
 }
 
+function Show-FinishTransition {
+    param([bool]$WillExit = $true)
+
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+    Write-Host "║                    SETUP COMPLETED                       ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+    Write-Host ""
+
+    Write-Ok "Setup has completed successfully."
+
+    if ($WillExit) {
+        Write-Info "Preparing to exit the setup program..."
+        Start-Sleep -Milliseconds 900
+    } else {
+        Write-Info "The setup process is complete. You can continue using the current terminal."
+    }
+
+    Write-Host ""
+}
+
 Write-Banner
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -573,3 +594,5 @@ if ($MyInvocation.InvocationName -eq ".") {
     Write-Host "  . .\setup.ps1" -ForegroundColor White
     Write-Host ""
 }
+
+# Show-FinishTransition -WillExit ($MyInvocation.InvocationName -ne ".")

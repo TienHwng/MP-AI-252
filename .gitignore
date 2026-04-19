@@ -102,3 +102,4 @@ tmp/
 
 # Repository-specific
 docs/report/
+.ruff_cache/
