@@ -9,7 +9,7 @@ broker_config = {
 	"listeners": {
 		"default": {
 			"type": "tcp",
-			"bind": "192.168.1.34:1883",  # Make sure port 1883 is open
+			"bind": "10.0.2.131:1883",  # Make sure port 1883 is open
 		}
 	},
 	"sys_interval": 10,

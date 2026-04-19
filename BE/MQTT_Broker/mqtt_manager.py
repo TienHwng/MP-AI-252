@@ -15,8 +15,26 @@ import threading
 import time
 from datetime import UTC, datetime
 
+
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
+
+# Kích hoạt hỗ trợ ANSI color trên Windows PowerShell/CMD
+if os.name == "nt":
+	os.system("color")
+
+
+# Lớp định nghĩa màu sắc cơ bản
+class Color:
+	CYAN = "\033[96m"
+	GREEN = "\033[92m"
+	YELLOW = "\033[93m"
+	BLUE = "\033[94m"
+	MAGENTA = "\033[95m"
+	RED = "\033[91m"
+	BOLD = "\033[1m"
+	RESET = "\033[0m"
+
 
 from BE.HERA.config import (
 	MQTT_BROKER,
@@ -303,150 +321,384 @@ if __name__ == "__main__":
 
 	try:
 		while True:
-			# Hiển thị Menu cho người dùng
-			print("\n" + "=" * 35)
-			print("SMART HOME CONTROL MENU")
-			print("1. Turn on living room light")
-			print("2. Turn off living room light")
-			print("3. Turn on NeoPixel light")
-			print("4. Turn off NeoPixel light")
-			print("5. Turn on WS2812 light")
-			print("6. Turn off WS2812 light")
-			print("7. Turn on mini fan")
-			print("8. Turn off mini fan")
-			print("9. Turn on relay")
-			print("10. Turn off relay")
-			print("11. View sensors status")
-			print("12. View devices status")
-			print("13. View network status")
-			print("14. View full telemetry data")
-			print("0. Exit program")
-			print("=" * 35)
+			print(
+				"\n"
+				+ Color.CYAN
+				+ "╔═════════════════════════════════════════════════════════════════╗"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║                     "
+				+ Color.BOLD
+				+ "H.E.R.A. CONTROL CENTER"
+				+ Color.RESET
+				+ Color.CYAN
+				+ "                     ║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "╠═════════════════════════════════════════════════════════════════╣"
+				+ Color.RESET
+			)
+
+			# Nhóm 1: Điều khiển đèn
+			print(
+				Color.CYAN
+				+ "║ "
+				+ Color.YELLOW
+				+ "[ LIGHTING CONTROLS ]                                           "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.YELLOW
+				+ "1."
+				+ Color.RESET
+				+ " Turn ON living room light   "
+				+ Color.YELLOW
+				+ "2."
+				+ Color.RESET
+				+ " Turn OFF living room light  "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.YELLOW
+				+ "3."
+				+ Color.RESET
+				+ " Turn ON NeoPixel light      "
+				+ Color.YELLOW
+				+ "4."
+				+ Color.RESET
+				+ " Turn OFF NeoPixel light     "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.YELLOW
+				+ "5."
+				+ Color.RESET
+				+ " Turn ON WS2812 light        "
+				+ Color.YELLOW
+				+ "6."
+				+ Color.RESET
+				+ " Turn OFF WS2812 light       "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "╟─────────────────────────────────────────────────────────────────╢"
+				+ Color.RESET
+			)
+
+			# Nhóm 2: Điều khiển thiết bị khác
+			print(
+				Color.CYAN
+				+ "║ "
+				+ Color.BLUE
+				+ "[ DEVICE CONTROLS ]                                             "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.BLUE
+				+ "7."
+				+ Color.RESET
+				+ " Turn ON mini fan            "
+				+ Color.BLUE
+				+ "8."
+				+ Color.RESET
+				+ " Turn OFF mini fan           "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.BLUE
+				+ "9."
+				+ Color.RESET
+				+ " Turn ON relay               "
+				+ Color.BLUE
+				+ "10."
+				+ Color.RESET
+				+ " Turn OFF relay             "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "╟─────────────────────────────────────────────────────────────────╢"
+				+ Color.RESET
+			)
+
+			# Nhóm 3: Giám sát hệ thống
+			print(
+				Color.CYAN
+				+ "║ "
+				+ Color.MAGENTA
+				+ "[ SYSTEM MONITORING ]                                           "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.MAGENTA
+				+ "11."
+				+ Color.RESET
+				+ " View sensors status       "
+				+ Color.MAGENTA
+				+ "12."
+				+ Color.RESET
+				+ " View devices status         "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.MAGENTA
+				+ "13."
+				+ Color.RESET
+				+ " View network status       "
+				+ Color.MAGENTA
+				+ "14."
+				+ Color.RESET
+				+ " View full telemetry data    "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "╟─────────────────────────────────────────────────────────────────╢"
+				+ Color.RESET
+			)
+
+			# Thoát
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.RED
+				+ "0."
+				+ Color.RESET
+				+ " Exit program                                               "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "╚═════════════════════════════════════════════════════════════════╝"
+				+ Color.RESET
+			)
 
 			# Lấy lựa chọn từ người dùng
-			choice = input("[ INPUT ] Please choose an option (0-14): ").strip()
-
+			choice = input(
+				Color.BOLD + " [ INPUT ] Please choose an option (0-14): " + Color.RESET
+			).strip()
 			if choice == "0":
-				print("Exiting program...")
-				break
+				print(
+					Color.RED
+					+ "\nExiting H.E.R.A. Control Center. Goodbye!\n"
+					+ Color.RESET
+				)
+				break  # Giữ nguyên logic break của bạn
 
 			elif choice == "1":
-				print("HERA: Turning on the living room light...")
+				print(
+					Color.GREEN
+					+ "\n>>> HERA: Turning on the living room light..."
+					+ Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueLedBlinky", True)
 
 			elif choice == "2":
-				print("HERA: Turning off the living room light...")
+				print(
+					Color.YELLOW
+					+ "\n>>> HERA: Turning off the living room light..."
+					+ Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueLedBlinky", False)
 
 			elif choice == "3":
-				print("HERA: Turning on the NeoPixel light...")
+				print(
+					Color.GREEN
+					+ "\n>>> HERA: Turning on the NeoPixel light..."
+					+ Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueNeoLed", True)
 
 			elif choice == "4":
-				print("HERA: Turning off the NeoPixel light...")
+				print(
+					Color.YELLOW
+					+ "\n>>> HERA: Turning off the NeoPixel light..."
+					+ Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueNeoLed", False)
 
 			elif choice == "5":
-				print("HERA: Turning on WS2812 light...")
+				print(
+					Color.GREEN + "\n>>> HERA: Turning on WS2812 light..." + Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueWS2812", True)
 
 			elif choice == "6":
-				print("HERA: Turning off WS2812 light...")
+				print(
+					Color.YELLOW
+					+ "\n>>> HERA: Turning off WS2812 light..."
+					+ Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueWS2812", False)
 
 			elif choice == "7":
-				print("HERA: Turning on mini fan...")
+				print(Color.GREEN + "\n>>> HERA: Turning on mini fan..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueMiniFan", True)
 
 			elif choice == "8":
-				print("HERA: Turning off mini fan...")
+				print(
+					Color.YELLOW + "\n>>> HERA: Turning off mini fan..." + Color.RESET
+				)
 				mqtt_system.send_rpc_command("setValueMiniFan", False)
 
 			elif choice == "9":
-				print("HERA: Turning on relay...")
+				print(Color.GREEN + "\n>>> HERA: Turning on relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", True)
 
 			elif choice == "10":
-				print("HERA: Turning off relay...")
+				print(Color.YELLOW + "\n>>> HERA: Turning off relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", False)
 
 			elif choice == "11":
+				print(Color.CYAN + "\n[ FETCHING SENSOR DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
 					and mqtt_system.latest_sensor_data
 				):
 					sensors = mqtt_system.latest_sensor_data.get("sensors", {})
-					temp = sensors.get("temperature", "Not updated yet")
-					hum = sensors.get("humidity", "Not updated yet")
-					light = sensors.get("light", "Not updated yet")
+					temp = sensors.get("temperature", "N/A")
+					hum = sensors.get("humidity", "N/A")
+					light = sensors.get("light", "N/A")
 
-					print("SENSOR INFO:")
-					print(f"   - Temperature: {temp}°C")
-					print(f"   - Humidity: {hum}%")
-					print(f"   - Light: {light}")
+					print(f"  - Temperature : {Color.YELLOW}{temp}°C{Color.RESET}")
+					print(f"  - Humidity    : {Color.BLUE}{hum}%{Color.RESET}")
+					print(f"  - Light       : {Color.YELLOW}{light}{Color.RESET}")
 				else:
 					print(
-						"SENSOR INFO: Waiting for the board to send data, please try again in a few seconds..."
+						Color.RED
+						+ "  - Waiting for the board to send data, please try again in a few seconds..."
+						+ Color.RESET
 					)
 
 			elif choice == "12":
+				print(Color.CYAN + "\n[ FETCHING DEVICE STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
 					and mqtt_system.latest_sensor_data
 				):
 					devices = mqtt_system.latest_sensor_data.get("devices", {})
-					led = devices.get("led_status", "Unknown")
-					neo = devices.get("neo_led_status", "Unknown")
-					ws2812 = devices.get("ws2812_status", "Unknown")
-					relay = devices.get("relay_status", "Unknown")
-					fan = devices.get("mini_fan_status", "Unknown")
 
-					print("DEVICE STATUS:")
-					print(f"   - LED: {led}")
-					print(f"   - NeoPixel: {neo}")
-					print(f"   - WS2812: {ws2812}")
-					print(f"   - Relay: {relay}")
-					print(f"   - Mini fan: {fan}")
+					# Hàm hỗ trợ tô màu trạng thái True/False hoặc ON/OFF
+					def format_status(status):
+						if str(status).lower() in ["true", "on", "1"]:
+							return f"{Color.GREEN}ON{Color.RESET}"
+						if str(status).lower() in ["false", "off", "0"]:
+							return f"{Color.RED}OFF{Color.RESET}"
+						return str(status)
+
+					print(
+						f"  - LED       : {format_status(devices.get('led_status', 'Unknown'))}"
+					)
+					print(
+						f"  - NeoPixel  : {format_status(devices.get('neo_led_status', 'Unknown'))}"
+					)
+					print(
+						f"  - WS2812    : {format_status(devices.get('ws2812_status', 'Unknown'))}"
+					)
+					print(
+						f"  - Relay     : {format_status(devices.get('relay_status', 'Unknown'))}"
+					)
+					print(
+						f"  - Mini fan  : {format_status(devices.get('mini_fan_status', 'Unknown'))}"
+					)
 				else:
-					print("DEVICE STATUS: Waiting for telemetry...")
+					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
 			elif choice == "13":
+				print(Color.CYAN + "\n[ FETCHING NETWORK STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
 					and mqtt_system.latest_sensor_data
 				):
 					network = mqtt_system.latest_sensor_data.get("network", {})
-					wifi_connected = network.get("wifi_connected", "Unknown")
-					wifi_rssi = network.get("wifi_rssi", "Unknown")
-					wifi_ip = network.get("wifi_ip", "Unknown")
-					mqtt_connected = network.get("mqtt_connected", "Unknown")
-					uptime_ms = network.get("uptime_ms", "Unknown")
 
-					print("NETWORK STATUS:")
-					print(f"   - WiFi connected: {wifi_connected}")
-					print(f"   - WiFi RSSI: {wifi_rssi} dBm")
-					print(f"   - WiFi IP: {wifi_ip}")
-					print(f"   - MQTT connected: {mqtt_connected}")
-					print(f"   - Uptime: {uptime_ms} ms")
+					wifi_conn = (
+						f"{Color.GREEN}Connected{Color.RESET}"
+						if network.get("wifi_connected")
+						else f"{Color.RED}Disconnected{Color.RESET}"
+					)
+					mqtt_conn = (
+						f"{Color.GREEN}Connected{Color.RESET}"
+						if network.get("mqtt_connected")
+						else f"{Color.RED}Disconnected{Color.RESET}"
+					)
+
+					print(f"  - WiFi Status  : {wifi_conn}")
+					print(
+						f"  - WiFi RSSI    : {Color.YELLOW}{network.get('wifi_rssi', 'Unknown')} dBm{Color.RESET}"
+					)
+					print(
+						f"  - WiFi IP      : {Color.BLUE}{network.get('wifi_ip', 'Unknown')}{Color.RESET}"
+					)
+					print(f"  - MQTT Status  : {mqtt_conn}")
+					print(
+						f"  - Uptime       : {network.get('uptime_ms', 'Unknown')} ms"
+					)
 				else:
-					print("NETWORK STATUS: Waiting for telemetry...")
+					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
 			elif choice == "14":
+				print(Color.CYAN + "\n[ FULL TELEMETRY DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
 					and mqtt_system.latest_sensor_data
 				):
-					print("FULL TELEMETRY DATA:")
-					print(
-						json.dumps(
-							mqtt_system.latest_sensor_data, indent=2, ensure_ascii=False
-						)
+					# Tô màu cho chuỗi JSON xuất ra
+					json_str = json.dumps(
+						mqtt_system.latest_sensor_data, indent=2, ensure_ascii=False
 					)
+					print(Color.YELLOW + json_str + Color.RESET)
 				else:
-					print("FULL TELEMETRY: Waiting for telemetry...")
+					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
 			else:
-				print("[ WARNING ] Invalid choice. Please enter a number from 0 to 14.")
+				print(
+					Color.RED
+					+ Color.BOLD
+					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 14."
+					+ Color.RESET
+				)
 
 	except KeyboardInterrupt:
 		print("Closing connection...")

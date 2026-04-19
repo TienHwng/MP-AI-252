@@ -52,8 +52,8 @@ OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL")
 # ===================== MQTT =====================
 
 # Core MQTT connection
-MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.1.34")
-MQTT_BROKER_BIND_HOST = os.getenv("MQTT_BROKER_BIND_HOST", "192.168.1.34")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "10.0.2.131")
+MQTT_BROKER_BIND_HOST = os.getenv("MQTT_BROKER_BIND_HOST", "10.0.2.131")
 MQTT_PORT = env_int("MQTT_PORT", 1883)
 
 # MQTT topics (migrated from old .env)
