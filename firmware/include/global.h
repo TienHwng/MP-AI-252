@@ -13,6 +13,7 @@
 typedef struct {
     float temperature;
     float humidity;
+    float light;
 } SensorData;
 
 enum LcdScreen {

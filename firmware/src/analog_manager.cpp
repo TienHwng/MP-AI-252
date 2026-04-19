@@ -28,19 +28,19 @@ static AnalogLevel decode_analog_level(uint16_t rawValue) {
 void setup_analog_manager() {
     Serial.println("[INIT] Analog manager task created successfully");
 
-    pinMode(ANALOG_GPIO_PIN, INPUT);
+    pinMode(LIGHT_SENSOR_PIN, INPUT);
 
     analogReadResolution(12);
-    analogSetPinAttenuation(ANALOG_GPIO_PIN, ADC_11db);
+    analogSetPinAttenuation(LIGHT_SENSOR_PIN, ADC_11db);
 
-    const uint16_t bootRead = analogRead(ANALOG_GPIO_PIN);
+    const uint16_t bootRead = analogRead(LIGHT_SENSOR_PIN);
 
     lastStableLevel = decode_analog_level(bootRead);
     lastInstantLevel = lastStableLevel;
     lastChange = xTaskGetTickCount();
 
     if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
-        Serial.printf("[ANALOG] GPIO %d init raw=%u level=%d\n", ANALOG_GPIO_PIN, bootRead, (int)lastStableLevel);
+        Serial.printf("[ANALOG] GPIO %d init raw=%u level=%d\n", LIGHT_SENSOR_PIN, bootRead, (int)lastStableLevel);
     }
 }
 
@@ -48,8 +48,15 @@ void analog_manager(void *pvParameters) {
     setup_analog_manager();
 
     while (1) {
-        const uint16_t rawValue = analogRead(ANALOG_GPIO_PIN);
+        const uint16_t rawValue = analogRead(LIGHT_SENSOR_PIN);
+        const float lightPercent = ((float)rawValue / 4095.0f) * 100.0f;
         const AnalogLevel level = decode_analog_level(rawValue);
+
+        if (xSensorDataMutex != NULL &&
+            xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            sensorData.light = lightPercent;
+            xSemaphoreGive(xSensorDataMutex);
+        }
 
         if (level != lastInstantLevel) {
             lastInstantLevel = level;
@@ -63,7 +70,7 @@ void analog_manager(void *pvParameters) {
                 if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
                     const float voltage = (3.3f * (float)rawValue) / 4095.0f;
                     Serial.printf("[ANALOG] GPIO %d raw=%u voltage=%.2fV decoded=%d\n",
-                                  ANALOG_GPIO_PIN,
+                                  LIGHT_SENSOR_PIN,
                                   rawValue,
                                   voltage,
                                   (int)lastStableLevel);

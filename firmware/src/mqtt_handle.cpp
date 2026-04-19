@@ -42,7 +42,7 @@ void forceConnectWiFi() {
 
 
 
-const char *mqtt_server	  = "10.0.2.131"; // IP cua may chay Mosquitto
+const char *mqtt_server	  = "172.20.10.2"; // IP cua may chay Mosquitto
 const int	mqtt_port	  = 1883;
 const char *coreIOT_Token = "ehehehe"; // device access Token
 
@@ -231,7 +231,7 @@ void setup_mqtt() {
 	client.setCallback(callback);
 }
 
-void publish_telemetry(float temp, float hum, float anomaly, bool led_state, bool neo_state) {
+void publish_telemetry(float temp, float hum, float light, float anomaly, bool led_state, bool neo_state) {
 	if (!client.connected())
 		return;
 
@@ -274,7 +274,7 @@ void publish_telemetry(float temp, float hum, float anomaly, bool led_state, boo
 	JsonObject sensors = doc.createNestedObject("sensors");
 	sensors["temperature"] = temp;
 	sensors["humidity"] = hum;
-	sensors["light"] = 90.0; // Placeholder for light sensor
+	sensors["light"] = light;
 	
 	// doc["lcd_screen"] = static_cast<int>(current_lcd_screen);
 	// doc["anomaly"] = anomaly;
@@ -308,15 +308,17 @@ void mqtt_task(void *pvParameters) {
 
 			float temp	  = 0.0;
 			float hum	  = 0.0;
+			float light   = 0.0;
 			float anomaly = 0.12; // Giả sử model TinyML trả về
 
 			if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
 				temp = sensorData.temperature;
 				hum	 = sensorData.humidity;
+				light = sensorData.light;
 				xSemaphoreGive(xSensorDataMutex);
 			}
 
-			publish_telemetry(temp, hum, anomaly, is_LED_on, is_NeoLED_on);
+			publish_telemetry(temp, hum, light, anomaly, is_LED_on, is_NeoLED_on);
 		}
 
 		// 3. NHƯỜNG CPU

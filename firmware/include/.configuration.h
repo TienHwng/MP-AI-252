@@ -10,7 +10,7 @@
 // ----- General Settings -----
 // Mode Settings
 #define IS_DEBUG_MODE               false
-#define IS_MONITOR_MODE             true
+#define IS_MONITOR_MODE             false
 #define IS_SHOW_DHT20_STATUS        false
 #define IS_SHOW_LED_STATUS          false
 #define IS_SHOW_NEO_STATUS          false
@@ -78,10 +78,10 @@
 #define IR_RECEIVE_PIN              DIGITAL_PORT_4_PIN
 #define RELAY_PIN                   DIGITAL_PORT_3_PIN
 
-#define LIGHT_SENSOR_PIN            ANALOG_PORT_1_PIN
-#define MQ2_SENSOR_PIN              ANALOG_PORT_2_PIN
-#define SOIL_MOISTURE_PIN           ANALOG_PORT_3_PIN
-#define ANALOG_GPIO_PIN             ANALOG_PORT_4_PIN
+#define ANALOG_GPIO_PIN             ANALOG_PORT_2_PIN
+#define LIGHT_SENSOR_PIN            ANALOG_PORT_2_PIN
+#define MQ2_SENSOR_PIN              ANALOG_PORT_3_PIN
+#define SOIL_MOISTURE_PIN           ANALOG_PORT_4_PIN
 
 // GPIO ports
 #define LED_PIN                     48
