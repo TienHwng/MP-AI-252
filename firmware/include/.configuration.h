@@ -50,13 +50,18 @@
 
 
 // ----- Board default ports mapping -----
-// Digital Ports
+// Digital Grove Ports
 #define DIGITAL_PORT_1_PIN          18      // D9
 #define DIGITAL_PORT_2_PIN          10      // D7
 #define DIGITAL_PORT_3_PIN          8       // D5
 #define DIGITAL_PORT_4_PIN          6       // D3
 
-// Analog Ports
+#define DIGITAL_PORT_1_SUB_PIN      21      // D10
+#define DIGITAL_PORT_2_SUB_PIN      17      // D8
+#define DIGITAL_PORT_3_SUB_PIN      9       // D6
+#define DIGITAL_PORT_4_SUB_PIN      7       // D4
+
+// Analog Grove Ports
 #define ANALOG_PORT_1_PIN           4       // A3
 #define ANALOG_PORT_2_PIN           3       // A2
 #define ANALOG_PORT_3_PIN           2       // A1
@@ -76,9 +81,10 @@
 
 // Grove's port devices
 #define WS2812_PIN                  DIGITAL_PORT_1_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_2_PIN
+// #define PIR_SENSOR_PIN              DIGITAL_PORT_2_PIN
 #define MINI_FAN_PIN                DIGITAL_PORT_3_PIN
 #define RELAY_PIN                   DIGITAL_PORT_4_PIN
-#define IR_RECEIVE_PIN              DIGITAL_PORT_2_PIN
 
 #define ANALOG_GPIO_PIN             ANALOG_PORT_1_PIN
 #define LIGHT_SENSOR_PIN            ANALOG_PORT_2_PIN
@@ -94,9 +100,9 @@
 #define WS2812_NUMBER               4
 
 // Fan PWM (LEDC) settings
-#define FAN_PWM_CHANNEL             0
+// #define FAN_PWM_CHANNEL             MINI_FAN_PIN
 #define FAN_PWM_FREQ                25000   // 25 kHz
-#define FAN_PWM_RESOLUTION          12       // 8-bit -> 0..255
+#define FAN_PWM_RESOLUTION          12       // 8-bit -> 0..4096
 // ----- END GPIO Pins Definitions -----
 
 

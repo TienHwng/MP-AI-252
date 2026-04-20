@@ -158,7 +158,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 			}
 			else if (method == method_mini_fan.c_str()) {
 				// Bật/tắt quạt qua bool: true -> 255, false -> 0
-				uint8_t spd = params ? 255 : 0;
+				uint8_t spd = params ? 4095 : 0;
 				if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
 					fan_speed      = spd;
 					is_mini_fan_on = params;
@@ -372,8 +372,8 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	serializeJsonPretty(doc, prettyPayload);
 
 	client.publish(TOPIC_TELEMETRY, payload.c_str());
-	Serial.println("[MQTT] Send:");
-	Serial.println(prettyPayload);
+	// Serial.println("[MQTT] Send:");
+	// Serial.println(prettyPayload);
 }
 
 void mqtt_task(void *pvParameters) {

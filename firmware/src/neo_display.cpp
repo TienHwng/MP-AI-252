@@ -155,6 +155,6 @@ void setup_neo_display() {
 
     WS2812.begin();
     WS2812.setBrightness(ws2812_brightness);
-    WS2812.clear();
+    // WS2812.clear();
     WS2812.show();
 }

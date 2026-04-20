@@ -1,10 +1,26 @@
 #include "digital_manager.h"
 #include "neo_display.h"
 
+typedef enum {
+    FAN_DIR_STOP = 0,
+    FAN_DIR_FORWARD,
+    FAN_DIR_REVERSE
+} FanDirection_t;
+
 // Lưu giá trị trước đó để chỉ ghi khi thay đổi
-static uint8_t lastFanSpeed        = 0;
+static int16_t lastFanSpeed        = 0;
+static FanDirection_t lastFanDirection   = FAN_DIR_STOP;
 static uint8_t lastWs2812Brightness = 0;
 static bool    lastWs2812On         = false;
+
+static inline uint16_t clamp_pwm_10bit_abs(int16_t speed) {
+    int32_t val = speed;
+
+    if (val < 0) val = -val;
+    if (val > 1023) val = 1023;
+
+    return (uint16_t)val;
+}
 
 void setup_digital_manager() {
     Serial.println("[INIT] Digital manager task created successfully");
@@ -18,20 +34,49 @@ void setup_digital_manager() {
     digitalWrite(IR_RECEIVE_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
 
-    // Khởi tạo LEDC PWM cho quạt mini
-    ledcSetup(FAN_PWM_CHANNEL, FAN_PWM_FREQ, FAN_PWM_RESOLUTION);
-    ledcAttachPin(MINI_FAN_PIN, FAN_PWM_CHANNEL);
-    ledcWrite(FAN_PWM_CHANNEL, 0);   // Tắt quạt ban đầu
+    pinMode(MINI_FAN_PIN, OUTPUT);
+    pinMode(DIGITAL_PORT_3_SUB_PIN, OUTPUT);
+
+    // PWM global cho toàn bộ analogWrite
+    analogWriteResolution(10);     // 0..1023
+    analogWriteFrequency(20000);   // 20 kHz
+
+    analogWrite(MINI_FAN_PIN, 100);
+    // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
 }
 
-void fan_set_speed(uint8_t speed) {
+void fan_set_speed(int16_t speed) {
+    uint16_t pwm = clamp_pwm_10bit_abs(speed);
+
     fan_speed      = speed;
-    is_mini_fan_on = (speed > 0);
+    is_mini_fan_on = (speed != 0);
 
-    ledcWrite(FAN_PWM_CHANNEL, speed);
+    if (speed > 0) {
+        // Quay xuôi
+        // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
+        analogWrite(MINI_FAN_PIN, pwm);
 
-    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
-        Serial.printf("[FAN] Speed set to %u / 255\n", speed);
+        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+            Serial.printf("[FAN] Forward | Speed = %d | PWM = %u / 1023\n", speed, pwm);
+        }
+    }
+    else if (speed < 0) {
+        // Quay ngược
+        analogWrite(MINI_FAN_PIN, 0);
+        // analogWrite(DIGITAL_PORT_3_SUB_PIN, pwm);
+
+        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+            Serial.printf("[FAN] Reverse | Speed = %d | PWM = %u / 1023\n", speed, pwm);
+        }
+    }
+    else {
+        // Dừng
+        analogWrite(MINI_FAN_PIN, 0);
+        // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
+
+        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+            Serial.println("[FAN] Stop");
+        }
     }
 }
 
@@ -63,7 +108,7 @@ void digital_manager(void *pvParameters) {
 
         // --- Quạt mini: điều chỉnh tốc độ bằng PWM ---
         if (xSemaphoreTake(xFanStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
-            uint8_t curSpeed = fan_speed;
+            int16_t curSpeed = fan_speed;
             xSemaphoreGive(xFanStateSemaphore);
 
             if (curSpeed != lastFanSpeed) {

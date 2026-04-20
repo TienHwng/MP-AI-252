@@ -13,14 +13,14 @@ boolean isWifiConnected = false;
 
 boolean is_LED_on		= true;
 boolean is_NeoLED_on	= true;
-uint8_t strip_brightness	= 100;   // default strip brightness (0..255)
+uint8_t strip_brightness	= 10;   // default strip brightness (0..255)
 boolean is_ws2812_on	= true;
-uint8_t ws2812_brightness	= 100;   // default brightness (0..255)
+uint8_t ws2812_brightness	= 10;   // default brightness (0..255)
 
-boolean is_relay_on		= false;
+boolean is_relay_on		= true;
 
-boolean is_mini_fan_on	= false;
-uint8_t fan_speed		= 0;     // default fan speed (0..255, PWM duty)
+boolean is_mini_fan_on	= true;
+int16_t fan_speed		= 500;     // default fan speed (0..4095, PWM duty)
 
 LcdScreen current_lcd_screen = SCREEN_ENV;
 
