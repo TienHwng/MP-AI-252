@@ -52,7 +52,7 @@ def _env_bool(name: str, default: bool) -> bool:
 	return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-ENABLE_MONGODB = _env_bool("MQTT_ENABLE_MONGODB", True)
+ENABLE_MONGODB = _env_bool("MQTT_ENABLE_MONGODB", False)
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
