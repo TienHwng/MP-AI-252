@@ -57,17 +57,33 @@ MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
 
-if ENABLE_MONGODB:
+collection = None
+devices_collection = None
+
+try:
 	from pymongo import MongoClient
+except ImportError:
+	MongoClient = None
 
-	mongo_client = MongoClient(MONGODB_URI)
-	db = mongo_client[MONGODB_DB]
-	collection = db[MONGODB_COLLECTION]
-
-	mongo_client = MongoClient(MONGODB_URI)
-	db = mongo_client[MONGODB_DB]
-	collection = db[MONGODB_COLLECTION]
-	devices_collection = db["devices"]
+if ENABLE_MONGODB:
+	if MongoClient is None:
+		print(
+			"[ WARNING ] MQTT_ENABLE_MONGODB=true nhưng thiếu package 'pymongo'. "
+			"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
+		)
+	else:
+		try:
+			mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=1500)
+			# Ping để fail-fast khi contributor không chạy MongoDB local
+			mongo_client.admin.command("ping")
+			db = mongo_client[MONGODB_DB]
+			collection = db[MONGODB_COLLECTION]
+			devices_collection = db["devices"]
+		except Exception as e:
+			print(
+				f"[ WARNING ] Không thể kết nối MongoDB ({e}). "
+				"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
+			)
 
 
 class MQTTManager:
@@ -85,6 +101,14 @@ class MQTTManager:
 		self.persist_telemetry = (
 			ENABLE_MONGODB if persist_telemetry is None else bool(persist_telemetry)
 		)
+		self.collection = collection
+		self.devices_collection = devices_collection
+
+		if self.persist_telemetry and not self.collection:
+			print(
+				"[ INFO ] Telemetry persistence disabled. "
+				"Ứng dụng vẫn nhận dữ liệu MQTT bình thường."
+			)
 
 		# === Cấu hình Broker ===
 		self.broker_config = {
@@ -204,33 +228,44 @@ class MQTTManager:
 				parsed = json.loads(payload)
 				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 
-				if self.persist_telemetry and ENABLE_MONGODB:
-					current_user_id = None
+				if (
+					self.persist_telemetry
+					and self.collection
+					and self.devices_collection
+				):
 					try:
-						device_info = devices_collection.find_one(
-							{"device_id": "device_0001"}
-						)
-						if device_info:
-							current_user_id = device_info.get("current_user_id")
+						current_user_id = None
+						try:
+							device_info = self.devices_collection.find_one(
+								{"device_id": "device_0001"}
+							)
+							if device_info:
+								current_user_id = device_info.get("current_user_id")
+						except Exception as e:
+							print(f"[ WARNING ] Could not fetch device owner: {e}")
+
+						doc = {
+							"recorded_at": datetime.now(UTC),
+							"metadata": {
+								"device_id": "device_0001",
+								"env_id": "env_0001",
+								"user_id": current_user_id,
+							},
+							**{
+								k: v
+								for k, v in self.latest_sensor_data.items()
+								if v is not None
+							},
+						}
+
+						self.collection.insert_one(doc)
+						# print(f"[ INFO ] [Database] Inserted sensor data: {doc}")
 					except Exception as e:
-						print(f"[ WARNING ] Could not fetch device owner: {e}")
-
-					doc = {
-						"recorded_at": datetime.now(UTC),
-						"metadata": {
-							"device_id": "device_0001",
-							"env_id": "env_0001",
-							"user_id": current_user_id,
-						},
-						**{
-							k: v
-							for k, v in self.latest_sensor_data.items()
-							if v is not None
-						},
-					}
-
-					collection.insert_one(doc)
-					# print(f"[ INFO ] [Database] Inserted sensor data: {doc}")
+						print(
+							f"[ WARNING ] MongoDB write failed ({e}). "
+							"MQTT vẫn tiếp tục chạy, tạm tắt telemetry persistence."
+						)
+						self.persist_telemetry = False
 
 			except Exception as e:
 				print("JSON parse error:", e)
