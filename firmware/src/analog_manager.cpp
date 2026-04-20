@@ -1,30 +1,5 @@
 #include "analog_manager.h"
 
-enum AnalogLevel : int8_t {
-    ANALOG_UNKNOWN = -1,
-    ANALOG_LEVEL_0 = 0,
-    ANALOG_LEVEL_1 = 1,
-    ANALOG_LEVEL_2 = 2,
-    ANALOG_LEVEL_3 = 3,
-};
-
-static AnalogLevel lastStableLevel = ANALOG_UNKNOWN;
-static AnalogLevel lastInstantLevel = ANALOG_UNKNOWN;
-static TickType_t  lastChange       = 0;
-
-static AnalogLevel decode_analog_level(uint16_t rawValue) {
-    if (rawValue <= ANALOG_LEVEL_0_MAX) {
-        return ANALOG_LEVEL_0;
-    }
-    if (rawValue <= ANALOG_LEVEL_1_MAX) {
-        return ANALOG_LEVEL_1;
-    }
-    if (rawValue <= ANALOG_LEVEL_2_MAX) {
-        return ANALOG_LEVEL_2;
-    }
-    return ANALOG_LEVEL_3;
-}
-
 void setup_analog_manager() {
     Serial.println("[INIT] Analog manager task created successfully");
 
@@ -35,12 +10,8 @@ void setup_analog_manager() {
 
     const uint16_t bootRead = analogRead(LIGHT_SENSOR_PIN);
 
-    lastStableLevel = decode_analog_level(bootRead);
-    lastInstantLevel = lastStableLevel;
-    lastChange = xTaskGetTickCount();
-
     if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
-        Serial.printf("[ANALOG] GPIO %d init raw=%u level=%d\n", LIGHT_SENSOR_PIN, bootRead, (int)lastStableLevel);
+        Serial.printf("[ANALOG] GPIO %d init raw=%u\n", LIGHT_SENSOR_PIN, bootRead);
     }
 }
 
@@ -50,34 +21,22 @@ void analog_manager(void *pvParameters) {
     while (1) {
         const uint16_t rawValue = analogRead(LIGHT_SENSOR_PIN);
         const float lightPercent = ((float)rawValue / 4095.0f) * 100.0f;
-        const AnalogLevel level = decode_analog_level(rawValue);
 
-        if (xSensorDataMutex != NULL &&
-            xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        if (xLightSemaphore != NULL &&
+            xSemaphoreTake(xLightSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             sensorData.light = lightPercent;
-            xSemaphoreGive(xSensorDataMutex);
+            xSemaphoreGive(xLightSemaphore);
         }
 
-        if (level != lastInstantLevel) {
-            lastInstantLevel = level;
-            lastChange = xTaskGetTickCount();
+        if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
+            const float voltage = (3.3f * (float)rawValue) / 4095.0f;
+            Serial.printf("[ANALOG] GPIO %d raw=%u voltage=%.2fV light=%.2f%%\n",
+                          LIGHT_SENSOR_PIN,
+                          rawValue,
+                          voltage,
+                          lightPercent);
         }
 
-        if ((xTaskGetTickCount() - lastChange) >= pdMS_TO_TICKS(ANALOG_DEBOUNCE_MS)) {
-            if (level != lastStableLevel) {
-                lastStableLevel = level;
-
-                if (IS_DEBUG_MODE || IS_MONITOR_MODE || 1) {
-                    const float voltage = (3.3f * (float)rawValue) / 4095.0f;
-                    Serial.printf("[ANALOG] GPIO %d raw=%u voltage=%.2fV decoded=%d\n",
-                                  LIGHT_SENSOR_PIN,
-                                  rawValue,
-                                  voltage,
-                                  (int)lastStableLevel);
-                }
-            }
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(ANALOG_READ_DELAY_MS));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

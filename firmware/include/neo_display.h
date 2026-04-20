@@ -11,6 +11,9 @@ void setup_neo_display();
 void update_NEO_LED(uint32_t index);
 void neo_display(void *pvParameters);
 void ws2812_set(bool on);
+void ws2812_set_brightness(uint8_t brightness);
 void ws2812_toggle();
+
+void strip_set_brightness(uint8_t brightness);
 
 #endif

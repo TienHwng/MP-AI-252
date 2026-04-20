@@ -40,7 +40,10 @@ void update_NEO_LED(uint32_t index) {
     }
     
     if (!neoLedStateLocal) 	strip.fill(0);  // Turn off LEDs
-    else				    strip.fill(color_map[index]);
+    else {
+        strip.setBrightness(strip_brightness > 0 ? strip_brightness : 1);
+        strip.fill(color_map[index]);
+    }
 
     strip.show();
 
@@ -56,9 +59,9 @@ void neo_display(void *pvParameters) {
     while (1) {
         static float currentHumid = 0.0f;
 
-        if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             currentHumid = sensorData.humidity;
-            xSemaphoreGive(xSensorDataMutex);
+            xSemaphoreGive(xDHT20Semaphore);
         }
 
         // Change NEO LED color based on humidity
@@ -85,6 +88,7 @@ void ws2812_set(bool on) {
     ws2812StateLocal = on;
 
     if (on) {
+        WS2812.setBrightness(ws2812_brightness > 0 ? ws2812_brightness : 1);
         WS2812.fill(WS2812.Color(0, 64, 255)); // cool blue when ON
         WS2812.setPixelColor(0, WS2812.Color(255, 0, 0)); // Red for pixel 0
     }
@@ -94,9 +98,29 @@ void ws2812_set(bool on) {
 
     WS2812.show();
 
+    if (IS_DEBUG_MODE || IS_SHOW_NEO_STATUS) {
+        Serial.printf("[WS2812] %s  brightness=%u\n", on ? "ON" : "OFF", ws2812_brightness);
+    }
+}
+
+void ws2812_set_brightness(uint8_t brightness) {
+    ws2812_brightness = brightness;
+
+    WS2812.setBrightness(brightness > 0 ? brightness : 0);
+
+    if (ws2812StateLocal) {
+        // Re-render pixels so brightness change is visible immediately
+        WS2812.fill(WS2812.Color(0, 64, 255));
+        WS2812.setPixelColor(0, WS2812.Color(255, 0, 0));
+    }
+    else {
+        WS2812.clear();
+    }
+
+    WS2812.show();
 
     if (IS_DEBUG_MODE || IS_SHOW_NEO_STATUS) {
-        Serial.printf("[WS2812] %s\n", on ? "ON" : "OFF");
+        Serial.printf("[WS2812] Brightness set to %u\n", brightness);
     }
 }
 
@@ -104,18 +128,33 @@ void ws2812_toggle() {
     ws2812_set(!ws2812StateLocal);
 }
 
+void strip_set_brightness(uint8_t brightness) {
+    strip_brightness = brightness;
+
+    strip.setBrightness(brightness > 0 ? brightness : 0);
+
+    // Re-render ngay lập tức nếu đèn đang bật
+    if (neoLedStateLocal) {
+        strip.show();
+    }
+
+    if (IS_DEBUG_MODE || IS_SHOW_NEO_STATUS) {
+        Serial.printf("[STRIP] Brightness set to %u\n", brightness);
+    }
+}
+
 void setup_neo_display() {
     // TODO
     Serial.println("[INIT] Neo Display task created successfully");
 
     strip.begin();
-    strip.setBrightness(100);
+    strip.setBrightness(strip_brightness);
     strip.show();
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     WS2812.begin();
-    WS2812.setBrightness(100);
+    WS2812.setBrightness(ws2812_brightness);
     WS2812.clear();
     WS2812.show();
 }

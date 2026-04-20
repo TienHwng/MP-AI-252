@@ -1,4 +1,5 @@
 #include "mqtt_handle.h"
+#include "digital_manager.h"
 #include "WiFi.h"
 
 void forceConnectWiFi() {
@@ -42,7 +43,7 @@ void forceConnectWiFi() {
 
 
 
-const char *mqtt_server	  = "172.20.10.2"; // IP cua may chay Mosquitto
+const char *mqtt_server	  = "192.168.1.2"; // IP cua may chay Mosquitto
 const int	mqtt_port	  = 1883;
 const char *coreIOT_Token = "ehehehe"; // device access Token
 
@@ -55,11 +56,14 @@ const char *TOPIC_ATTRIBUTES   = "v1/devices/me/attributes";
 WiFiClient	 espClient;
 PubSubClient client(espClient);
 
-String method_led_blinky = "setValueLedBlinky";
-String method_neo_led	 = "setValueNeoLed";
-String method_ws2812	 = "setValueWS2812";
-String method_relay		 = "setValueRelay";
-String method_mini_fan	 = "setValueMiniFan";
+String method_led_blinky		= "setValueLedBlinky";
+String method_neo_led			= "setValueNeoLed";
+String method_ws2812			= "setValueWS2812";
+String method_ws2812_brightness	= "setWS2812Brightness";
+String method_strip_brightness	= "setStripBrightness";
+String method_relay				= "setValueRelay";
+String method_mini_fan			= "setValueMiniFan";
+String method_fan_speed			= "setFanSpeed";
 
 static bool setActuatorState(SemaphoreHandle_t mutex, boolean &stateRef, bool state, uint8_t pin) {
 	if (mutex == NULL) {
@@ -99,14 +103,6 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 	// Get method and param from HERA
 	String method = doc["method"].as<String>();
-	bool   params;
-	if (!doc["params"].is<bool>()) {
-		Serial.println("params is not bool!");
-		return;
-	}
-	else {
-		params = doc["params"].as<bool>();
-	}
 
 	// Get request_id from topic (Ex: ".../request/1" -> "1")
 	String topicStr	 = String(topic);
@@ -115,48 +111,135 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 	// Handling device on/off based on method
 	StaticJsonDocument<512> responseDoc;
-	if (method == method_led_blinky.c_str()) {
-		setActuatorState(xLedStateSemaphore, is_LED_on, params, LED_PIN);
-		responseDoc["Led_Status"] = params;
-		
-		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "[ACTION] Turning on normal LED" : "[ACTION] Turning off normal LED");
+
+	// ========================================
+	// Nhóm 1: Các lệnh dùng params kiểu bool
+	// ========================================
+	if (method == method_led_blinky.c_str() ||
+		method == method_neo_led.c_str()    ||
+		method == method_ws2812.c_str()     ||
+		method == method_relay.c_str()      ||
+		method == method_mini_fan.c_str()) {
+
+		if (!doc["params"].is<bool>()) {
+			Serial.println("[MQTT] params is not bool!");
+			responseDoc["error"] = "params must be bool";
+		}
+		else {
+			bool params = doc["params"].as<bool>();
+
+			if (method == method_led_blinky.c_str()) {
+				setActuatorState(xLedStateSemaphore, is_LED_on, params, LED_PIN);
+				responseDoc["Led_Status"] = params;
+				if (IS_SHOW_PAYLOAD) {
+					Serial.println(params ? "[ACTION] Turning on normal LED" : "[ACTION] Turning off normal LED");
+				}
+			}
+			else if (method == method_neo_led.c_str()) {
+				setActuatorState(xNeoLedStateSemaphore, is_NeoLED_on, params, NEO_LED_PIN);
+				responseDoc["NeoLed_Status"] = params;
+				if (IS_SHOW_PAYLOAD) {
+					Serial.println(params ? "[ACTION] Turning on NeoPixel" : "[ACTION] Turning off NeoPixel");
+				}
+			}
+			else if (method == method_ws2812.c_str()) {
+				setActuatorState(xWS2812StateSemaphore, is_ws2812_on, params, WS2812_PIN);
+				responseDoc["WS2812_Status"] = params;
+				if (IS_SHOW_PAYLOAD) {
+					Serial.println(params ? "[ACTION] Turning on WS2812" : "[ACTION] Turning off WS2812");
+				}
+			}
+			else if (method == method_relay.c_str()) {
+				setActuatorState(xRelayStateSemaphore, is_relay_on, params, RELAY_PIN);
+				responseDoc["Relay_Status"] = params;
+				if (IS_SHOW_PAYLOAD) {
+					Serial.println(params ? "[ACTION] Turning on Relay" : "[ACTION] Turning off Relay");
+				}
+			}
+			else if (method == method_mini_fan.c_str()) {
+				// Bật/tắt quạt qua bool: true -> 255, false -> 0
+				uint8_t spd = params ? 255 : 0;
+				if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
+					fan_speed      = spd;
+					is_mini_fan_on = params;
+					xSemaphoreGive(xFanStateSemaphore);
+				}
+				responseDoc["Fan_Status"] = params;
+				responseDoc["Fan_Speed"]  = spd;
+				if (IS_SHOW_PAYLOAD) {
+					Serial.printf("[ACTION] Fan %s (speed=%u)\n", params ? "ON" : "OFF", spd);
+				}
+			}
 		}
 	}
 
-	else if (method == method_neo_led.c_str()) {
-		setActuatorState(xNeoLedStateSemaphore, is_NeoLED_on, params, NEO_LED_PIN);
-		responseDoc["NeoLed_Status"] = params;
-		
-		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "[ACTION] Turning on NeoPixel" : "[ACTION] Turning off NeoPixel");
+	// ========================================
+	// Nhóm 2: Lệnh chỉnh độ sáng WS2812 (int 0..255)
+	// ========================================
+	else if (method == method_ws2812_brightness.c_str()) {
+		if (!doc["params"].is<int>()) {
+			Serial.println("[MQTT] params is not int!");
+			responseDoc["error"] = "params must be int (0..255)";
+		}
+		else {
+			int val = doc["params"].as<int>();
+			if (val < 0)   val = 0;
+			if (val > 255) val = 255;
+
+			if (xSemaphoreTake(xWS2812StateSemaphore, portMAX_DELAY) == pdTRUE) {
+				ws2812_brightness = (uint8_t)val;
+				is_ws2812_on      = (val > 0);
+				xSemaphoreGive(xWS2812StateSemaphore);
+			}
+			responseDoc["WS2812_Brightness"] = val;
+			Serial.printf("[ACTION] WS2812 brightness -> %d\n", val);
 		}
 	}
 
-	else if (method == method_ws2812.c_str()) {
-		setActuatorState(xWS2812StateSemaphore, is_ws2812_on, params, WS2812_PIN);
-		responseDoc["WS2812_Status"] = params;
-		
-		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "[ACTION] Turning on WS2812" : "[ACTION] Turning off WS2812");
+	// ========================================
+	// Nhóm 3: Lệnh chỉnh tốc độ quạt (int 0..255)
+	// ========================================
+	else if (method == method_fan_speed.c_str()) {
+		if (!doc["params"].is<int>()) {
+			Serial.println("[MQTT] params is not int!");
+			responseDoc["error"] = "params must be int (0..255)";
+		}
+		else {
+			int val = doc["params"].as<int>();
+			if (val < 0)   val = 0;
+			if (val > 255) val = 255;
+
+			if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
+				fan_speed      = (uint8_t)val;
+				is_mini_fan_on = (val > 0);
+				xSemaphoreGive(xFanStateSemaphore);
+			}
+			responseDoc["Fan_Speed"]  = val;
+			responseDoc["Fan_Status"] = (val > 0);
+			Serial.printf("[ACTION] Fan speed -> %d\n", val);
 		}
 	}
 
-	else if (method == method_relay.c_str()) {
-		setActuatorState(xRelayStateSemaphore, is_relay_on, params, RELAY_PIN);
-		responseDoc["Relay_Status"] = params;
-		
-		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "[ACTION] Turning on Relay" : "[ACTION] Turning off Relay");
+	// ========================================
+	// Nhóm 4: Lệnh chỉnh độ sáng Strip (int 0..255)
+	// ========================================
+	else if (method == method_strip_brightness.c_str()) {
+		if (!doc["params"].is<int>()) {
+			Serial.println("[MQTT] params is not int!");
+			responseDoc["error"] = "params must be int (0..255)";
 		}
-	}
+		else {
+			int val = doc["params"].as<int>();
+			if (val < 0)   val = 0;
+			if (val > 255) val = 255;
 
-	else if (method == method_mini_fan.c_str()) {
-		setActuatorState(xFanStateSemaphore, is_mini_fan_on, params, MINI_FAN_PIN);
-		responseDoc["Fan_Status"] = params;
-
-		if (IS_SHOW_PAYLOAD) {
-			Serial.println(params ? "[ACTION] Turning on Fan" : "[ACTION] Turning off Fan");
+			if (xSemaphoreTake(xNeoLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
+				strip_brightness = (uint8_t)val;
+				xSemaphoreGive(xNeoLedStateSemaphore);
+			}
+			strip_set_brightness((uint8_t)val);
+			responseDoc["Strip_Brightness"] = val;
+			Serial.printf("[ACTION] Strip brightness -> %d\n", val);
 		}
 	}
 
@@ -231,7 +314,7 @@ void setup_mqtt() {
 	client.setCallback(callback);
 }
 
-void publish_telemetry(float temp, float hum, float light, float anomaly, bool led_state, bool neo_state) {
+void publish_telemetry(float temp, float hum, float light, float gas, float anomaly, bool led_state, bool neo_state) {
 	if (!client.connected())
 		return;
 
@@ -268,13 +351,16 @@ void publish_telemetry(float temp, float hum, float light, float anomaly, bool l
 	devices["led_status"] = is_LED_on;
 	devices["neo_led_status"] = is_NeoLED_on;
 	devices["ws2812_status"] = is_ws2812_on;
+	devices["ws2812_brightness"] = ws2812_brightness;
 	devices["relay_status"] = is_relay_on;
 	devices["mini_fan_status"] = is_mini_fan_on;
+	devices["fan_speed"] = fan_speed;
 	
 	JsonObject sensors = doc.createNestedObject("sensors");
 	sensors["temperature"] = temp;
 	sensors["humidity"] = hum;
 	sensors["light"] = light;
+	sensors["gas"] = gas;
 	
 	// doc["lcd_screen"] = static_cast<int>(current_lcd_screen);
 	// doc["anomaly"] = anomaly;
@@ -282,8 +368,12 @@ void publish_telemetry(float temp, float hum, float light, float anomaly, bool l
 	String payload;
 	serializeJson(doc, payload);
 
+	String prettyPayload;
+	serializeJsonPretty(doc, prettyPayload);
+
 	client.publish(TOPIC_TELEMETRY, payload.c_str());
-	Serial.println("[MQTT] Send: " + payload);
+	Serial.println("[MQTT] Send:");
+	Serial.println(prettyPayload);
 }
 
 void mqtt_task(void *pvParameters) {
@@ -309,16 +399,26 @@ void mqtt_task(void *pvParameters) {
 			float temp	  = 0.0;
 			float hum	  = 0.0;
 			float light   = 0.0;
+			float gas     = 0.0;
 			float anomaly = 0.12; // Giả sử model TinyML trả về
 
-			if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+			if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
 				temp = sensorData.temperature;
 				hum	 = sensorData.humidity;
-				light = sensorData.light;
-				xSemaphoreGive(xSensorDataMutex);
+				xSemaphoreGive(xDHT20Semaphore);
 			}
 
-			publish_telemetry(temp, hum, light, anomaly, is_LED_on, is_NeoLED_on);
+			if (xSemaphoreTake(xLightSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+				light = sensorData.light;
+				xSemaphoreGive(xLightSemaphore);
+			}
+
+			if (xSemaphoreTake(xMQ2Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+				gas = sensorData.gas;
+				xSemaphoreGive(xMQ2Semaphore);
+			}
+
+			publish_telemetry(temp, hum, light, gas, anomaly, is_LED_on, is_NeoLED_on);
 		}
 
 		// 3. NHƯỜNG CPU

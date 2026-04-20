@@ -46,6 +46,7 @@
 #include "analog_manager.h"
 #include "ir_receiver.h"
 #include "mqtt_handle.h"
+#include "button_handler.h"
 
 void system_init();
 void semaphore_init();

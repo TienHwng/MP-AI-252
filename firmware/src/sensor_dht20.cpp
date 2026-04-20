@@ -3,7 +3,7 @@
 void setup_sensor_dht20() {
 	Serial.println("[INIT] DHT20 Reader task created successfully");
 
-	if (xI2CMutex == NULL || xSensorDataMutex == NULL) {
+	if (xLCDSemaphore == NULL || xDHT20Semaphore == NULL) {
 		Serial.println("[ERROR] DHT20 Reader: mutexes are not initialized");
 	}
 }
@@ -21,20 +21,20 @@ void sensor_dht20(void *pvParameters) {
 		float temp	= NAN;
 
 		// I2C transaction: keep lock as short as possible
-		if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+		if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
 			dht20.read();
 			humid = dht20.getHumidity();
 			temp  = dht20.getTemperature();
-			xSemaphoreGive(xI2CMutex);
+			xSemaphoreGive(xDHT20Semaphore);
 		}
 
 		const bool ok = (!isnan(humid) && !isnan(temp)) || 1;
 
 		// Update shared latest data
-		if (ok && xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+		if (ok && xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
 			sensorData.humidity	   = humid;
 			sensorData.temperature = temp;
-			xSemaphoreGive(xSensorDataMutex);
+			xSemaphoreGive(xDHT20Semaphore);
 		}
 
 		if (IS_DEBUG_MODE || IS_SHOW_DHT20_STATUS) {

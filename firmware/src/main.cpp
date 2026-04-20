@@ -9,6 +9,7 @@ void setup() {
 
 	Serial.println("\n======= System initializing... =======\n");
 
+	xTaskCreate(button_handler,    "Button",     2048, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(digital_manager,   "Digital IO", 4096, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(analog_manager,    "Analog IO",  4096, NULL, PRIO_INPUT, NULL);
 	// xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
@@ -47,9 +48,13 @@ void loop() {
 }
 
 void semaphore_init() {
-	// Mutex cho I2C & data
-	xI2CMutex		 = xSemaphoreCreateMutex();
-	xSensorDataMutex = xSemaphoreCreateMutex();
+	// Mutex cho LCD I2C
+	xLCDSemaphore		  = xSemaphoreCreateMutex();
+	
+	// Mutex riêng cho từng loại sensor data
+	xDHT20Semaphore   = xSemaphoreCreateMutex();
+	xLightSemaphore  = xSemaphoreCreateMutex();
+	xMQ2Semaphore    = xSemaphoreCreateMutex();
 
 	// Mutex cho state variables (đang dùng như lock)
 	xLedStateSemaphore		  = xSemaphoreCreateMutex();

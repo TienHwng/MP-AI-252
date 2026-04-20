@@ -56,10 +56,10 @@ static void lcd_print2(const char *l0, const char *l1) {
 // Hàm kết xuất đồ họa (Gom dữ liệu cảm biến và in ra chuỗi)
 static void render_screen(LcdScreen screen, bool manualMode) {
 	float t = NAN, h = NAN;
-	if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+	if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
 		t = sensorData.temperature;
 		h = sensorData.humidity;
-		xSemaphoreGive(xSensorDataMutex);
+		xSemaphoreGive(xDHT20Semaphore);
 	}
 
 	bool l1 = is_LED_on;
@@ -98,20 +98,20 @@ static void render_screen(LcdScreen screen, bool manualMode) {
 		snprintf(l1buf, sizeof(l1buf), " ");
 	}
 
-	if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+	if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
 		lcd_print2(l0, l1buf);
-		xSemaphoreGive(xI2CMutex);
+		xSemaphoreGive(xLCDSemaphore);
 	}
 }
 
 void setup_LCD_display() {
 	Serial.println("[INIT] LCD Display task created successfully");
 
-	if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+	if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(200)) == pdTRUE) {
 		lcd.begin();
 		lcd.backlight();
 		lcd_print2("LCD ready", "Auto rotate...");
-		xSemaphoreGive(xI2CMutex);
+		xSemaphoreGive(xLCDSemaphore);
 	}
 	else {
 		Serial.println("[WARN] LCD init skipped (I2C mutex timeout)");

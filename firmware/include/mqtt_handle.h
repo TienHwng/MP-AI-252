@@ -7,9 +7,11 @@
 #include <ArduinoJson.h>
 #include "global.h"
 
+#include "neo_display.h"
+
 // function for main.cpp
 void setup_mqtt();
-void publish_telemetry(float temp, float hum, float light, float anomaly, bool led_state, bool neo_state);
+void publish_telemetry(float temp, float hum, float light, float gas, float anomaly, bool led_state, bool neo_state);
 
 // helper function
 void reconnect();

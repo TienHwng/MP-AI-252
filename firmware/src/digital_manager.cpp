@@ -1,48 +1,38 @@
 #include "digital_manager.h"
 #include "neo_display.h"
 
-// --- Biến cho nút Relay (Nút số 1) ---
-static bool output1State = false;
-static bool output2State = false;
-static bool output3State = false;
-static bool output4State = false;
-
-static bool lastStableRead   = HIGH;
-static bool lastInstantRead  = HIGH;
-static TickType_t lastChange = 0;
-
-// --- Biến cho nút lật trang LCD (Nút BOOT) ---
-static bool bootLastStableRead   = HIGH;
-static bool bootLastInstantRead  = HIGH;
-static TickType_t bootLastChange = 0;
+// Lưu giá trị trước đó để chỉ ghi khi thay đổi
+static uint8_t lastFanSpeed        = 0;
+static uint8_t lastWs2812Brightness = 0;
+static bool    lastWs2812On         = false;
 
 void setup_digital_manager() {
     Serial.println("[INIT] Digital manager task created successfully");
 
-    // Khởi tạo nút số 1 (Nút điều khiển)
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
-    // Khởi tạo nút BOOT (Nút lật LCD)
-    pinMode(BOOT_PIN, INPUT_PULLUP);
-
     // Khởi tạo các chân Output theo cấu hình cổng số
     pinMode(WS2812_PIN, OUTPUT);
-    pinMode(MINI_FAN_PIN, OUTPUT);
     pinMode(IR_RECEIVE_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
 
     digitalWrite(WS2812_PIN, LOW);
-    digitalWrite(MINI_FAN_PIN, LOW);
     digitalWrite(IR_RECEIVE_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
 
-    // Chốt trạng thái ban đầu cho 2 nút
-    lastStableRead      = digitalRead(BUTTON_PIN);
-    lastInstantRead     = lastStableRead;
-    lastChange          = xTaskGetTickCount();
+    // Khởi tạo LEDC PWM cho quạt mini
+    ledcSetup(FAN_PWM_CHANNEL, FAN_PWM_FREQ, FAN_PWM_RESOLUTION);
+    ledcAttachPin(MINI_FAN_PIN, FAN_PWM_CHANNEL);
+    ledcWrite(FAN_PWM_CHANNEL, 0);   // Tắt quạt ban đầu
+}
 
-    bootLastStableRead  = digitalRead(BOOT_PIN);
-    bootLastInstantRead = bootLastStableRead;
-    bootLastChange      = xTaskGetTickCount();
+void fan_set_speed(uint8_t speed) {
+    fan_speed      = speed;
+    is_mini_fan_on = (speed > 0);
+
+    ledcWrite(FAN_PWM_CHANNEL, speed);
+
+    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+        Serial.printf("[FAN] Speed set to %u / 255\n", speed);
+    }
 }
 
 void digital_manager(void *pvParameters) {
@@ -50,75 +40,44 @@ void digital_manager(void *pvParameters) {
 
     while (1) {
         // ==========================================
-        // 1. XỬ LÝ NÚT SỐ 1 (ĐIỀU KHIỂN THIẾT BỊ)
+        // ĐIỀU KHIỂN THIẾT BỊ THEO BIẾN GLOBAL
+        //    (Được set từ MQTT hoặc các task khác)
         // ==========================================
-        const bool reading = digitalRead(BUTTON_PIN);
 
-        if (reading != lastInstantRead) {
-            lastInstantRead = reading;
-            lastChange      = xTaskGetTickCount();
-        }
-
-        if ((xTaskGetTickCount() - lastChange) >= pdMS_TO_TICKS(DEBOUNCE_MS)) {
-            if (reading != lastStableRead) {
-                lastStableRead = reading;
-
-                if (reading == LOW) { // Nhấn nút 1
-                    is_LED_on = !is_LED_on;
-                    is_NeoLED_on = !is_NeoLED_on;
-                    is_ws2812_on = !is_ws2812_on;
-                    is_mini_fan_on = !is_mini_fan_on;
-                    is_relay_on = !is_relay_on;
-
-                    // ws2812_toggle();
-                    // digitalWrite(MINI_FAN_PIN,      is_mini_fan_on ? HIGH : LOW);
-                    // digitalWrite(RELAY_PIN,         is_relay_on ? HIGH : LOW);
-                    // digitalWrite(IR_RECEIVE_PIN,    output3State ? HIGH : LOW);
-                }
-            }
-        }
-
-        // ==========================================
-        // 2. XỬ LÝ NÚT BOOT (LẬT TRANG LCD)
-        // ==========================================
-        const bool bootReading = digitalRead(BOOT_PIN);
-
-        if (bootReading != bootLastInstantRead) {
-            bootLastInstantRead = bootReading;
-            bootLastChange      = xTaskGetTickCount();
-        }
-
-        if ((xTaskGetTickCount() - bootLastChange) >= pdMS_TO_TICKS(DEBOUNCE_MS)) {
-            if (bootReading != bootLastStableRead) {
-                bootLastStableRead = bootReading;
-
-                if (bootReading == LOW) { // Nhấn nút BOOT
-                    // Chuyển sang trang tiếp theo, nếu vượt quá số trang thì vòng lại 0
-                    current_lcd_screen = (LcdScreen)((current_lcd_screen + 1) % SCREEN_COUNT);
-                    
-                    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
-                        Serial.printf("[BUTTON] BOOT pressed -> LCD Screen %d\n", current_lcd_screen);
-                    }
-                }
-            }
-        }
-
-        // Code tam thoi, se cap nhat lai sau
-        if (xSemaphoreTake(xWS2812StateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {           
-            ws2812_set(is_ws2812_on);
+        // --- WS2812: kiểm tra cả on/off lẫn brightness ---
+        if (xSemaphoreTake(xWS2812StateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+            bool    curOn   = is_ws2812_on;
+            uint8_t curBrt  = ws2812_brightness;
             xSemaphoreGive(xWS2812StateSemaphore);
+
+            if (curOn != lastWs2812On) {
+                ws2812_set(curOn);
+                lastWs2812On = curOn;
+                lastWs2812Brightness = curBrt;
+            }
+            else if (curBrt != lastWs2812Brightness) {
+                ws2812_set_brightness(curBrt);
+                lastWs2812Brightness = curBrt;
+            }
         }
 
+        // --- Quạt mini: điều chỉnh tốc độ bằng PWM ---
         if (xSemaphoreTake(xFanStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
-            digitalWrite(MINI_FAN_PIN, is_mini_fan_on ? HIGH : LOW);
+            uint8_t curSpeed = fan_speed;
             xSemaphoreGive(xFanStateSemaphore);
+
+            if (curSpeed != lastFanSpeed) {
+                fan_set_speed(curSpeed);
+                lastFanSpeed = curSpeed;
+            }
         }
 
+        // --- Relay: vẫn giữ bật/tắt đơn giản ---
         if (xSemaphoreTake(xRelayStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             digitalWrite(RELAY_PIN, is_relay_on ? HIGH : LOW);
             xSemaphoreGive(xRelayStateSemaphore);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(30)); // Luồng quét nút nhấn quét rất nhanh (10ms)
+        vTaskDelay(pdMS_TO_TICKS(30));
     }
 }

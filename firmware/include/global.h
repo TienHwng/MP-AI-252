@@ -14,6 +14,7 @@ typedef struct {
     float temperature;
     float humidity;
     float light;
+    float gas;
 } SensorData;
 
 enum LcdScreen {
@@ -35,9 +36,11 @@ extern SemaphoreHandle_t xWS2812StateSemaphore;
 extern SemaphoreHandle_t xRelayStateSemaphore;
 extern SemaphoreHandle_t xFanStateSemaphore;
 
+extern SemaphoreHandle_t xLCDSemaphore;
+
 extern SemaphoreHandle_t xDHT20Semaphore;
-extern SemaphoreHandle_t xI2CMutex;
-extern SemaphoreHandle_t xSensorDataMutex;
+extern SemaphoreHandle_t xLightSemaphore;
+extern SemaphoreHandle_t xMQ2Semaphore;
 
 extern String WIFI_SSID;
 extern String WIFI_PASS;
@@ -52,9 +55,14 @@ extern String CORE_IOT_PORT;
 extern boolean isWifiConnected;
 extern boolean is_LED_on;
 extern boolean is_NeoLED_on;
+extern uint8_t strip_brightness;    // 0..255, NeoPixel strip brightness
 extern boolean is_ws2812_on;
+extern uint8_t ws2812_brightness;   // 0..255, 0 = off
+
 extern boolean is_relay_on;
+
 extern boolean is_mini_fan_on;
+extern uint8_t fan_speed;           // 0..255, 0 = off (PWM duty)
 
 extern float glob_inference_result;
 

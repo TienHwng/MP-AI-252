@@ -67,9 +67,9 @@ void led_display(void *pvParameters) {
 		static float currentTemp = 0.0f;
 
 		// Take temperature from sensorData
-		if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+		if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
 			currentTemp = sensorData.temperature;
-			xSemaphoreGive(xSensorDataMutex);
+			xSemaphoreGive(xDHT20Semaphore);
 		}
 
 		TempState state = getTempState(currentTemp);
