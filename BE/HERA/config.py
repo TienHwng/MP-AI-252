@@ -34,6 +34,13 @@ def env_float(name: str, default: float) -> float:
 		return default
 
 
+def env_bool(name: str, default: bool) -> bool:
+	raw = os.getenv(name)
+	if raw is None:
+		return default
+	return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ===================== TELEGRAM =====================
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -51,6 +58,19 @@ OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL")
 
 # ===================== MQTT =====================
 
+
+def env_mode() -> str:
+	"""Runtime hardware mode: sim uses mqtt_simulator, real uses physical board."""
+	raw = (os.getenv("MODE", "sim") or "sim").strip().lower()
+	if raw in {"sim", "simulator", "simulation"}:
+		return "sim"
+	if raw in {"real", "hardware", "device"}:
+		return "real"
+	return "sim"
+
+
+MODE = env_mode()
+
 # Core MQTT connection
 MQTT_BROKER = os.getenv("MQTT_BROKER", "10.0.2.131")
 MQTT_BROKER_BIND_HOST = os.getenv("MQTT_BROKER_BIND_HOST", "10.0.2.131")
@@ -62,12 +82,21 @@ TOPIC_RPC_REQUEST = os.getenv("TOPIC_RPC_REQUEST", "v1/devices/me/rpc/request/")
 TOPIC_RPC_RESPONSE = os.getenv("TOPIC_RPC_RESPONSE", "v1/devices/me/rpc/response/")
 TOPIC_ATTRIBUTES = os.getenv("TOPIC_ATTRIBUTES", "v1/devices/me/attributes")
 
-# Backward-compatible aliases for existing modules
+# Backward-compatible MQTT topic names for existing modules
 MQTT_SUBSCRIBE_TOPIC = os.getenv("MQTT_SUBSCRIBE_TOPIC", TOPIC_TELEMETRY)
 MQTT_RPC_REQUEST_TOPIC_PREFIX = os.getenv(
 	"MQTT_RPC_REQUEST_TOPIC_PREFIX",
 	TOPIC_RPC_REQUEST.rstrip("/"),
 ).rstrip("/")
+
+
+# ===================== MONGODB =====================
+
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
+MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
+MEMORY_RECENT_ACTION_LIMIT = env_int("MEMORY_RECENT_ACTION_LIMIT", 8)
+MEMORY_SESSION_TURN_LIMIT = env_int("MEMORY_SESSION_TURN_LIMIT", 40)
 
 
 # ===================== AI THRESHOLDS =====================
@@ -83,9 +112,20 @@ NORMAL_HUMI_MAX = env_float("NORMAL_HUMI_MAX", 80.0)
 # Anomaly scoring thresholds
 ANOMALY_THRESHOLD = env_float("ANOMALY_THRESHOLD", 0.5)
 ANOMALY_CRITICAL_THRESHOLD = env_float("ANOMALY_CRITICAL_THRESHOLD", 0.8)
+ANOMALY_ALERTS_ENABLED = env_bool("ANOMALY_ALERTS_ENABLED", False)
+ANOMALY_ALERT_COOLDOWN_SECONDS = env_int("ANOMALY_ALERT_COOLDOWN_SECONDS", 300)
+TELEMETRY_STALE_SECONDS = env_int("TELEMETRY_STALE_SECONDS", 30)
+ANOMALY_TELEMETRY_WINDOW_MINUTES = env_int("ANOMALY_TELEMETRY_WINDOW_MINUTES", 10)
+ANOMALY_TELEMETRY_POINT_LIMIT = env_int("ANOMALY_TELEMETRY_POINT_LIMIT", 60)
 
 
 # ===================== RUNTIME LIMITS =====================
 
 MAX_TOOL_ITERATIONS = env_int("MAX_TOOL_ITERATIONS", 5)
 MAX_HISTORY = env_int("MAX_HISTORY", 8)
+DEVICE_VERIFICATION_TIMEOUT_SECONDS = env_float(
+	"DEVICE_VERIFICATION_TIMEOUT_SECONDS", 0.8
+)
+DEVICE_VERIFICATION_POLL_SECONDS = env_float("DEVICE_VERIFICATION_POLL_SECONDS", 0.1)
+GENERAL_RESPONSE_TIMEOUT_SECONDS = env_float("GENERAL_RESPONSE_TIMEOUT_SECONDS", 12.0)
+FINAL_RESPONSE_TIMEOUT_SECONDS = env_float("FINAL_RESPONSE_TIMEOUT_SECONDS", 8.0)

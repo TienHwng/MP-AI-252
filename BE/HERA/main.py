@@ -7,11 +7,24 @@ from agents.anomaly_agent import AnomalyExpertAgent
 from agents.device_agent import DeviceControlAgent
 from agents.orchestrator import Orchestrator
 from agents.sensor_agent import SensorAnalysisAgent
-from config import MQTT_BROKER, MQTT_PORT, TELEGRAM_BOT_TOKEN
+from config import (
+	MODE,
+	MONGODB_COLLECTION,
+	MONGODB_DB,
+	MONGODB_URI,
+	MQTT_BROKER,
+	MQTT_PORT,
+	TELEGRAM_BOT_TOKEN,
+)
 from core.llm_service import LLMService
+from core.logger import log_hera, log_memory, log_mqtt
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
 from core.tool_registry import ToolRegistry
+from domain.devices.device_executor import DeviceExecutor
+from memory import MemoryService, MongoMemoryClient
+from runtime import CapabilityRegistry, PolicyEngine, ToolRunner, VerificationService
+from telemetry import TelemetryStore
 
 NOISY_LOGGERS = (
 	"httpx",
@@ -54,39 +67,75 @@ def connect_mqtt() -> MQTTService | None:
 	mqtt_svc = MQTTService(
 		broker_address=MQTT_BROKER,
 		port=MQTT_PORT,
-		persist_telemetry=False,
+		persist_telemetry=True,
 	)
 	try:
 		mqtt_svc.connect_client_only()
 	except ConnectionRefusedError:
-		print("Cannot connect to MQTT broker")
+		log_mqtt("Cannot connect to MQTT broker")
 		return None
-	print(f"[MQTT] Connected {MQTT_BROKER}:{MQTT_PORT}")
+	log_mqtt(f"Connected {MQTT_BROKER}:{MQTT_PORT}")
 	return mqtt_svc
 
 
-def build_agents(llm_svc: LLMService, mqtt_svc: MQTTService) -> dict:
-	tool_reg = ToolRegistry(mqtt_svc)
+def build_runtime(mqtt_svc: MQTTService) -> tuple[ToolRegistry, ToolRunner]:
+	capabilities = CapabilityRegistry()
+	device_executor = DeviceExecutor(mqtt_svc)
+	tool_runner = ToolRunner(
+		capabilities,
+		device_executor,
+		policy_engine=PolicyEngine(),
+		verification_service=VerificationService(),
+	)
+	tool_reg = ToolRegistry(
+		mqtt_svc,
+		capabilities=capabilities,
+		device_executor=device_executor,
+	)
+	return tool_reg, tool_runner
+
+
+def build_memory_service() -> MemoryService:
+	mongo = MongoMemoryClient(MONGODB_URI, MONGODB_DB)
+	if mongo.available:
+		log_memory(f"MongoDB memory enabled: {MONGODB_DB}")
+	else:
+		log_memory("MongoDB unavailable; memory writes disabled")
+	return MemoryService(mongo)
+
+
+def build_agents(
+	llm_svc: LLMService,
+	mqtt_svc: MQTTService,
+	tool_reg: ToolRegistry,
+	tool_runner: ToolRunner,
+	memory_service: MemoryService,
+) -> dict:
+	telemetry_store = TelemetryStore(
+		memory_service.mongo,
+		collection_name=MONGODB_COLLECTION,
+	)
 	return {
-		"device_control": DeviceControlAgent(llm_svc, mqtt_svc, tool_reg),
+		"device_control": DeviceControlAgent(llm_svc, tool_runner),
 		"sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
-		"anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc),
+		"anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc, telemetry_store),
 	}
 
 
 def print_runtime_summary(settings: dict, agents: dict) -> None:
 	active_provider = settings["provider"]
 	provider_models = settings["models"][active_provider]
-	print(f"[HERA] Provider: {active_provider}")
-	print(f"[HERA] Orchestrator model: {provider_models['orchestratorModel']}")
-	print(
-		"[HERA] Agent models: "
+	log_hera(f"Hardware mode: {MODE}")
+	log_hera(f"Provider: {active_provider}")
+	log_hera(f"Orchestrator model: {provider_models['orchestratorModel']}")
+	log_hera(
+		"Agent models: "
 		f"device_control={provider_models['deviceControlModel']}, "
 		f"sensor_analysis={provider_models['sensorAnalysisModel']}, "
 		f"anomaly_expert={provider_models['anomalyExpertModel']}"
 	)
-	print(f"[HERA] Agents: {', '.join(agents)}")
-	print("[HERA] Bot running ... (Ctrl+C to stop)\n")
+	log_hera(f"Agents: {', '.join(agents)}")
+	log_hera("Bot running ... (Ctrl+C to stop)\n")
 
 
 def main() -> None:
@@ -94,7 +143,7 @@ def main() -> None:
 	print_banner()
 
 	if not TELEGRAM_BOT_TOKEN:
-		print("TELEGRAM_BOT_TOKEN not set in .env")
+		log_hera("TELEGRAM_BOT_TOKEN not set in .env")
 		return
 
 	settings, provider = load_runtime_settings()
@@ -103,8 +152,17 @@ def main() -> None:
 		return
 
 	llm_svc = LLMService(provider)
-	agents = build_agents(llm_svc, mqtt_svc)
-	orchestrator = Orchestrator(llm_svc, agents, mqtt_svc, orchestrator_model=None)
+	tool_reg, tool_runner = build_runtime(mqtt_svc)
+	memory_service = build_memory_service()
+	agents = build_agents(llm_svc, mqtt_svc, tool_reg, tool_runner, memory_service)
+	orchestrator = Orchestrator(
+		llm_svc,
+		agents,
+		mqtt_svc,
+		tool_runner=tool_runner,
+		memory_service=memory_service,
+		orchestrator_model=None,
+	)
 	print_runtime_summary(settings, agents)
 	TelegramAdapter(orchestrator, mqtt_svc, provider).run()
 

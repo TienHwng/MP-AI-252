@@ -1,0 +1,625 @@
+"""Behavior regression harness for HERA device-control semantics.
+
+Run from BE/HERA:
+    python tests_device_behavior.py
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from typing import Any
+
+import agents.device_agent as device_agent_module
+import runtime.tool_runner as tool_runner_module
+from agents.anomaly_agent import classify_anomaly
+from agents.device_agent import DeviceControlAgent, build_tool_proposal
+from agents.orchestrator import Orchestrator
+from core.message import AgentResponse, MessageSource, UserMessage
+from domain.devices.device_executor import DeviceExecutor
+from prompts import (
+	DEVICE_COMMAND_INTERPRETER_PROMPT,
+	DEVICE_CONTROL_RESPONSE_SYSTEM,
+	DEVICE_TARGET_CLARIFICATION_PROMPT,
+	FINAL_RESPONSE_SYSTEM,
+)
+from runtime.capability_registry import CapabilityRegistry
+from runtime.policy_engine import PolicyEngine
+from runtime.tool_runner import ToolRunner
+
+
+class FakeLLM:
+	"""Deterministic LLM double that exercises behavior guards."""
+
+	def __init__(self) -> None:
+		self.device_call_count = 0
+		self.general_call_count = 0
+
+	def completion(self, messages: list[dict], tools: Any, model: str) -> dict:
+		system = messages[0]["content"]
+		user = messages[-1]["content"]
+		if system.startswith(DEVICE_COMMAND_INTERPRETER_PROMPT):
+			self.device_call_count += 1
+			return {"content": json.dumps(self._parse_command(user))}
+		if system.startswith(DEVICE_TARGET_CLARIFICATION_PROMPT):
+			self.device_call_count += 1
+			return {"content": json.dumps(self._resolve_target(user))}
+		if system.startswith(DEVICE_CONTROL_RESPONSE_SYSTEM):
+			self.general_call_count += 1
+			return {"content": self._compose_device_response(user)}
+		if system.startswith(FINAL_RESPONSE_SYSTEM):
+			self.general_call_count += 1
+			return {"content": self._compose_final_response(user)}
+		if system.startswith("You are HERA"):
+			self.general_call_count += 1
+			return {"content": self._general_response(user)}
+		self.general_call_count += 1
+		raise AssertionError(f"Unexpected prompt in fake LLM: {system[:80]!r}")
+
+	@staticmethod
+	def _parse_command(text: str) -> dict:
+		if "trên 30" in text and "quạt" in text:
+			return {
+				"action": "turn_on",
+				"target": "mini_fan",
+				"reference": "none",
+				"confidence": 0.92,
+				"condition": {
+					"type": "sensor_threshold",
+					"sensor": "temperature",
+					"operator": ">",
+					"threshold": 30,
+				},
+			}
+		if "các thiết bị khác" in text:
+			return {
+				"action": "turn_on",
+				"target": "all_devices",
+				"reference": "none",
+				"confidence": 0.9,
+			}
+		if "tất cả thiết bị" in text:
+			return {
+				"action": "turn_on",
+				"target": "all_devices",
+				"reference": "none",
+				"confidence": 0.9,
+			}
+		if "tất cả đèn" in text:
+			return {
+				"action": "turn_on",
+				"target": "all_lights",
+				"reference": "none",
+				"confidence": 0.9,
+			}
+		if "vừa được bật" in text:
+			return {
+				"action": "turn_off",
+				"target": None,
+				"reference": "recent_changed_devices",
+				"confidence": 0.9,
+			}
+		if "bật đèn" in text:
+			# Simulate the bad model behavior we saw in Telegram logs.
+			return {
+				"action": "unknown",
+				"target": "all_lights",
+				"reference": "none",
+				"confidence": 0.8,
+			}
+		return {
+			"action": "unknown",
+			"target": None,
+			"reference": "none",
+			"confidence": 0.0,
+		}
+
+	@staticmethod
+	def _resolve_target(text: str) -> dict:
+		if "neo" in text:
+			return {"target": "neo_led", "confidence": 0.95}
+		if "quạt" in text:
+			return {"target": "mini_fan", "confidence": 0.95}
+		if "tất cả đèn" in text:
+			return {"target": "all_lights", "confidence": 0.95}
+		return {"target": None, "confidence": 0.0}
+
+	@staticmethod
+	def _general_response(text: str) -> str:
+		if "hôm nay" in text:
+			return "Hôm nay là Thứ Sáu, ngày 24/04/2026."
+		return "Xin chào Tran, mình đây."
+
+	@staticmethod
+	def _compose_device_response(payload_text: str) -> str:
+		payload = json.loads(payload_text)
+		report = payload.get("specialist_report", {})
+		analysis = report.get("analysis_payload", {})
+		command = analysis.get("parsed_command", {})
+		condition = command.get("condition", {})
+		if condition.get("status") == "not_met":
+			return "Mình đã kiểm tra nhiệt độ: hiện chưa trên 30°C, nên mình chưa bật quạt."
+		results = payload.get("execution_results", [])
+		if results and results[0].get("status") == "noop":
+			return "Nhiệt độ đã vượt ngưỡng, nhưng quạt đang bật sẵn rồi."
+		if results:
+			return "Mình đã gửi lệnh điều khiển thiết bị."
+		return "Mình cần làm rõ thêm trước khi điều khiển thiết bị."
+
+	@staticmethod
+	def _compose_final_response(payload_text: str) -> str:
+		payload = json.loads(payload_text)
+		route = payload.get("route_decision", {}).get("intent")
+		if route == "anomaly_query":
+			return "Mọi chỉ số hiện trong vùng an toàn, chưa có gì cần lưu ý đặc biệt."
+		if route == "sensor_query":
+			return "Hiện tại nhiệt độ 29.1°C, độ ẩm 37.6%, ánh sáng 420.0."
+		return "Mình đã xem xong."
+
+
+class FakeToolRunner:
+	def get_device_status_report(self) -> dict:
+		return {
+			"main_led": False,
+			"neo_led": False,
+			"ws2812": False,
+			"relay": False,
+			"mini_fan": False,
+		}
+
+
+class FakeMemoryService:
+	def __init__(self) -> None:
+		self.mongo = type("FakeMongo", (), {"available": True})()
+		self.retrieve_count = 0
+		self.turn_write_count = 0
+		self.tool_write_count = 0
+
+	def retrieve(self, request):
+		self.retrieve_count += 1
+		raise AssertionError("simple device commands should not retrieve memory")
+
+	def record_turn(self, request, response, *, intent: str) -> bool:
+		self.turn_write_count += 1
+		return True
+
+	def record_tool_results(
+		self, request, context, results, *, original_text: str
+	) -> list:
+		self.tool_write_count += 1
+		return []
+
+
+class FakeMQTT:
+	def __init__(self) -> None:
+		self.sensor_state = {
+			"sensors": {
+				"temperature": 29.1,
+				"humidity": 37.55,
+				"light": 420.0,
+				"anomaly": 0.12,
+			},
+			"devices": {
+				"led_status": False,
+				"neo_led_status": False,
+				"ws2812_status": False,
+				"relay_status": False,
+				"mini_fan_status": False,
+			},
+			"network": {"mqtt_connected": True},
+			"last_seen_at": "2026-04-24T00:44:00+07:00",
+		}
+		self.published: list[tuple[str, Any]] = []
+
+	def publish_rpc(self, method: str, params: Any) -> None:
+		self.published.append((method, params))
+
+	def get_device_snapshot(self) -> dict:
+		return dict(self.sensor_state["devices"])
+
+	def get_network_snapshot(self) -> dict:
+		return dict(self.sensor_state["network"])
+
+	def get_sensor_snapshot(self) -> dict:
+		return dict(self.sensor_state)
+
+
+def message(text: str) -> UserMessage:
+	return UserMessage(
+		text=text,
+		chat_id="behavior-test",
+		source=MessageSource.REST,
+	)
+
+
+async def parse(agent: DeviceControlAgent, text: str, recent_actions=None) -> dict:
+	context = {
+		"memory_context": {
+			"recent_actions": recent_actions or [],
+			"user_profile": {},
+		}
+	}
+	return await agent.parse_command(message(text), context)
+
+
+def assert_command(command: dict, *, action: str, target: str | None) -> None:
+	assert command["action"] == action, command
+	assert command["target"] == target, command
+
+
+async def test_device_semantics() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	agent = DeviceControlAgent(fake_llm, FakeToolRunner())
+
+	generic_light = await parse(agent, "bật đèn lên giùm")
+	assert_command(generic_light, action="turn_on", target="all_lights")
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
+	generic_led = await parse(agent, "bật đèn led giúp tôi")
+	assert_command(generic_led, action="turn_on", target="all_lights")
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
+	all_lights = await parse(agent, "bật tất cả đèn")
+	assert_command(all_lights, action="turn_on", target="all_lights")
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
+	all_devices = await parse(agent, "bật tất cả thiết bị")
+	assert_command(all_devices, action="turn_on", target="all_devices")
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
+	parser_failed_group_command = await parse(
+		agent,
+		"tôi vừa đi làm về, mệt quá, hãy giúp tôi bật đèn và các thiết bị khác lên nhé",
+	)
+	assert_command(parser_failed_group_command, action="turn_on", target="all_devices")
+
+	recent_light_group = [
+		{"changed_entities": ["Main LED", "NeoPixel LED", "WS2812 LED"]}
+	]
+	follow_up = await parse(
+		agent,
+		"tắt những thiết bị vừa được bật",
+		recent_light_group,
+	)
+	assert_command(follow_up, action="turn_off", target="all_lights")
+
+	typo_follow_up = await parse(
+		agent,
+		"ắt những thiết bị vừa được bật",
+		recent_light_group,
+	)
+	assert_command(typo_follow_up, action="turn_off", target="all_lights")
+
+	explicit_main_led = await parse(agent, "bật main led giúp tôi")
+	assert_command(explicit_main_led, action="turn_on", target="main_led")
+
+	explicit_device = await parse(agent, "bật đèn neo giúp tôi")
+	assert_command(explicit_device, action="turn_on", target="neo_led")
+	assert fake_llm.device_call_count <= 3, fake_llm.device_call_count
+
+
+async def test_target_resolution_from_clarification() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	agent = DeviceControlAgent(fake_llm, FakeToolRunner())
+	result = await agent.resolve_target_from_clarification(
+		message("đèn neo"),
+		requested_action="turn_on",
+	)
+	assert result["target"] == "neo_led", result
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
+
+async def test_fast_confirmation_and_direct_device_rendering() -> None:
+	orchestrator = Orchestrator(
+		FakeLLM(),
+		{},
+		FakeMQTT(),
+	)
+	assert await orchestrator.classify_pending_confirmation("ừ, xác nhận") == "confirm"
+	text = orchestrator.render_device_control_text(
+		"bật đèn giùm tôi đi",
+		{
+			"status": "ask",
+			"policy_reason": "broad_all_devices_scope_requires_confirmation",
+			"user_visible_message": None,
+		},
+	)
+	assert "xác nhận" in text.lower(), text
+
+
+async def test_device_clarification_payload_is_serializable() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	agent = DeviceControlAgent(FakeLLM(), FakeToolRunner())
+	response = await agent.process(
+		message("bật đèn giúp tôi"),
+		{
+			"memory_context": {
+				"recent_actions": [],
+				"user_profile": {},
+			}
+		},
+	)
+	json.dumps(response.metadata, ensure_ascii=False)
+
+
+async def test_fast_device_intent_routing() -> None:
+	orchestrator = Orchestrator(
+		FakeLLM(),
+		{},
+		FakeMQTT(),
+	)
+	assert await orchestrator.classify_intent("bật đèn lên giùm") == "device_control"
+	assert (
+		await orchestrator.classify_intent("relay đang bật hay tắt") == "device_control"
+	)
+	assert (
+		await orchestrator.classify_intent("báo cáo tình hình ngôi nhà")
+		== "sensor_query"
+	)
+	assert (
+		await orchestrator.classify_intent("vậy có gì cần lưu ý không")
+		== "anomaly_query"
+	)
+
+
+async def test_fast_read_only_routing_and_rendering() -> None:
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	orchestrator = Orchestrator(
+		fake_llm,
+		{},
+		fake_mqtt,
+	)
+	assert (
+		await orchestrator.classify_intent("nhiệt độ hiện tại bao nhiêu")
+		== "sensor_query"
+	)
+	assert await orchestrator.classify_intent("có bất thường không") == "anomaly_query"
+	assert (
+		await orchestrator.classify_intent("hôm nay là thứ mấy, ngày mấy") == "general"
+	)
+
+	general = await orchestrator.handle_general(message("xin chào"))
+	assert "mình đây" in general.text.lower(), general.text
+	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
+
+	date_response = await orchestrator.handle_general(
+		message("hôm nay là thứ mấy, ngày mấy")
+	)
+	assert "24/04/2026" in date_response.text, date_response.text
+	assert fake_llm.general_call_count == 2, fake_llm.general_call_count
+
+	sensor_response = orchestrator.render_sensor_text(
+		"nhiệt độ hiện tại bao nhiêu",
+		AgentResponse(
+			text="",
+			agent_name="sensor_analysis",
+			metadata={
+				"specialist_report": {
+					"analysis_payload": {
+						"snapshot": fake_mqtt.get_sensor_snapshot(),
+					}
+				}
+			},
+		),
+	)
+	assert "29.1" in sensor_response, sensor_response
+
+	anomaly_response = orchestrator.render_anomaly_text(
+		"có bất thường không",
+		AgentResponse(
+			text="",
+			agent_name="anomaly_expert",
+			metadata={
+				"specialist_report": {
+					"analysis_payload": {
+						"classification": {
+							"type": "normal",
+							"severity": "none",
+							"score": 0.12,
+							"detail": "All readings within normal range.",
+						},
+						"freshness": {
+							"is_stale": False,
+						},
+						"telemetry_window": {
+							"anomaly_events": {"available": True, "count": 0},
+						},
+					}
+				}
+			},
+		),
+	)
+	assert "bất thường" in anomaly_response.lower(), anomaly_response
+
+
+async def test_fast_device_pipeline_skips_memory_and_parser_llm() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(fake_mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	memory = FakeMemoryService()
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner)},
+		fake_mqtt,
+		tool_runner=runner,
+		memory_service=memory,
+	)
+
+	response = await orchestrator.handle(message("bật đèn phòng khách giúp tôi"))
+
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+	assert memory.retrieve_count == 0, memory.retrieve_count
+	assert memory.turn_write_count == 1, memory.turn_write_count
+	assert memory.tool_write_count == 1, memory.tool_write_count
+	assert fake_mqtt.published == [
+		("setValueLedBlinky", True),
+		("setValueNeoLed", True),
+		("setValueWS2812", True),
+	]
+	assert "đã gửi lệnh" in response.text.lower(), response.text
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
+
+
+async def test_conditional_device_request_checks_sensor_before_acting() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(fake_mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner)},
+		fake_mqtt,
+		tool_runner=runner,
+		memory_service=FakeMemoryService(),
+	)
+
+	response = await orchestrator.handle(
+		message(
+			"kiểm tra xem nhiệt độ có cao không, nếu trên 30 độ thì bật quạt giúp tôi"
+		)
+	)
+
+	assert fake_mqtt.published == [], fake_mqtt.published
+	assert "chưa bật quạt" in response.text.lower(), response.text
+	assert (
+		response.metadata["specialist_report"]["analysis_payload"]["parsed_command"][
+			"action"
+		]
+		== "turn_on"
+	)
+	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
+
+async def test_conditional_noop_response_stays_vietnamese() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	fake_mqtt.sensor_state["sensors"]["temperature"] = 31.2
+	fake_mqtt.sensor_state["devices"]["mini_fan_status"] = True
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(fake_mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner)},
+		fake_mqtt,
+		tool_runner=runner,
+		memory_service=FakeMemoryService(),
+	)
+
+	response = await orchestrator.handle(
+		message("nếu nhiệt độ trên 30 độ thì bật quạt giúp tôi")
+	)
+
+	assert fake_mqtt.published == [], fake_mqtt.published
+	assert "quạt đang bật sẵn" in response.text.lower(), response.text
+	assert "requested device state" not in response.text.lower(), response.text
+	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
+
+def test_all_devices_confirmation_policy() -> None:
+	policy = PolicyEngine()
+	capability = CapabilityRegistry().require("turn_on_device")
+	proposal = build_tool_proposal(
+		{"action": "turn_on", "target": "all_devices", "confidence": 1.0}
+	)
+	assert proposal is not None
+	state = {
+		"network": {"mqtt_connected": True},
+		"devices": {
+			"led_status": False,
+			"neo_led_status": False,
+			"ws2812_status": False,
+			"relay_status": False,
+			"mini_fan_status": False,
+		},
+	}
+
+	decision = policy.evaluate(proposal, capability, state)
+	assert decision.decision == "ask", decision
+	assert decision.reason == "broad_all_devices_scope_requires_confirmation", decision
+
+	confirmed = proposal.model_copy(
+		update={"arguments": {**proposal.arguments, "_confirmed": True}}
+	)
+	decision = policy.evaluate(confirmed, capability, state)
+	assert decision.decision == "allow", decision
+
+
+def test_command_is_not_verified_without_readback() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	mqtt = FakeMQTT()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	proposal = build_tool_proposal(
+		{"action": "turn_on", "target": "main_led", "confidence": 1.0}
+	)
+	assert proposal is not None
+
+	result = runner.run(proposal)
+	assert mqtt.published == [("setValueLedBlinky", True)]
+	assert mqtt.sensor_state["devices"]["led_status"] is False
+	assert result.status == "state_changed", result
+	assert result.verification.status == "timeout", result.verification
+
+
+def test_static_thresholds_are_reported_even_with_low_ml_score() -> None:
+	classification = classify_anomaly(
+		{
+			"sensors": {
+				"temperature": 21.2,
+				"humidity": 55.4,
+				"anomaly": 0.0,
+			}
+		},
+		{"is_stale": False},
+	)
+
+	assert classification["type"] != "normal", classification
+	assert classification["severity"] == "low", classification
+	assert "below" in classification["detail"], classification
+
+
+async def main() -> None:
+	await test_device_semantics()
+	await test_target_resolution_from_clarification()
+	await test_fast_confirmation_and_direct_device_rendering()
+	await test_device_clarification_payload_is_serializable()
+	await test_fast_device_intent_routing()
+	await test_fast_read_only_routing_and_rendering()
+	await test_fast_device_pipeline_skips_memory_and_parser_llm()
+	await test_conditional_device_request_checks_sensor_before_acting()
+	await test_conditional_noop_response_stays_vietnamese()
+	test_all_devices_confirmation_policy()
+	test_command_is_not_verified_without_readback()
+	test_static_thresholds_are_reported_even_with_low_ml_score()
+	print("device behavior checks passed")
+
+
+if __name__ == "__main__":
+	asyncio.run(main())

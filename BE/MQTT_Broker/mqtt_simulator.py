@@ -15,8 +15,10 @@ load_dotenv(dotenv_path=ROOT_ENV_PATH)
 # =========================
 # CONFIG
 # =========================
+RAW_MODE = (os.getenv("MODE", "sim") or "sim").strip().lower()
+MODE = "sim" if RAW_MODE in {"sim", "simulator", "simulation"} else RAW_MODE
 MQTT_SERVER = os.getenv("MQTT_BROKER")
-MQTT_PORT = int(os.getenv("MQTT_PORT"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 COREIOT_TOKEN = os.getenv("COREIOT_TOKEN")
 
 TOPIC_TELEMETRY = "v1/devices/me/telemetry"
@@ -24,8 +26,9 @@ TOPIC_RPC_REQUEST = "v1/devices/me/rpc/request/+"
 TOPIC_RPC_RESPONSE_PREFIX = "v1/devices/me/rpc/response/"
 TOPIC_ATTRIBUTES = "v1/devices/me/attributes"
 
-CLIENT_ID = os.getenv("SIM_CLIENT_ID")
-TELEMETRY_INTERVAL = int(os.getenv("SIM_TELEMETRY_INTERVAL"))  # seconds
+CLIENT_ID = os.getenv("SIM_CLIENT_ID", "hera-sim-device")
+TELEMETRY_INTERVAL = int(os.getenv("SIM_TELEMETRY_INTERVAL", "2"))  # seconds
+SIM_ANOMALY_PROBABILITY = float(os.getenv("SIM_ANOMALY_PROBABILITY", "0.1"))
 
 
 # =========================
@@ -51,8 +54,8 @@ sensor_state = {
 
 network_state = {
 	"wifi_connected": True,
-	"wifi_rssi": int(os.getenv("SIM_WIFI_RSSI_MIN")),
-	"wifi_ip": os.getenv("SIM_WIFI_IP"),
+	"wifi_rssi": int(os.getenv("SIM_WIFI_RSSI_MIN", "-55")),
+	"wifi_ip": os.getenv("SIM_WIFI_IP", "192.168.1.50"),
 	"mqtt_connected": False,
 }
 
@@ -69,18 +72,39 @@ def pretty_json(data) -> str:
 
 
 def update_fake_sensor_data():
-	temp_min = float(os.getenv("SIM_TEMP_MIN"))
-	temp_max = float(os.getenv("SIM_TEMP_MAX"))
-	humi_min = float(os.getenv("SIM_HUMI_MIN"))
-	humi_max = float(os.getenv("SIM_HUMI_MAX"))
-	light_min = float(os.getenv("SIM_LIGHT_MIN"))
-	light_max = float(os.getenv("SIM_LIGHT_MAX"))
-	rssi_min = int(os.getenv("SIM_WIFI_RSSI_MIN"))
-	rssi_max = int(os.getenv("SIM_WIFI_RSSI_MAX"))
+	temp_min = float(os.getenv("SIM_TEMP_MIN", "27"))
+	temp_max = float(os.getenv("SIM_TEMP_MAX", "34"))
+	humi_min = float(os.getenv("SIM_HUMI_MIN", "55"))
+	humi_max = float(os.getenv("SIM_HUMI_MAX", "82"))
+	light_min = float(os.getenv("SIM_LIGHT_MIN", "80"))
+	light_max = float(os.getenv("SIM_LIGHT_MAX", "650"))
+	rssi_min = int(os.getenv("SIM_WIFI_RSSI_MIN", "-70"))
+	rssi_max = int(os.getenv("SIM_WIFI_RSSI_MAX", "-42"))
 
 	with state_lock:
-		sensor_state["temperature"] = round(random.uniform(temp_min, temp_max), 2)
-		sensor_state["humidity"] = round(random.uniform(humi_min, humi_max), 2)
+		is_anomaly_sample = random.random() < SIM_ANOMALY_PROBABILITY
+
+		if is_anomaly_sample:
+			sensor_state["temperature"] = round(
+				random.uniform(max(36.0, temp_max), max(42.0, temp_max + 6.0)),
+				2,
+			)
+			sensor_state["humidity"] = round(
+				random.uniform(max(82.0, humi_max), max(95.0, humi_max + 10.0)),
+				2,
+			)
+		else:
+			normal_temp_max = min(temp_max, 30.0)
+			normal_humi_max = min(humi_max, 65.0)
+			sensor_state["temperature"] = round(
+				random.uniform(temp_min, max(temp_min, normal_temp_max)),
+				2,
+			)
+			sensor_state["humidity"] = round(
+				random.uniform(humi_min, max(humi_min, normal_humi_max)),
+				2,
+			)
+
 		sensor_state["light"] = round(random.uniform(light_min, light_max), 2)
 		network_state["wifi_rssi"] = random.randint(rssi_min, rssi_max)
 
@@ -100,11 +124,10 @@ def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties=Non
 		print(f"[MQTT] Connect failed, reason_code={reason_code}")
 
 
-def on_disconnect(
-	client: mqtt.Client, userdata, disconnect_flags, reason_code, properties=None
-):
+def on_disconnect(client: mqtt.Client, userdata, *args):
 	with state_lock:
 		network_state["mqtt_connected"] = False
+	reason_code = args[-2] if len(args) >= 2 else args[0] if args else None
 	print(f"[MQTT] Disconnected, reason_code={reason_code}")
 
 
@@ -212,6 +235,17 @@ def build_telemetry_payload():
 				"temperature": sensor_state["temperature"],
 				"humidity": sensor_state["humidity"],
 				"light": sensor_state["light"],
+				"anomaly": round(
+					max(
+						0.0,
+						min(
+							1.0,
+							(sensor_state["temperature"] - 30.0) / 10.0
+							+ (sensor_state["humidity"] - 65.0) / 50.0,
+						),
+					),
+					3,
+				),
 			},
 		}
 	return payload
@@ -255,7 +289,14 @@ def main():
 
 	client = build_client()
 
-	print(f"[MQTT] Connecting to broker {MQTT_SERVER}:{MQTT_PORT} ...")
+	if MODE != "sim":
+		raise RuntimeError(
+			f"mqtt_simulator.py is only allowed when MODE=sim. Current MODE={RAW_MODE!r}"
+		)
+	if not MQTT_SERVER:
+		raise RuntimeError("MQTT_BROKER is not configured in .env")
+
+	print(f"[SIM] MODE=sim; connecting fake hardware to {MQTT_SERVER}:{MQTT_PORT} ...")
 	client.connect(MQTT_SERVER, MQTT_PORT, keepalive=60)
 
 	telemetry_thread = threading.Thread(

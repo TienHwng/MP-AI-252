@@ -8,7 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const client = new MongoClient("mongodb://localhost:27017");
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
+const MONGODB_DB = process.env.MONGODB_DB || "HERA";
+const client = new MongoClient(MONGODB_URI);
 let collection; // telemetry_points
 let usersCollection;
 let modelSettingsCollection;
@@ -132,6 +134,68 @@ const toVnTimestamp = (value) => {
 	});
 };
 
+const telemetryDocToPayload = (doc, index = 0) => {
+	const recordedAt = new Date(doc.recorded_at);
+
+	return {
+		id: index + 1,
+		timestamp: recordedAt.getTime(),
+		recorded_at: recordedAt.toISOString(),
+		time: recordedAt.toLocaleTimeString("vi-VN", {
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+		}),
+		temp: doc.sensors?.temperature ?? null,
+		humidity: doc.sensors?.humidity ?? null,
+		light: doc.sensors?.light ?? null,
+		sensors: doc.sensors || {},
+		devices: doc.devices || {},
+		network: doc.network || {},
+		metadata: doc.metadata || {},
+	};
+};
+
+const telemetryFilter = (deviceId, userId, includeUser = true) => {
+	const filter = { "metadata.device_id": deviceId };
+	if (includeUser && userId) {
+		filter["metadata.user_id"] = userId;
+	}
+	return filter;
+};
+
+const findTelemetryDocs = async ({ deviceId, userId, limit }) => {
+	let docs = await collection
+		.find(telemetryFilter(deviceId, userId, true))
+		.sort({ recorded_at: -1 })
+		.limit(limit)
+		.toArray();
+
+	if (docs.length === 0) {
+		docs = await collection
+			.find(telemetryFilter(deviceId, userId, false))
+			.sort({ recorded_at: -1 })
+			.limit(limit)
+			.toArray();
+	}
+
+	return docs;
+};
+
+const findLatestTelemetryDoc = async ({ deviceId, userId }) => {
+	let doc = await collection.findOne(telemetryFilter(deviceId, userId, true), {
+		sort: { recorded_at: -1 },
+	});
+
+	if (!doc) {
+		doc = await collection.findOne(telemetryFilter(deviceId, userId, false), {
+			sort: { recorded_at: -1 },
+		});
+	}
+
+	return doc;
+};
+
 const toLegacyEnvShapedPayload = (envValues) => {
 	const provider =
 		envValues.LLM_PROVIDER === "ollama" || envValues.LLM_PROVIDER === "openrouter"
@@ -220,7 +284,7 @@ const getModelSettings = async () => {
 
 async function start() {
 	await client.connect();
-	const db = client.db("HERA");
+	const db = client.db(MONGODB_DB);
 	collection = db.collection("telemetry_points");
 	usersCollection = db.collection("users");
 	modelSettingsCollection = db.collection("model_settings");
@@ -286,33 +350,9 @@ async function start() {
                 return res.status(400).json({ error: "user_id parameter is required to fetch personalized data" });
             }
 
-            // Chỉ lấy data thuộc về user này
-			const docs = await collection
-				.find({ 
-                    "metadata.device_id": deviceId,
-                    "metadata.user_id": userId 
-                })
-				.sort({ recorded_at: -1 })
-				.limit(limit)
-				.toArray();
+			const docs = await findTelemetryDocs({ deviceId, userId, limit });
 
-			const data = docs.reverse().map((doc, index) => {
-				const recordedAt = new Date(doc.recorded_at);
-
-				return {
-					id: index + 1,
-					timestamp: recordedAt.getTime(),
-					recorded_at: recordedAt.toISOString(),
-					time: recordedAt.toLocaleTimeString("vi-VN", {
-						hour: "2-digit",
-						minute: "2-digit",
-						second: "2-digit",
-					}),
-					temp: doc.sensors?.temperature ?? null,
-					humidity: doc.sensors?.humidity ?? null,
-					light: doc.sensors?.light ?? null,
-				};
-			});
+			const data = docs.reverse().map(telemetryDocToPayload);
 
 			res.json(data);
 		} catch (err) {
@@ -330,14 +370,7 @@ async function start() {
                 return res.status(400).json({ error: "user_id parameter is required" });
             }
 
-			const docs = await collection
-				.find({ 
-                    "metadata.device_id": deviceId,
-                    "metadata.user_id": userId
-                })
-				.sort({ recorded_at: -1 })
-				.limit(1)
-				.toArray();
+			const docs = await findTelemetryDocs({ deviceId, userId, limit: 1 });
 
 			if (docs.length === 0) {
 				return res.status(404).json({ error: "No sensor data found for this user" });
@@ -348,6 +381,51 @@ async function start() {
 			console.error(err);
 			res.status(500).json({ error: "Failed to fetch latest sensor data" });
 		}
+	});
+
+	app.get("/api/sensors/stream", async (req, res) => {
+		const deviceId = req.query.device_id || "device_0001";
+		const userId = req.query.user_id;
+
+		if (!userId) {
+			return res.status(400).json({ error: "user_id parameter is required" });
+		}
+
+		res.setHeader("Content-Type", "text/event-stream");
+		res.setHeader("Cache-Control", "no-cache");
+		res.setHeader("Connection", "keep-alive");
+		res.flushHeaders?.();
+
+		let lastTimestamp = 0;
+
+		const sendLatest = async () => {
+			try {
+				const doc = await findLatestTelemetryDoc({ deviceId, userId });
+
+				if (!doc) {
+					return;
+				}
+
+				const payload = telemetryDocToPayload(doc);
+				if (payload.timestamp <= lastTimestamp) {
+					return;
+				}
+
+				lastTimestamp = payload.timestamp;
+				res.write(`event: telemetry\n`);
+				res.write(`data: ${JSON.stringify(payload)}\n\n`);
+			} catch (err) {
+				res.write(`event: error\n`);
+				res.write(`data: ${JSON.stringify({ error: "stream_read_failed" })}\n\n`);
+			}
+		};
+
+		await sendLatest();
+		const interval = setInterval(sendLatest, 1000);
+		req.on("close", () => {
+			clearInterval(interval);
+			res.end();
+		});
 	});
 
 	app.get("/api/settings/models", async (_req, res) => {

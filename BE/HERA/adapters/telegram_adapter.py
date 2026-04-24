@@ -14,11 +14,14 @@ from datetime import datetime
 
 from agents.orchestrator import Orchestrator
 from config import (
+	ANOMALY_ALERT_COOLDOWN_SECONDS,
+	ANOMALY_ALERTS_ENABLED,
 	TELEGRAM_BOT_TOKEN,
 	TELEGRAM_CONNECT_TIMEOUT,
 	TELEGRAM_READ_TIMEOUT,
 	TELEGRAM_WRITE_TIMEOUT,
 )
+from core.logger import log_alert, log_telegram
 from core.message import AgentResponse, MessageSource, UserMessage
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
@@ -47,6 +50,7 @@ class TelegramAdapter:
 		self.provider = provider
 		self.app = None
 		self.registered_chats = set()  # Track users who started the bot
+		self.last_anomaly_alert_at = 0.0
 
 	# ── command handlers ──────────────────────────────────────
 
@@ -103,7 +107,12 @@ class TelegramAdapter:
 
 	async def monitor_anomalies(self, context):
 		"""Background task: Check sensor state and alert on anomalies."""
+		if not ANOMALY_ALERTS_ENABLED:
+			return
 		try:
+			now = datetime.now().timestamp()
+			if now - self.last_anomaly_alert_at < ANOMALY_ALERT_COOLDOWN_SECONDS:
+				return
 			sensor_state = self.mqtt.get_sensor_snapshot()
 			sensors = sensor_state.get("sensors", {})
 			current_score = sensors.get("anomaly") or 0
@@ -122,6 +131,15 @@ class TelegramAdapter:
 				)
 
 				print(alert_msg)
+				log_alert(
+					f"{severity} anomaly detected",
+					data={
+						"score": f"{current_score:.4f}",
+						"temp": sensors.get("temperature"),
+						"humi": sensors.get("humidity"),
+					},
+				)
+				self.last_anomaly_alert_at = now
 
 				# Send alert to all registered Telegram users
 				if self.registered_chats and self.app:
@@ -130,14 +148,16 @@ class TelegramAdapter:
 							await self.app.bot.send_message(
 								chat_id=chat_id, text=alert_msg, parse_mode="HTML"
 							)
-							print(f"[TELEGRAM] Sent alert to chat {chat_id}")
+							log_telegram(f"Sent anomaly alert to chat {chat_id}")
 						except Exception as send_err:
-							print(f"[TELEGRAM] Failed to send to {chat_id}: {send_err}")
+							log_telegram(
+								f"Failed to send alert to {chat_id}: {send_err}"
+							)
 				else:
-					print("[ALERT] No registered users (need /start)")
+					log_alert("No registered users for anomaly alert (need /start)")
 
 		except Exception as e:
-			print(f"[MONITOR] Error: {e}")
+			log_alert(f"Monitor error: {e}")
 
 	# ── message handler ───────────────────────────────────────
 
@@ -160,7 +180,7 @@ class TelegramAdapter:
 				reply = "[ WARNING ] API key khong hop le. Vui long kiem tra file .env."
 			else:
 				reply = f"[ WARNING ] Loi: {exc}"
-			print(f"[Telegram] Error: {exc}")
+			log_telegram(f"Error handling message: {exc}")
 
 		try:
 			await update.message.reply_text(reply)
@@ -170,9 +190,9 @@ class TelegramAdapter:
 					await asyncio.sleep(1)
 					await update.message.reply_text(reply)
 				except Exception:
-					print("[Telegram] Failed to send reply after retry")
+					log_telegram("Failed to send reply after timeout retry")
 			else:
-				print(f"[Telegram] Send error: {send_err}")
+				log_telegram(f"Send error: {send_err}")
 
 	# ── run ───────────────────────────────────────────────────
 
@@ -192,7 +212,9 @@ class TelegramAdapter:
 		)
 		self.app = app
 
-		# Start background anomaly monitoring (5-second interval)
-		app.job_queue.run_repeating(self.monitor_anomalies, interval=5.0, first=1.0)
+		if ANOMALY_ALERTS_ENABLED:
+			app.job_queue.run_repeating(self.monitor_anomalies, interval=5.0, first=1.0)
+		else:
+			log_alert("Proactive anomaly alerts disabled")
 
 		app.run_polling()

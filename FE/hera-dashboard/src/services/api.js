@@ -124,6 +124,71 @@ export const fetchLatestSensorData = async () => {
 	throw lastError || new Error('Unable to fetch latest sensor data');
 };
 
+export const subscribeLatestSensorData = ({ onData, onError } = {}) => {
+	const user = getStoredUser();
+	if (!user) {
+		throw new Error('User not logged in');
+	}
+
+	const params = new URLSearchParams({
+		user_id: user.user_id,
+		device_id: 'device_0001',
+	});
+	const source = new EventSource(`${API_BASE_URL}/api/sensors/stream?${params.toString()}`);
+
+	source.addEventListener('telemetry', (event) => {
+		try {
+			const payload = JSON.parse(event.data);
+			onData?.(normalizeSensorData(payload));
+		} catch (error) {
+			onError?.(error);
+		}
+	});
+
+	source.onerror = (error) => {
+		onError?.(error);
+	};
+
+	return () => source.close();
+};
+
+export const subscribeTelemetrySeries = ({ limit = 500, onData, onError } = {}) => {
+	const user = getStoredUser();
+	if (!user) {
+		throw new Error('User not logged in');
+	}
+
+	const params = new URLSearchParams({
+		user_id: user.user_id,
+		device_id: 'device_0001',
+	});
+	const source = new EventSource(`${API_BASE_URL}/api/sensors/stream?${params.toString()}`);
+
+	source.addEventListener('telemetry', (event) => {
+		try {
+			const payload = JSON.parse(event.data);
+			const point = {
+				id: payload.id,
+				timestamp: payload.timestamp,
+				recorded_at: payload.recorded_at,
+				time: payload.time,
+				temp: payload.sensors?.temperature ?? payload.temp ?? null,
+				humidity: payload.sensors?.humidity ?? payload.humidity ?? null,
+				light: payload.sensors?.light ?? payload.light ?? null,
+			};
+			onData?.(point, limit);
+		} catch (error) {
+			onError?.(error);
+		}
+	});
+
+	source.onerror = (error) => {
+		onError?.(error);
+	};
+
+	return () => source.close();
+};
+
 export const toggleLedLight = async (enabled) => {
 	const response = await fetch(`${API_BASE_URL}/api/control/led`, {
 		method: 'POST',

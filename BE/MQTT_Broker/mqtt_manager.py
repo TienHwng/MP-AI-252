@@ -53,6 +53,7 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 ENABLE_MONGODB = _env_bool("MQTT_ENABLE_MONGODB", False)
+TELEMETRY_DB_DEBUG = _env_bool("TELEMETRY_DB_DEBUG", False)
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
@@ -65,25 +66,31 @@ try:
 except ImportError:
 	MongoClient = None
 
-if ENABLE_MONGODB:
+
+def connect_mongo_collections():
 	if MongoClient is None:
 		print(
-			"[ WARNING ] MQTT_ENABLE_MONGODB=true nhưng thiếu package 'pymongo'. "
+			"[ WARNING ] Thiếu package 'pymongo'. "
 			"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
 		)
-	else:
-		try:
-			mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=1500)
-			# Ping để fail-fast khi contributor không chạy MongoDB local
-			mongo_client.admin.command("ping")
-			db = mongo_client[MONGODB_DB]
-			collection = db[MONGODB_COLLECTION]
-			devices_collection = db["devices"]
-		except Exception as e:
-			print(
-				f"[ WARNING ] Không thể kết nối MongoDB ({e}). "
-				"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
-			)
+		return None, None
+
+	try:
+		mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=1500)
+		# Ping để fail-fast khi contributor không chạy MongoDB local
+		mongo_client.admin.command("ping")
+		db = mongo_client[MONGODB_DB]
+		return db[MONGODB_COLLECTION], db["devices"]
+	except Exception as e:
+		print(
+			f"[ WARNING ] Không thể kết nối MongoDB ({e}). "
+			"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
+		)
+		return None, None
+
+
+if ENABLE_MONGODB:
+	collection, devices_collection = connect_mongo_collections()
 
 
 class MQTTManager:
@@ -103,8 +110,12 @@ class MQTTManager:
 		)
 		self.collection = collection
 		self.devices_collection = devices_collection
+		if self.persist_telemetry and (
+			self.collection is None or self.devices_collection is None
+		):
+			self.collection, self.devices_collection = connect_mongo_collections()
 
-		if self.persist_telemetry and not self.collection:
+		if self.persist_telemetry and self.collection is None:
 			print(
 				"[ INFO ] Telemetry persistence disabled. "
 				"Ứng dụng vẫn nhận dữ liệu MQTT bình thường."
@@ -148,6 +159,7 @@ class MQTTManager:
 		self.client.on_subscribe = self.on_subscribe
 		self.client.on_publish = self.on_publish
 		self.latest_sensor_data = {}
+		self.telemetry_insert_count = 0
 		# self.latest_sensor_data = {"temperature": "25"}
 
 	@staticmethod
@@ -226,12 +238,15 @@ class MQTTManager:
 			# print(f"[ INFO ] [Sensor data] {payload}")
 			try:
 				parsed = json.loads(payload)
+				observed_at = datetime.now(UTC)
 				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
+				self.latest_sensor_data["last_seen_at"] = observed_at.isoformat()
+				self.latest_sensor_data["source_topic"] = topic
 
 				if (
 					self.persist_telemetry
-					and self.collection
-					and self.devices_collection
+					and self.collection is not None
+					and self.devices_collection is not None
 				):
 					try:
 						current_user_id = None
@@ -245,7 +260,7 @@ class MQTTManager:
 							print(f"[ WARNING ] Could not fetch device owner: {e}")
 
 						doc = {
-							"recorded_at": datetime.now(UTC),
+							"recorded_at": observed_at,
 							"metadata": {
 								"device_id": "device_0001",
 								"env_id": "env_0001",
@@ -259,7 +274,13 @@ class MQTTManager:
 						}
 
 						self.collection.insert_one(doc)
-						# print(f"[ INFO ] [Database] Inserted sensor data: {doc}")
+						self.telemetry_insert_count += 1
+						if TELEMETRY_DB_DEBUG or self.telemetry_insert_count == 1:
+							print(
+								"[ INFO ] [Database] Inserted telemetry "
+								f"#{self.telemetry_insert_count} "
+								f"user_id={current_user_id or 'unclaimed'}"
+							)
 					except Exception as e:
 						print(
 							f"[ WARNING ] MongoDB write failed ({e}). "

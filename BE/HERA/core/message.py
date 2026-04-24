@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
+from uuid import uuid4
 
 
 class MessageSource(StrEnum):
@@ -28,6 +29,8 @@ class UserMessage:
 	chat_id: str
 	source: MessageSource
 	timestamp: datetime = field(default_factory=datetime.now)
+	request_id: str = field(default_factory=lambda: str(uuid4()))
+	metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

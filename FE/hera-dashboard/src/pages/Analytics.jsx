@@ -9,6 +9,7 @@ import {
 	ResponsiveContainer,
 	CartesianGrid,
 } from "recharts";
+import { subscribeTelemetrySeries } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -209,9 +210,33 @@ const Analytics = () => {
 		};
 
 		fetchTelemetry();
-		const interval = setInterval(fetchTelemetry, 5000);
+		let unsubscribe = null;
+		try {
+			unsubscribe = subscribeTelemetrySeries({
+				limit: 500,
+				onData: (point, limit) => {
+					setData((prev) => {
+						const next = [...prev, point];
+						const deduped = next.filter(
+							(item, index, arr) =>
+								arr.findIndex((candidate) => candidate.timestamp === item.timestamp) === index,
+						);
+						return deduped.slice(-limit);
+					});
+				},
+				onError: (error) => {
+					console.error("Telemetry stream error:", error);
+				},
+			});
+		} catch (error) {
+			console.error("Failed to open telemetry stream:", error);
+		}
+		const interval = setInterval(fetchTelemetry, 30000);
 
-		return () => clearInterval(interval);
+		return () => {
+			unsubscribe?.();
+			clearInterval(interval);
+		};
 	}, []);
 
 	const visibleData = useMemo(() => {

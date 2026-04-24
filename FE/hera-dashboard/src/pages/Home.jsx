@@ -3,7 +3,7 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
-import { fetchLatestSensorData, toggleLedLight, toggleNeoLight, logoutUser } from '../services/api';
+import { fetchLatestSensorData, subscribeLatestSensorData, toggleLedLight, toggleNeoLight, logoutUser } from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
@@ -78,6 +78,7 @@ const Home = ({ user, onLogout }) => {
 
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe = null;
 
     const loadLatestData = async () => {
       try {
@@ -92,10 +93,25 @@ const Home = ({ user, onLogout }) => {
     };
 
     loadLatestData();
-    const intervalId = setInterval(loadLatestData, 5000);
+    try {
+      unsubscribe = subscribeLatestSensorData({
+        onData: (latest) => {
+          if (!cancelled) {
+            setSensorData(latest);
+          }
+        },
+        onError: (error) => {
+          console.error('Sensor stream error:', error);
+        },
+      });
+    } catch (error) {
+      console.error('Failed to open sensor stream:', error);
+    }
+    const intervalId = setInterval(loadLatestData, 15000);
 
     return () => {
       cancelled = true;
+      unsubscribe?.();
       clearInterval(intervalId);
     };
   }, []);

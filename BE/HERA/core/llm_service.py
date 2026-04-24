@@ -19,6 +19,7 @@ from config import (
 )
 from litellm import completion as litellm_completion
 
+from core.logger import log_llm
 from core.runtime_settings import runtime_settings
 
 # ── Normalised result dict ────────────────────────────────────
@@ -77,9 +78,13 @@ class LLMService:
 				model = f"ollama_chat/{model}"
 		call_id = next(self.call_counter)
 		tool_count = len(tools) if tools else 0
-		print(
-			f"[LLM] API call #{call_id} -> provider={active_provider} "
-			f"model={model} tools={tool_count} messages={len(messages)}"
+		log_llm(
+			f"API call #{call_id} → {model}",
+			data={
+				"provider": active_provider,
+				"tools": tool_count,
+				"msgs": len(messages),
+			},
 		)
 		kwargs: dict[str, Any] = {
 			"model": model,
@@ -100,7 +105,7 @@ class LLMService:
 		msg = resp.choices[0].message
 		tool_calls = getattr(msg, "tool_calls", None)
 		if not tool_calls:
-			print(f"[LLM] API call #{call_id} <- tool_calls=0")
+			log_llm(f"API call #{call_id} ← text response", data={"tool_calls": 0})
 			return {"content": msg.content, "tool_calls": None}
 
 		normalized_tool_calls = []
@@ -124,7 +129,11 @@ class LLMService:
 					"args": args or {},
 				}
 			)
-		print(f"[LLM] API call #{call_id} <- tool_calls={len(normalized_tool_calls)}")
+		tool_names = [tc["name"] for tc in normalized_tool_calls]
+		log_llm(
+			f"API call #{call_id} ← tool response",
+			data={"tool_calls": len(normalized_tool_calls), "tools": tool_names},
+		)
 		return {
 			"content": msg.content or "",
 			"tool_calls": normalized_tool_calls,

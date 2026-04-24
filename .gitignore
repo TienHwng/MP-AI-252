@@ -98,6 +98,15 @@ tmp/
 # Database files
 *.db
 *.sqlite
+
+# ===================== Docs Folder Rules =====================
+# Ignore all files in docs/ folder
+docs/**
+# But allow directories to be traversed
+!docs/*/
+# Allow markdown and PDF files
+!docs/**/*.md
+!docs/**/*.pdf
 *.sqlite3
 
 # Repository-specific

@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
+from core.logger import log_hera
+
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 
@@ -125,9 +127,8 @@ class RuntimeSettingsStore:
 							self.cache = deep_merge(DEFAULT_SETTINGS, next_settings)
 							current_provider = self.cache.get("provider")
 						if current_provider != prev_provider:
-							print(
-								f"{YELLOW}[HERA][MODEL] Switched to provider: "
-								f"{current_provider}{RESET}",
+							log_hera(
+								f"Model provider switched: {prev_provider} → {current_provider}",
 							)
 			except PyMongoError:
 				# Keep runtime resilient if change stream is unavailable.
@@ -167,9 +168,8 @@ class RuntimeSettingsStore:
 				self.cache = deep_merge(DEFAULT_SETTINGS, latest)
 			current_provider = self.cache.get("provider")
 			if current_provider != prev_provider:
-				print(
-					f"{YELLOW}[HERA][MODEL] Switched to provider: "
-					f"{current_provider}{RESET}",
+				log_hera(
+					f"Model provider switched: {prev_provider} → {current_provider}",
 				)
 			return deep_merge({}, self.cache)
 

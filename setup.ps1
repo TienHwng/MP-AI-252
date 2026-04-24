@@ -124,9 +124,9 @@ function Install-GitIfMissing {
     Add-Summary "Git" $gitVersion
 }
 
-function Find-Python314 {
+function Find-Python312 {
     try {
-        $pythonPath = py -3.14 -c "import sys; print(sys.executable)" 2>$null
+        $pythonPath = py -3.12 -c "import sys; print(sys.executable)" 2>$null
         if ($LASTEXITCODE -eq 0 -and $pythonPath) {
             return $pythonPath.Trim()
         }
@@ -135,7 +135,7 @@ function Find-Python314 {
     try {
         $pythonCmd = Get-Command python -ErrorAction Stop
         $versionOutput = & $pythonCmd.Source --version 2>&1
-        if ($versionOutput -match "Python 3\.14") {
+        if ($versionOutput -match "Python 3\.12") {
             return $pythonCmd.Source
         }
     } catch {}
@@ -143,34 +143,34 @@ function Find-Python314 {
     return $null
 }
 
-function Test-Python314Installed {
-    $pythonPath = Find-Python314
+function Test-Python312Installed {
+    $pythonPath = Find-Python312
     return -not [string]::IsNullOrWhiteSpace($pythonPath)
 }
 
-function Install-Python314IfMissing {
-    if (Test-Python314Installed) {
-        $pythonPath = Find-Python314
+function Install-Python312IfMissing {
+    if (Test-Python312Installed) {
+        $pythonPath = Find-Python312
         $pythonVersion = & $pythonPath --version
-        Write-Ok "Python 3.14 detected: $pythonVersion"
+        Write-Ok "Python 3.12 detected: $pythonVersion"
         Add-Summary "Python" $pythonVersion
         return
     }
 
-    Write-Warn "Python 3.14.x was not found."
-    Write-Info "Attempting to install the latest available Python 3.14.x with winget..."
+    Write-Warn "Python 3.12.x was not found."
+    Write-Info "Attempting to install the latest available Python 3.12.x with winget..."
 
     if (-not (Test-CommandExists "winget")) {
         Write-Err "winget is not available."
-        Write-Host "Please install Python 3.14 manually, then run this script again." -ForegroundColor Yellow
+        Write-Host "Please install Python 3.12 manually, then run this script again." -ForegroundColor Yellow
         exit 1
     }
 
     try {
-        winget install --id Python.Python.3.14 --exact --source winget --accept-package-agreements --accept-source-agreements | Out-Null
+        winget install --id Python.Python.3.12 --exact --source winget --accept-package-agreements --accept-source-agreements | Out-Null
     } catch {
-        Write-Err "Automatic Python 3.14.x installation failed."
-        Write-Host "Please install Python 3.14 manually, then run this script again." -ForegroundColor Yellow
+        Write-Err "Automatic Python 3.12.x installation failed."
+        Write-Host "Please install Python 3.12 manually, then run this script again." -ForegroundColor Yellow
         exit 1
     }
 
@@ -178,9 +178,9 @@ function Install-Python314IfMissing {
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
     $env:Path = "$machinePath;$userPath"
 
-    $pythonPath = Find-Python314
+    $pythonPath = Find-Python312
     if (-not $pythonPath) {
-        Write-Err "Python 3.14.x seems installed, but is not available in PATH yet."
+        Write-Err "Python 3.12.x seems installed, but is not available in PATH yet."
         Write-Host "Please reopen the terminal and run this script again." -ForegroundColor Yellow
         exit 1
     }
@@ -190,7 +190,7 @@ function Install-Python314IfMissing {
     Add-Summary "Python" $pythonVersion
 }
 
-function Test-VenvIsPython314 {
+function Test-VenvIsPython312 {
     param([string]$PythonExe)
 
     if (-not (Test-Path $PythonExe)) {
@@ -199,7 +199,7 @@ function Test-VenvIsPython314 {
 
     try {
         $version = & $PythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-        return $version.Trim() -eq "3.14"
+        return $version.Trim() -eq "3.12"
     } catch {
         return $false
     }
@@ -472,20 +472,20 @@ Add-Summary "Project root" $projectRoot
 Write-Step "Checking Git"
 Install-GitIfMissing
 
-Write-Step "Checking Python 3.14.x"
-Install-Python314IfMissing
-$python314 = Find-Python314
+Write-Step "Checking Python 3.12.x"
+Install-Python312IfMissing
+$python312 = Find-Python312
 
 Write-Step "Preparing virtual environment"
 $needCreateVenv = $true
 
 if (Test-Path $pythonExeInVenv) {
-    if (Test-VenvIsPython314 -PythonExe $pythonExeInVenv) {
-        Write-Ok ".venv already exists and uses Python 3.14"
+    if (Test-VenvIsPython312 -PythonExe $pythonExeInVenv) {
+        Write-Ok ".venv already exists and uses Python 3.12"
         Add-Summary "Virtual env" "Reused existing .venv"
         $needCreateVenv = $false
     } else {
-        Write-Warn ".venv exists but does not use Python 3.14"
+        Write-Warn ".venv exists but does not use Python 3.12"
         Write-Info "Recreating .venv..."
         Remove-Item -Recurse -Force $venvPath
     }
@@ -493,7 +493,7 @@ if (Test-Path $pythonExeInVenv) {
 
 if ($needCreateVenv) {
     Write-Info "Creating .venv"
-    & $python314 -m venv $venvPath | Out-Null
+    & $python312 -m venv $venvPath | Out-Null
     Write-Ok ".venv created."
     Add-Summary "Virtual env" "Created new .venv"
 }
