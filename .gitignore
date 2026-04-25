@@ -8,7 +8,6 @@ Thumbs.db
 ehthumbs.db
 
 # ===================== IDE / Editor Configuration =====================
-.vscode/
 .idea/
 *.code-workspace
 *.swp
@@ -85,7 +84,6 @@ tmp/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
-.vscode/settings.json
 .vscode/extensions.json
 
 # ===================== Project-specific =====================

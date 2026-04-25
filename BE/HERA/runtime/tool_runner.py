@@ -38,13 +38,6 @@ class ToolRunner:
 	def get_device_status_report(self) -> dict:
 		return self.device_executor.get_device_status_report()
 
-	def run_all(
-		self,
-		proposals: list[ToolProposal],
-		context: ExecutionContext | None = None,
-	) -> list[ToolExecutionResult]:
-		return [self.run(proposal, context) for proposal in proposals]
-
 	def run(
 		self,
 		proposal: ToolProposal,

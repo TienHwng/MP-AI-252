@@ -28,8 +28,6 @@ from core.mqtt_service import MQTTService
 from schemas import SpecialistReport
 from telemetry import TelemetryStore
 
-from agents.base import AgentBase
-
 # ── Rule engine ───────────────────────────────────────────────
 
 
@@ -131,7 +129,7 @@ def classify_anomaly(sensor: dict, freshness: dict | None = None) -> dict:
 	}
 
 
-class AnomalyExpertAgent(AgentBase):
+class AnomalyExpertAgent:
 	def __init__(
 		self,
 		llm: LLMService,
@@ -161,6 +159,26 @@ class AnomalyExpertAgent(AgentBase):
 		telemetry_window = self._recent_telemetry_window(context)
 		report = {
 			"user_message": message.text,
+			"tool_calls": [
+				{
+					"name": "get_current_telemetry",
+					"args": {},
+					"confidence": 1.0,
+					"source": "anomaly_subgraph",
+				}
+			],
+			"tool_results": [
+				{
+					"name": "get_current_telemetry",
+					"ok": True,
+					"result": snapshot,
+				},
+				{
+					"name": "get_telemetry_window",
+					"ok": bool(telemetry_window.get("available")),
+					"result": telemetry_window,
+				},
+			],
 			"snapshot": snapshot,
 			"freshness": freshness,
 			"telemetry_window": telemetry_window,

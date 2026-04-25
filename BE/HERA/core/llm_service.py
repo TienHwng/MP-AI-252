@@ -96,7 +96,6 @@ class LLMService:
 		if active_provider == "ollama":
 			kwargs["api_base"] = OLLAMA_API_BASE
 			kwargs["think"] = False  # Disable thinking chain for Ollama
-			kwargs["stream"] = True  # Enable streaming for faster response
 		elif active_provider == "openrouter":
 			if not OPENROUTER_API_KEY:
 				raise ValueError("OPENROUTER_API_KEY is not set in .env")
@@ -104,31 +103,8 @@ class LLMService:
 			kwargs["api_base"] = OPENROUTER_BASE_URL
 			kwargs["custom_llm_provider"] = "openrouter"
 			kwargs["think"] = False  # Disable thinking chain for OpenRouter too
-			kwargs["stream"] = True  # Enable streaming for faster response
 		resp = litellm_completion(**kwargs)
-
-		# Collect streaming response if needed
-		if hasattr(resp, "__iter__") and not hasattr(resp, "choices"):
-			# Streaming response - collect all chunks
-			full_content = ""
-			full_tool_calls = []
-			for chunk in resp:
-				if hasattr(chunk, "choices") and chunk.choices:
-					delta = chunk.choices[0].delta
-					if delta.content:
-						full_content += delta.content
-					if hasattr(delta, "tool_calls") and delta.tool_calls:
-						full_tool_calls.extend(delta.tool_calls)
-			msg = type(
-				"Message",
-				(),
-				{
-					"content": full_content,
-					"tool_calls": full_tool_calls if full_tool_calls else None,
-				},
-			)()
-		else:
-			msg = resp.choices[0].message
+		msg = resp.choices[0].message
 
 		tool_calls = getattr(msg, "tool_calls", None)
 		if not tool_calls:

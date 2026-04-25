@@ -16,16 +16,14 @@ from config import (
 	NORMAL_TEMP_MIN,
 )
 from core.llm_service import LLMService
+from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from core.tool_registry import ToolRegistry
 from schemas import SpecialistReport
 
-from agents.base import AgentBase
-from core.logger import log_agent
 
-
-class SensorAnalysisAgent(AgentBase):
+class SensorAnalysisAgent:
 	def __init__(
 		self,
 		llm: LLMService,
@@ -55,6 +53,21 @@ class SensorAnalysisAgent(AgentBase):
 		sensors = snapshot.get("sensors", {})
 		report = {
 			"user_message": message.text,
+			"tool_calls": [
+				{
+					"name": "get_current_telemetry",
+					"args": {},
+					"confidence": 1.0,
+					"source": "sensor_subgraph",
+				}
+			],
+			"tool_results": [
+				{
+					"name": "get_current_telemetry",
+					"ok": True,
+					"result": snapshot,
+				}
+			],
 			"snapshot": snapshot,
 			"reference": {
 				"temperature_c": {

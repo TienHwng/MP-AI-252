@@ -13,10 +13,15 @@ class OrchestrationState(TypedDict, total=False):
 
 	message: UserMessage
 	request: IncomingRequest
-	memory_context: MemoryContext
+	memory_context: MemoryContext | None
 	intent: str
-	route_decision: RouteDecision
-	specialist_response: AgentResponse
-	response: AgentResponse
+	route_decision: RouteDecision | None
+	specialist_response: AgentResponse | None
+	response: AgentResponse | None
+	chat_history: list[dict[str, Any]]
+	active_focus: dict[str, Any] | None
+	pending_confirmation: dict[str, Any] | None
+	pending_device_clarification: dict[str, Any] | None
+	last_tool_results: list[dict[str, Any]]
 	start_time: float
 	metadata: dict[str, Any]

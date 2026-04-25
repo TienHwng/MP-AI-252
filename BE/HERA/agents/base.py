@@ -1,34 +1,23 @@
-"""
-Agent Base
-==========
-Abstract base class that every HERA agent must implement.
-
-The protocol is intentionally simple:
-  1.  ``name`` / ``description`` — identity for logging & orchestration
-  2.  ``process(message, context)`` — takes a user message, returns a response
-"""
+"""Structural specialist-agent protocol used by the orchestrator."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from typing import Protocol
 
 from core.message import AgentResponse, UserMessage
 
 
-class AgentBase(ABC):
-	"""Contract that all specialist agents fulfil."""
+class AgentLike(Protocol):
+	"""Any object with this shape can be mounted as a HERA specialist."""
 
 	@property
-	@abstractmethod
 	def name(self) -> str:
 		"""Short identifier, e.g. ``'device_control'``."""
 
 	@property
-	@abstractmethod
 	def description(self) -> str:
 		"""One-line summary used by the orchestrator prompt."""
 
-	@abstractmethod
 	async def process(
 		self,
 		message: UserMessage,

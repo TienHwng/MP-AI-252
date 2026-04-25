@@ -1,0 +1,4 @@
+{
+  "task.allowAutomaticTasks": "on",
+  "postman.settings.dotenv-detection-notification-visibility": false
+}

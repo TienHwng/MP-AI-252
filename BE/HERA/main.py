@@ -9,16 +9,36 @@ from agents.orchestrator import Orchestrator
 from agents.sensor_agent import SensorAnalysisAgent
 from agents.web_research_agent import WebResearchAgent
 from config import (
+	CALENDAR_CACHE_TTL_SECONDS,
+	CALENDAR_SEARCH_ENABLED,
 	DUCKDUCKGO_SEARCH_REGION,
+	GOOGLE_CALENDAR_CREDENTIALS_PATH,
+	GOOGLE_CALENDAR_ID,
 	MODE,
 	MONGODB_COLLECTION,
 	MONGODB_DB,
 	MONGODB_URI,
 	MQTT_BROKER,
 	MQTT_PORT,
+	NEWS_CACHE_TTL_SECONDS,
+	NEWS_DEFAULT_COUNTRY,
+	NEWS_SEARCH_ENABLED,
+	NEWSAPI_API_KEY,
+	OPENWEATHERMAP_API_KEY,
+	PLACES_CACHE_TTL_SECONDS,
+	PLACES_SEARCH_ENABLED,
+	PLACES_USER_AGENT,
+	PRICE_CACHE_TTL_SECONDS,
+	PRICE_DEFAULT_CURRENCY,
+	PRICE_SEARCH_ENABLED,
+	SPECIALIZED_SEARCH_ENABLED,
 	TELEGRAM_BOT_TOKEN,
+	WEATHER_CACHE_TTL_SECONDS,
+	WEATHER_SEARCH_ENABLED,
 	WEB_FETCH_TIMEOUT_SECONDS,
+	WEB_SEARCH_DEFAULT_LOCATION,
 	WEB_SEARCH_ENABLED,
+	WEB_SEARCH_FETCH_TOP_RESULT,
 	WEB_SEARCH_MAX_RESULTS,
 	WEB_SEARCH_PROVIDER,
 	WEB_SEARCH_TIMEOUT_SECONDS,
@@ -32,7 +52,15 @@ from domain.devices.device_executor import DeviceExecutor
 from memory import MemoryService, MongoMemoryClient
 from runtime import CapabilityRegistry, PolicyEngine, ToolRunner, VerificationService
 from telemetry import TelemetryStore
-from web_search import DuckDuckGoSearchService
+from web_search import (
+	DuckDuckGoSearchService,
+	GoogleCalendarService,
+	NewsAPIService,
+	NominatimPlacesService,
+	OpenWeatherMapService,
+	PriceSearchService,
+	SearchIntentClassifier,
+)
 
 NOISY_LOGGERS = (
 	"httpx",
@@ -131,6 +159,56 @@ def build_web_search_service() -> DuckDuckGoSearchService:
 	return service
 
 
+def build_specialized_search_services() -> tuple[SearchIntentClassifier, dict]:
+	classifier = SearchIntentClassifier(default_location=WEB_SEARCH_DEFAULT_LOCATION)
+	if not SPECIALIZED_SEARCH_ENABLED:
+		log_hera("Specialized web search disabled")
+		return classifier, {}
+	services = {
+		"weather": OpenWeatherMapService(
+			api_key=OPENWEATHERMAP_API_KEY,
+			enabled=WEATHER_SEARCH_ENABLED,
+			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+			cache_ttl_seconds=WEATHER_CACHE_TTL_SECONDS,
+			default_location=WEB_SEARCH_DEFAULT_LOCATION,
+		),
+		"calendar": GoogleCalendarService(
+			credentials_path=GOOGLE_CALENDAR_CREDENTIALS_PATH,
+			enabled=CALENDAR_SEARCH_ENABLED,
+			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+			cache_ttl_seconds=CALENDAR_CACHE_TTL_SECONDS,
+			calendar_id=GOOGLE_CALENDAR_ID,
+		),
+		"news": NewsAPIService(
+			api_key=NEWSAPI_API_KEY,
+			enabled=NEWS_SEARCH_ENABLED,
+			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+			cache_ttl_seconds=NEWS_CACHE_TTL_SECONDS,
+			default_country=NEWS_DEFAULT_COUNTRY,
+		),
+		"price": PriceSearchService(
+			enabled=PRICE_SEARCH_ENABLED,
+			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+			cache_ttl_seconds=PRICE_CACHE_TTL_SECONDS,
+			default_currency=PRICE_DEFAULT_CURRENCY,
+		),
+		"places": NominatimPlacesService(
+			enabled=PLACES_SEARCH_ENABLED,
+			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+			cache_ttl_seconds=PLACES_CACHE_TTL_SECONDS,
+			default_location=WEB_SEARCH_DEFAULT_LOCATION,
+			user_agent=PLACES_USER_AGENT,
+		),
+	}
+	enabled = ", ".join(
+		name
+		for name, service in services.items()
+		if getattr(service, "available", False)
+	)
+	log_hera(f"Specialized web search services ready: {enabled or 'fallback-only'}")
+	return classifier, services
+
+
 def build_agents(
 	llm_svc: LLMService,
 	mqtt_svc: MQTTService,
@@ -143,6 +221,7 @@ def build_agents(
 		collection_name=MONGODB_COLLECTION,
 	)
 	web_search_service = build_web_search_service()
+	intent_classifier, specialized_services = build_specialized_search_services()
 	return {
 		"device_control": DeviceControlAgent(llm_svc, tool_runner, telemetry_store),
 		"sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
@@ -150,6 +229,9 @@ def build_agents(
 		"web_research": WebResearchAgent(
 			web_search_service,
 			max_results=WEB_SEARCH_MAX_RESULTS,
+			fetch_top_result=WEB_SEARCH_FETCH_TOP_RESULT,
+			intent_classifier=intent_classifier,
+			specialized_services=specialized_services,
 		),
 	}
 

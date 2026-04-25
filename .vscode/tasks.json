@@ -1,0 +1,89 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start All (VSCode Terminal)",
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "dependsOn": [
+        "MQTT: Simulator",
+        "MQTT: Manager",
+        "DB: API Server (run)",
+        "Model: HERA",
+        "Web: Dashboard (install+run)"
+      ],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: API Server (run)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; node server.js",
+      "options": {
+        "cwd": "${workspaceFolder}\\BE\\Database"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Web: Dashboard (install+run)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; npm install && npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}\\FE\\hera-dashboard"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Model: HERA",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; python main.py",
+      "options": {
+        "cwd": "${workspaceFolder}\\BE\\HERA"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "MQTT: Manager",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; python mqtt_manager.py",
+      "options": {
+        "cwd": "${workspaceFolder}\\BE\\MQTT_Broker"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "MQTT: Simulator",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; python mqtt_simulator.py",
+      "options": {
+        "cwd": "${workspaceFolder}\\BE\\MQTT_Broker"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

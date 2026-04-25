@@ -26,24 +26,34 @@ Canonical references:
 Rules:
 - The user may write in any language; infer meaning semantically.
 - If the requested action is clear but the target is generic/unspecified, keep
-  the action and return target=null. Do not guess a default target, except for
-  generic lighting requests defined below.
+  the action and return target=null. Do not guess a default target.
 - A bare request to control "the light/lights/lighting" without a specific
-  named light should map to target=all_lights because that is the user-facing
-  lighting group.
-- Generic requests like "bat den", "turn on the lights", or "bật đèn led"
-  should map to all_lights, not null.
+  named light is ambiguous because HERA has multiple lighting actuators.
+  Return target=null so the graph can ask a clarification question.
+- Use all_lights only when the user explicitly asks for every/all lights, such
+  as "bật tất cả đèn", "turn on all lights", or "toàn bộ đèn".
 - Use all_devices only when the request clearly scopes the command to every
   controllable actuator/device.
 - If the user refers to devices changed by a previous command, set
   reference=recent_changed_devices and target=null. The runtime will resolve
   the actual target from memory.
+- Do not use reference=recent_changed_devices when the current user message
+  explicitly names a concrete target such as relay, fan/quạt, main LED,
+  NeoPixel, or WS2812. The explicit target in the current message wins.
+- If the current user message is a short follow-up like "bật đi", "tắt đi",
+  or "chắc chưa", use Current discourse focus when it is provided. Do not
+  invent a default target.
 - If the user asks whether a device is on/off, use action=status.
 - If the user asks for a conditional action, such as "if temperature is above
   30 then turn on the fan", still parse the requested actuator action and
   target. Include the condition object when you can identify the sensor,
   operator, and threshold. The runtime will evaluate the condition against the
   current sensor snapshot before sending hardware commands.
+- If one user message contains multiple actuator actions, return the first
+  action in the top-level fields and include every action in commands[]. Keep
+  each condition attached only to the action it controls. Do not apply a sensor
+  condition to an independent action introduced by "also", "and", "với",
+  "tiện thể", or similar wording.
 - If the condition refers to a recent time window, such as "in the last 10
   seconds", "trong 10 giây vừa rồi", or "có lúc nào nhiệt độ lên 35", use
   type=sensor_window_threshold and include window_seconds. The runtime will
@@ -55,8 +65,9 @@ Rules:
 - Never return action=unknown with a non-null target.
 
 Examples:
-- "bat den giup toi" -> {"action":"turn_on","target":"all_lights",...}
-- "bật đèn led giúp tôi" -> {"action":"turn_on","target":"all_lights",...}
+- "bat den giup toi" -> {"action":"turn_on","target":null,...}
+- "bật đèn led giúp tôi" -> {"action":"turn_on","target":null,...}
+- "bật tất cả đèn giúp tôi" -> {"action":"turn_on","target":"all_lights",...}
 - "bật đèn neo giùm tôi" -> {"action":"turn_on","target":"neo_led",...}
 - "đèn neo" -> {"action":"unknown","target":null,...}
 
@@ -72,7 +83,16 @@ Output schema:
     "operator": ">" | ">=" | "<" | "<=",
     "threshold": number,
     "window_seconds": number | null
-  } | null
+  } | null,
+  "commands": [
+    {
+      "action": "turn_on" | "turn_off" | "status" | "unknown",
+      "target": "main_led" | "neo_led" | "ws2812" | "relay" | "mini_fan" | "all_lights" | "all_devices" | null,
+      "reference": "none" | "recent_changed_devices",
+      "confidence": 0.0-1.0,
+      "condition": object | null
+    }
+  ] | null
 }
 
 Do not include any other keys.

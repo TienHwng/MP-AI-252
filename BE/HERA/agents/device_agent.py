@@ -22,10 +22,14 @@ from prompts import (
 	DEVICE_COMMAND_INTERPRETER_PROMPT,
 	DEVICE_TARGET_CLARIFICATION_PROMPT,
 )
-from runtime import ToolRunner
+from runtime import (
+	ToolRunner,
+	get_current_telemetry_call,
+	get_device_status_call,
+	get_telemetry_window_call,
+	set_device_state_call,
+)
 from schemas import SpecialistReport, ToolProposal
-
-from agents.base import AgentBase
 
 DEVICE_LABEL_TARGETS = {
 	"Main LED": "main_led",
@@ -121,7 +125,7 @@ RECENT_REFERENCE_TOKENS = {
 GENERIC_LIGHT_TOKEN_SETS = {
 	frozenset({"đèn"}),
 	frozenset({"den"}),
-	frozenset({"led"}),
+	# frozenset({"led"}),  # Removed: "led" now defaults to main_led in SPECIFIC_TARGET_TOKEN_SETS
 	frozenset({"đèn", "led"}),
 	frozenset({"den", "led"}),
 	frozenset({"bóng", "đèn"}),
@@ -143,6 +147,8 @@ GENERIC_DEVICE_TOKEN_SETS = {
 ALL_LIGHTS_TOKEN_SETS = {
 	frozenset({"tất", "cả", "đèn"}),
 	frozenset({"tat", "ca", "den"}),
+	frozenset({"toàn", "bộ", "đèn"}),
+	frozenset({"toan", "bo", "den"}),
 	frozenset({"all", "lights"}),
 }
 
@@ -161,6 +167,17 @@ STATUS_MARKERS = (
 	"tat hay bat",
 	"on hay off",
 	"status",
+)
+
+STATUS_FOLLOWUP_MARKERS = (
+	"chắc chưa",
+	"chac chua",
+	"đúng chưa",
+	"dung chua",
+	"đúng không",
+	"dung khong",
+	"chưa",
+	"chua",
 )
 
 CONDITIONAL_MARKERS = (
@@ -250,6 +267,7 @@ SPECIFIC_TARGET_TOKEN_SETS: dict[frozenset[str], str] = {
 	frozenset({"fan"}): "mini_fan",
 	frozenset({"quạt"}): "mini_fan",
 	frozenset({"quat"}): "mini_fan",
+	frozenset({"led"}): "main_led",
 }
 
 SENSOR_CONDITION_ALIASES = {
@@ -373,6 +391,26 @@ def looks_like_standalone_device_request(text: str) -> bool:
 		and parsed.get("target") is not None
 		and not has_conditional_language(text)
 	)
+
+
+def looks_like_contextual_device_request(text: str, focus_target: str | None) -> bool:
+	"""True when a short follow-up can use the active device focus."""
+	return fast_parse_contextual_command(text, focus_target) is not None
+
+
+def looks_like_conditional_device_request(
+	text: str,
+	focus_target: str | None = None,
+) -> bool:
+	"""True when a conditional sentence contains a concrete actuator request."""
+	if not has_conditional_language(text):
+		return False
+	parsed = fast_parse_local_command(text)
+	if parsed is None:
+		parsed = fast_parse_contextual_command(text, focus_target)
+	if not isinstance(parsed, dict):
+		return False
+	return parsed.get("action") in {"turn_on", "turn_off", "status"}
 
 
 def detect_action(normalized: str) -> str | None:
@@ -531,14 +569,14 @@ def fast_parse_local_command(text: str) -> dict[str, Any] | None:
 	if significant in GENERIC_LIGHT_TOKEN_SETS:
 		return {
 			"action": action,
-			"target": "all_lights",
+			"target": None,
 			"reference": "none",
 			"confidence": 0.9,
 		}
 	if has_light:
 		return {
 			"action": action,
-			"target": "all_lights",
+			"target": None,
 			"reference": "none",
 			"confidence": 0.82,
 		}
@@ -557,6 +595,64 @@ def fast_parse_local_command(text: str) -> dict[str, Any] | None:
 			"confidence": 0.75,
 		}
 	return None
+
+
+def explicit_target_from_text(text: str) -> str | None:
+	tokens = tokenize_text(text)
+	if not tokens:
+		return None
+	significant_tokens = {
+		token
+		for token in tokens
+		if token not in ACTION_STOPWORDS
+		and token not in FILLER_TOKENS
+		and token not in RECENT_REFERENCE_TOKENS
+	}
+	significant = frozenset(significant_tokens)
+	for token_set, candidate in sorted(
+		SPECIFIC_TARGET_TOKEN_SETS.items(),
+		key=lambda item: len(item[0]),
+		reverse=True,
+	):
+		if token_set.issubset(significant):
+			return candidate
+	if significant in ALL_DEVICES_TOKEN_SETS:
+		return "all_devices"
+	if significant in ALL_LIGHTS_TOKEN_SETS:
+		return "all_lights"
+	return None
+
+
+def detect_contextual_action(text: str) -> str | None:
+	normalized = normalize_text(text)
+	action = detect_action(normalized)
+	leading_action = detect_leading_action(normalized)
+	if leading_action in {"turn_on", "turn_off"}:
+		return leading_action
+	if action in {"turn_on", "turn_off", "status"}:
+		return action
+	if any(marker in normalized for marker in STATUS_FOLLOWUP_MARKERS):
+		return "status"
+	return None
+
+
+def fast_parse_contextual_command(
+	text: str,
+	focus_target: str | None,
+) -> dict[str, Any] | None:
+	if focus_target not in DEVICE_TARGETS:
+		return None
+	if explicit_target_from_text(text) is not None:
+		return None
+	action = detect_contextual_action(text)
+	if action not in {"turn_on", "turn_off", "status"}:
+		return None
+	return {
+		"action": action,
+		"target": focus_target,
+		"reference": "discourse_focus",
+		"confidence": 0.88,
+	}
 
 
 def fast_resolve_target_text(text: str) -> dict[str, Any] | None:
@@ -588,7 +684,7 @@ def fast_resolve_target_text(text: str) -> dict[str, Any] | None:
 	):
 		return {"target": "all_devices", "confidence": 0.9}
 	if significant in GENERIC_LIGHT_TOKEN_SETS or has_light_language(tokens):
-		return {"target": "all_lights", "confidence": 0.82}
+		return {"target": None, "confidence": 0.82}
 	return None
 
 
@@ -655,6 +751,33 @@ def build_sensor_condition(
 			user_id=user_id,
 		)
 	return evaluate_sensor_condition(condition_payload, sensor_snapshot)
+
+
+class DeviceConditionEvaluator:
+	"""Ground conditional device commands against sensor and telemetry facts."""
+
+	def __init__(self, telemetry_store: Any | None = None) -> None:
+		self.telemetry_store = telemetry_store
+
+	def evaluate(
+		self,
+		command: dict[str, Any],
+		*,
+		user_text: str,
+		sensor_snapshot: dict | None,
+		user_id: str | None,
+	) -> dict[str, Any]:
+		raw_condition = command.get("condition")
+		condition = build_sensor_condition(
+			user_text,
+			sensor_snapshot,
+			raw_condition if isinstance(raw_condition, dict) else None,
+			telemetry_store=self.telemetry_store,
+			user_id=user_id,
+		)
+		if condition is None:
+			return command
+		return {**command, "condition": condition}
 
 
 def evaluate_sensor_condition(
@@ -998,6 +1121,150 @@ def normalise_command(
 	}
 	if isinstance(condition, dict):
 		command["condition"] = condition
+	raw_commands = parsed.get("commands")
+	if isinstance(raw_commands, list):
+		commands = [
+			normalise_command(item, recent_actions)
+			for item in raw_commands
+			if isinstance(item, dict)
+		]
+		if commands:
+			command["commands"] = commands
+	return command
+
+
+def command_without_group(command: dict[str, Any]) -> dict[str, Any]:
+	return {key: value for key, value in command.items() if key != "commands"}
+
+
+def command_list_from(command: dict[str, Any]) -> list[dict[str, Any]]:
+	raw_commands = command.get("commands")
+	if isinstance(raw_commands, list):
+		commands = [
+			command_without_group(item)
+			for item in raw_commands
+			if isinstance(item, dict)
+		]
+		return commands or [command_without_group(command)]
+	return [command_without_group(command)]
+
+
+def combine_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:
+	clean_commands = [command_without_group(command) for command in commands]
+	if not clean_commands:
+		return normalise_command({})
+	primary = dict(clean_commands[0])
+	if len(clean_commands) > 1:
+		primary["commands"] = clean_commands
+	return primary
+
+
+def deduplicate_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	seen: set[tuple[Any, Any, Any, Any]] = set()
+	deduped: list[dict[str, Any]] = []
+	for command in commands:
+		condition = command.get("condition")
+		condition_key = None
+		if isinstance(condition, dict):
+			condition_key = (
+				condition.get("type"),
+				condition.get("sensor"),
+				condition.get("operator"),
+				condition.get("threshold"),
+				condition.get("window_seconds"),
+			)
+		key = (
+			command.get("action"),
+			command.get("target"),
+			command.get("reference"),
+			condition_key,
+		)
+		if key in seen:
+			continue
+		seen.add(key)
+		deduped.append(command)
+	return deduped
+
+
+def parse_additional_action_segments(
+	text: str,
+	*,
+	recent_actions: list,
+	focus_target: str | None,
+) -> list[dict[str, Any]]:
+	segments = [
+		segment.strip(" ,.;")
+		for segment in re.split(
+			r"\b(?:với|và|va|đồng thời|dong thoi|tiện thể|tien the|and|plus)\b",
+			text,
+			flags=re.IGNORECASE,
+		)
+	]
+	if len(segments) <= 1:
+		return []
+
+	commands: list[dict[str, Any]] = []
+	for segment in segments[1:]:
+		if not segment:
+			continue
+		parsed = fast_parse_local_command(segment)
+		if parsed is None:
+			parsed = fast_parse_contextual_command(segment, focus_target)
+		if parsed is None:
+			continue
+		command = normalise_command(parsed, recent_actions)
+		command = apply_discourse_and_explicit_target(
+			command,
+			segment,
+			focus_target,
+		)
+		commands.append(command)
+	return commands
+
+
+def expand_multi_action_command(
+	command: dict[str, Any],
+	text: str,
+	*,
+	recent_actions: list,
+	focus_target: str | None,
+) -> dict[str, Any]:
+	commands = command_list_from(command)
+	commands.extend(
+		parse_additional_action_segments(
+			text,
+			recent_actions=recent_actions,
+			focus_target=focus_target,
+		)
+	)
+	commands = deduplicate_commands(commands)
+	return combine_commands(commands)
+
+
+def apply_discourse_and_explicit_target(
+	command: dict[str, Any],
+	text: str,
+	focus_target: str | None,
+) -> dict[str, Any]:
+	if command.get("action") not in {"turn_on", "turn_off", "status"}:
+		return command
+	explicit_target = explicit_target_from_text(text)
+	if explicit_target in DEVICE_TARGETS:
+		return {
+			**command,
+			"target": explicit_target,
+			"requested_target": explicit_target,
+			"reference": "none",
+			"confidence": max(float(command.get("confidence") or 0.0), 0.9),
+		}
+	if command.get("target") is None and focus_target in DEVICE_TARGETS:
+		return {
+			**command,
+			"target": focus_target,
+			"requested_target": focus_target,
+			"reference": "discourse_focus",
+			"confidence": max(float(command.get("confidence") or 0.0), 0.82),
+		}
 	return command
 
 
@@ -1009,7 +1276,7 @@ def capability_from_action(action: str) -> str | None:
 	}.get(action)
 
 
-def build_tool_proposal(command: dict[str, Any]) -> ToolProposal | None:
+def build_tool_call(command: dict[str, Any]) -> dict[str, Any] | None:
 	condition = command.get("condition")
 	if isinstance(condition, dict) and condition.get("status") != "met":
 		return None
@@ -1025,22 +1292,61 @@ def build_tool_proposal(command: dict[str, Any]) -> ToolProposal | None:
 	if not isinstance(confidence, int | float):
 		confidence = 0.0 if target is None else 0.6
 
-	arguments = (
-		{"device_target": target} if capability_name != "get_device_status" else {}
-	)
+	if not isinstance(confidence, int | float):
+		confidence = 0.0 if target is None else 0.6
+
+	confidence = max(0.0, min(float(confidence), 1.0))
 	if capability_name == "get_device_status":
-		arguments = {"device_target": target}
+		return get_device_status_call(
+			str(target),
+			confidence=confidence,
+			source="device_planner",
+		)
+	return set_device_state_call(
+		str(target),
+		capability_name == "turn_on_device",
+		confidence=confidence,
+		source="device_planner",
+	)
+
+
+def build_tool_calls(command: dict[str, Any]) -> list[dict[str, Any]]:
+	return [
+		tool_call
+		for item in command_list_from(command)
+		if (tool_call := build_tool_call(item)) is not None
+	]
+
+
+def tool_call_to_proposal(tool_call: dict[str, Any]) -> ToolProposal | None:
+	name = tool_call.get("name")
+	args = tool_call.get("args", {})
+	if name == "set_device_state":
+		state = args.get("state") if isinstance(args, dict) else None
+		if state is True:
+			name = "turn_on_device"
+		elif state is False:
+			name = "turn_off_device"
+		else:
+			return None
+	if name not in {"turn_on_device", "turn_off_device", "get_device_status"}:
+		return None
+	if not isinstance(args, dict):
+		args = {}
+	confidence = tool_call.get("confidence")
+	if not isinstance(confidence, int | float):
+		confidence = 0.6
 
 	return ToolProposal(
-		capability_name=capability_name,
-		arguments=arguments,
+		capability_name=name,
+		arguments=args,
 		rationale=(
-			"Parsed user request into a device capability. "
-			"Execution must go through the central ToolRunner."
+			"Planned as a native device tool call. "
+			"Execution must go through the graph runtime tool node."
 		),
 		expected_outcome=(
 			"Device state changes if requested state differs from current state."
-			if capability_name != "get_device_status"
+			if name != "get_device_status"
 			else "Current device state is reported without changing hardware."
 		),
 		confidence=max(0.0, min(float(confidence), 1.0)),
@@ -1049,7 +1355,48 @@ def build_tool_proposal(command: dict[str, Any]) -> ToolProposal | None:
 	)
 
 
-class DeviceControlAgent(AgentBase):
+def build_tool_proposal(command: dict[str, Any]) -> ToolProposal | None:
+	tool_call = build_tool_call(command)
+	return tool_call_to_proposal(tool_call) if tool_call else None
+
+
+def build_required_read_tool_calls(command: dict[str, Any]) -> list[dict[str, Any]]:
+	required_calls: list[dict[str, Any]] = []
+	seen: set[tuple[Any, Any]] = set()
+	if "commands" in command:
+		for item in command_list_from(command):
+			for call in build_required_read_tool_calls(item):
+				args = call.get("args", {}) if isinstance(call, dict) else {}
+				key = (
+					call.get("name") if isinstance(call, dict) else None,
+					json.dumps(args, sort_keys=True) if isinstance(args, dict) else "",
+				)
+				if key in seen:
+					continue
+				seen.add(key)
+				required_calls.append(call)
+		return required_calls
+
+	condition = command.get("condition")
+	if not isinstance(condition, dict):
+		return []
+	sensor = condition.get("sensor")
+	if not isinstance(sensor, str):
+		return []
+	if condition.get("type") == "sensor_window_threshold":
+		window_seconds = condition.get("window_seconds")
+		if isinstance(window_seconds, int | float) and int(window_seconds) > 0:
+			return [
+				get_telemetry_window_call(
+					sensor,
+					int(window_seconds),
+					source="device_condition_planner",
+				)
+			]
+	return [get_current_telemetry_call(source="device_condition_planner")]
+
+
+class DeviceControlAgent:
 	def __init__(
 		self,
 		llm: LLMService,
@@ -1059,6 +1406,7 @@ class DeviceControlAgent(AgentBase):
 		self.llm = llm
 		self.tool_runner = tool_runner
 		self.telemetry_store = telemetry_store
+		self.condition_evaluator = DeviceConditionEvaluator(telemetry_store)
 
 	@property
 	def name(self) -> str:
@@ -1077,30 +1425,32 @@ class DeviceControlAgent(AgentBase):
 			"recent_actions": raw_memory_context.get("recent_actions", []),
 			"user_profile": raw_memory_context.get("user_profile", {}),
 		}
-		sensor_snapshot = context.get("sensor_snapshot", {})
-		incoming_request = context.get("incoming_request")
-		user_id = getattr(incoming_request, "user_id", None)
+		focus_target = context.get("conversation_focus_target")
 		fast_parsed = (
 			fast_parse_local_command(message.text)
 			if should_use_local_fast_path(message.text)
 			else None
 		)
+		if fast_parsed is None:
+			fast_parsed = fast_parse_contextual_command(message.text, focus_target)
 		if fast_parsed is not None:
 			command = normalise_command(
 				fast_parsed,
 				device_memory_context.get("recent_actions", []),
 			)
-			raw_condition = command.get("condition")
-			condition = build_sensor_condition(
+			command = apply_discourse_and_explicit_target(
+				command,
 				message.text,
-				sensor_snapshot,
-				raw_condition if isinstance(raw_condition, dict) else None,
-				telemetry_store=self.telemetry_store,
-				user_id=user_id,
+				str(focus_target) if isinstance(focus_target, str) else None,
 			)
-			if condition is not None:
-				command["condition"] = condition
-			return command
+			return expand_multi_action_command(
+				command,
+				message.text,
+				recent_actions=device_memory_context.get("recent_actions", []),
+				focus_target=str(focus_target)
+				if isinstance(focus_target, str)
+				else None,
+			)
 		device_context = json.dumps(
 			self.tool_runner.get_device_status_report(),
 			indent=2,
@@ -1119,6 +1469,8 @@ class DeviceControlAgent(AgentBase):
 					+ device_context
 					+ "\n\nRecent action memory:\n"
 					+ memory_context
+					+ "\n\nCurrent discourse focus target:\n"
+					+ str(focus_target or "none")
 				),
 			},
 			{"role": "user", "content": message.text},
@@ -1134,17 +1486,17 @@ class DeviceControlAgent(AgentBase):
 			parsed,
 			device_memory_context.get("recent_actions", []),
 		)
-		raw_condition = command.get("condition")
-		condition = build_sensor_condition(
+		command = apply_discourse_and_explicit_target(
+			command,
 			message.text,
-			sensor_snapshot,
-			raw_condition if isinstance(raw_condition, dict) else None,
-			telemetry_store=self.telemetry_store,
-			user_id=user_id,
+			str(focus_target) if isinstance(focus_target, str) else None,
 		)
-		if condition is not None:
-			command["condition"] = condition
-		return command
+		return expand_multi_action_command(
+			command,
+			message.text,
+			recent_actions=device_memory_context.get("recent_actions", []),
+			focus_target=str(focus_target) if isinstance(focus_target, str) else None,
+		)
 
 	async def resolve_target_from_clarification(
 		self,
@@ -1194,53 +1546,114 @@ class DeviceControlAgent(AgentBase):
 		context: dict,
 	) -> AgentResponse:
 		command = await self.parse_command(message, context)
-		tool_proposal = build_tool_proposal(command)
-		condition = command.get("condition")
-		condition_str = (
-			f" condition={condition.get('status', '?')}"
-			if isinstance(condition, dict)
-			else ""
-		)
+		tool_calls = build_tool_calls(command)
 		log_agent(
 			f"DeviceControl: {command['action']} -> {command['target']}",
 			data={
 				"confidence": command.get("confidence"),
 				"reference": command.get("reference"),
-				"has_proposal": tool_proposal is not None,
+				"has_tool_call": bool(tool_calls),
+				"command_count": len(command_list_from(command)),
 			},
-			detail=(
-				f"proposal={tool_proposal.capability_name}"
-				if tool_proposal
-				else f"no proposal{condition_str}"
-			),
+			detail=(f"tool_calls={len(tool_calls)}" if tool_calls else "no tool_call"),
 		)
 
+		return self.build_plan_response(command, tool_calls)
+
+	def ground_tool_plan(
+		self,
+		response: AgentResponse,
+		*,
+		user_text: str,
+		sensor_snapshot: dict | None,
+		user_id: str | None,
+	) -> AgentResponse:
+		raw_report = response.metadata.get("specialist_report")
+		if not isinstance(raw_report, dict):
+			return response
+		analysis = raw_report.get("analysis_payload", {})
+		if not isinstance(analysis, dict):
+			return response
+		command = analysis.get("parsed_command")
+		if not isinstance(command, dict):
+			return response
+		grounded_commands = [
+			self.condition_evaluator.evaluate(
+				item,
+				user_text=user_text,
+				sensor_snapshot=sensor_snapshot,
+				user_id=user_id,
+			)
+			for item in command_list_from(command)
+		]
+		command = combine_commands(grounded_commands)
+		tool_calls = build_tool_calls(command)
+		grounded_response = self.build_plan_response(command, tool_calls)
+		grounded_response.metadata["planning_stage"] = "grounded"
+		return grounded_response
+
+	def build_plan_response(
+		self,
+		command: dict[str, Any],
+		tool_calls: list[dict[str, Any]] | dict[str, Any] | None,
+	) -> AgentResponse:
+		if isinstance(tool_calls, dict):
+			tool_calls = [tool_calls]
+		elif tool_calls is None:
+			tool_calls = []
+		tool_proposals = [
+			proposal
+			for tool_call in tool_calls
+			if (proposal := tool_call_to_proposal(tool_call)) is not None
+		]
+		commands = command_list_from(command)
 		clarification_question = None
+		needs_clarification = any(
+			item.get("action") in {"turn_on", "turn_off", "status"}
+			and item.get("target") is None
+			for item in commands
+		)
 		summary = "unknown_or_ambiguous_command"
-		condition = command.get("condition")
-		if isinstance(condition, dict) and condition.get("status") == "not_met":
-			summary = "condition_not_met"
-		elif isinstance(condition, dict) and condition.get("status") == "unknown":
-			summary = "condition_unknown"
-		elif (
-			isinstance(condition, dict)
-			and condition.get("status") == "met"
-			and tool_proposal
-		):
-			summary = "condition_met_tool_proposal_ready"
-		elif (
-			command["action"] in {"turn_on", "turn_off", "status"}
-			and command["target"] is None
-		):
+		conditions = [
+			item.get("condition")
+			for item in commands
+			if isinstance(item.get("condition"), dict)
+		]
+		if needs_clarification and tool_calls:
+			summary = "partial_tool_call_ready_awaiting_target_clarification"
+			clarification_question = "Bạn muốn mình điều khiển thiết bị nào?"
+		elif needs_clarification:
 			summary = "awaiting_target_clarification"
 			clarification_question = "Bạn muốn mình điều khiển thiết bị nào?"
-		elif tool_proposal:
-			summary = "tool_proposal_ready"
+		elif any(
+			isinstance(condition, dict) and condition.get("status") == "not_met"
+			for condition in conditions
+		):
+			summary = "condition_not_met"
+		elif any(
+			isinstance(condition, dict) and condition.get("status") == "unknown"
+			for condition in conditions
+		):
+			summary = "condition_unknown"
+		elif (
+			any(
+				isinstance(condition, dict) and condition.get("status") == "met"
+				for condition in conditions
+			)
+			and tool_calls
+		):
+			summary = "condition_met_tool_call_ready"
+		elif tool_calls:
+			summary = "tool_call_ready"
 
+		required_tool_calls = build_required_read_tool_calls(command)
 		report = {
 			"parsed_command": command,
+			"parsed_commands": commands,
+			"tool_calls": tool_calls,
+			"required_tool_calls": required_tool_calls,
 			"tool_proposals": (
-				[tool_proposal.model_dump(mode="json")] if tool_proposal else []
+				[proposal.model_dump(mode="json") for proposal in tool_proposals]
 			),
 			"device_status": self.tool_runner.get_device_status_report(),
 		}
@@ -1248,7 +1661,7 @@ class DeviceControlAgent(AgentBase):
 		specialist_report = SpecialistReport(
 			specialist_name=self.name,
 			summary=summary,
-			tool_proposals=[tool_proposal] if tool_proposal else [],
+			tool_proposals=tool_proposals,
 			clarification_question=clarification_question,
 			analysis_payload=analysis_payload,
 		)
@@ -1258,5 +1671,5 @@ class DeviceControlAgent(AgentBase):
 			text=json.dumps(report, ensure_ascii=False),
 			agent_name=self.name,
 			tools_used=[],
-			metadata=report,
+			metadata={**report, "planning_stage": "planned"},
 		)
