@@ -61,12 +61,75 @@ class TelemetryStore:
 				"point_count": 0,
 			}
 
+		return self._summary_payload(
+			points,
+			scope=scope,
+			limit=limit,
+			window_key="window_minutes",
+			window_value=window_minutes,
+		)
+
+	def recent_summary_seconds(
+		self,
+		*,
+		user_id: str | None,
+		window_seconds: int,
+		limit: int,
+	) -> dict[str, Any]:
+		collection = self.mongo.collection(self.collection_name)
+		if collection is None:
+			return {
+				"available": False,
+				"reason": "mongo_unavailable",
+				"source": f"mongodb.{self.collection_name}",
+			}
+
+		window_seconds = max(1, int(window_seconds))
+		cutoff = datetime.now(UTC) - timedelta(seconds=window_seconds)
+		base_filter: dict[str, Any] = {
+			"metadata.device_id": self.device_id,
+			"recorded_at": {"$gte": cutoff},
+		}
+		points, scope = self._find_recent_points(
+			collection,
+			base_filter,
+			user_id=user_id,
+			limit=limit,
+		)
+		if not points:
+			return {
+				"available": True,
+				"reason": "no_recent_telemetry",
+				"source": f"mongodb.{self.collection_name}",
+				"scope": scope,
+				"window_seconds": window_seconds,
+				"point_limit": limit,
+				"point_count": 0,
+			}
+
+		return self._summary_payload(
+			points,
+			scope=scope,
+			limit=limit,
+			window_key="window_seconds",
+			window_value=window_seconds,
+		)
+
+	def _summary_payload(
+		self,
+		points: list[dict[str, Any]],
+		*,
+		scope: str,
+		limit: int,
+		window_key: str,
+		window_value: int,
+	) -> dict[str, Any]:
 		return {
 			"available": True,
 			"reason": "ok",
 			"source": f"mongodb.{self.collection_name}",
 			"scope": scope,
-			"window_minutes": window_minutes,
+			window_key: window_value,
 			"point_limit": limit,
 			"point_count": len(points),
 			"first_recorded_at": self._iso(points[0].get("recorded_at")),

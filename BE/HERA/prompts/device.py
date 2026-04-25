@@ -44,6 +44,10 @@ Rules:
   target. Include the condition object when you can identify the sensor,
   operator, and threshold. The runtime will evaluate the condition against the
   current sensor snapshot before sending hardware commands.
+- If the condition refers to a recent time window, such as "in the last 10
+  seconds", "trong 10 giây vừa rồi", or "có lúc nào nhiệt độ lên 35", use
+  type=sensor_window_threshold and include window_seconds. The runtime will
+  query telemetry history and only execute if the window condition is true.
 - If the user asks to keep a device unchanged, do not include that device as
   the target unless it is also the requested control target.
 - Use action=unknown only when the requested action itself is unclear or the
@@ -63,10 +67,11 @@ Output schema:
   "reference": "none" | "recent_changed_devices",
   "confidence": 0.0-1.0,
   "condition": {
-    "type": "sensor_threshold",
+    "type": "sensor_threshold" | "sensor_window_threshold",
     "sensor": "temperature" | "humidity" | "light" | "anomaly",
     "operator": ">" | ">=" | "<" | "<=",
-    "threshold": number
+    "threshold": number,
+    "window_seconds": number | null
   } | null
 }
 

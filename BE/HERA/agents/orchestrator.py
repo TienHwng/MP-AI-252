@@ -15,20 +15,6 @@ import json
 import time
 from datetime import datetime
 
-from core.logger import (
-	get_trace,
-	log_compose,
-	log_exec,
-	log_graph,
-	log_memory,
-	log_orch,
-	log_policy,
-	log_route,
-	log_runtime,
-	log_verify,
-	trace_scope,
-)
-
 from config import (
 	FINAL_RESPONSE_TIMEOUT_SECONDS,
 	GENERAL_RESPONSE_TIMEOUT_SECONDS,
@@ -36,6 +22,16 @@ from config import (
 	MAX_TOOL_ITERATIONS,
 )
 from core.llm_service import LLMService
+from core.logger import (
+	log_compose,
+	log_exec,
+	log_graph,
+	log_memory,
+	log_orch,
+	log_route,
+	log_runtime,
+	trace_scope,
+)
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
@@ -52,9 +48,12 @@ from runtime import ExecutionContext, ToolRunner
 from schemas import IncomingRequest, MemoryContext, RouteDecision, ToolProposal
 
 from agents.base import AgentBase
-from agents.device_agent import needs_recent_action_memory
+from agents.device_agent import (
+	looks_like_standalone_device_request,
+	needs_recent_action_memory,
+)
 from agents.orchestrator_helpers import (
-	fast_classify_intent,
+	clean_user_visible_text,
 	fast_general_response,
 	format_timestamp,
 	looks_vietnamese,
@@ -70,8 +69,11 @@ INTENTS = (
 	"device_control",  # turn on/off LED, actuator commands
 	"sensor_query",  # what is the temperature / humidity / status
 	"anomaly_query",  # is there an anomaly, why is the score high
+	"web_search",  # external/current public web information
 	"general",  # greetings, help, chitchat, FAQ
 )
+
+MEMORY_SCOPES = {"none", "session", "actions", "profile", "all"}
 
 
 class Orchestrator:
@@ -141,20 +143,25 @@ class Orchestrator:
 
 	def graph_retrieve_memory(self, state: OrchestrationState) -> OrchestrationState:
 		request = state["request"]
-		if self.can_skip_memory_for_device_request(request):
-			log_memory("Skipped (fast device path)")
+		route_plan = state.get("metadata", {}).get("route_plan", {})
+		if not isinstance(route_plan, dict):
+			route_plan = {}
+		memory_scope = str(route_plan.get("memory_scope") or "none")
+		if memory_scope == "none":
+			log_memory("Skipped (memory_scope=none)")
 			return {
 				"memory_context": MemoryContext(
 					available=self.memory_available(),
-					reason="skipped_for_fast_device_control",
+					reason="memory_scope_none",
 				)
 			}
-		memory_ctx = self.retrieve_memory(request)
+		memory_ctx = self.retrieve_memory(request, memory_scope=memory_scope)
 		log_memory(
 			"Retrieved",
 			data={
 				"available": memory_ctx.available,
 				"reason": memory_ctx.reason or "ok",
+				"scope": memory_scope,
 			},
 		)
 		return {"memory_context": memory_ctx}
@@ -163,51 +170,6 @@ class Orchestrator:
 		message = state["message"]
 		request = state["request"]
 		metadata = state.get("metadata", {})
-		pending_clarification = self.pending_device_clarifications.get(
-			request.session_id
-		)
-		if pending_clarification is not None:
-			pending_action = pending_clarification.get("requested_action")
-			resolution = await self.resolve_pending_device_target(
-				message,
-				requested_action=str(pending_action),
-			)
-			resolved_target = resolution.get("target")
-			if pending_action in {"turn_on", "turn_off", "status"} and resolved_target:
-				metadata["pending_device_clarification"] = {
-					"requested_action": pending_action,
-					"resolved_target": resolved_target,
-					"confidence": resolution.get("confidence"),
-					"pending_request_id": pending_clarification.get("request_id"),
-				}
-				self.pending_device_clarifications.pop(request.session_id, None)
-				return {
-					"intent": "device_control",
-					"route_decision": RouteDecision.from_intent(
-						"device_control",
-						max_tool_steps=MAX_TOOL_ITERATIONS,
-					),
-					"metadata": metadata,
-				}
-			metadata["pending_device_clarification"] = {
-				"requested_action": pending_action,
-				"resolved_target": None,
-				"confidence": resolution.get("confidence"),
-				"pending_request_id": pending_clarification.get("request_id"),
-				"clarification_question": pending_clarification.get(
-					"clarification_question"
-				),
-				"unresolved": True,
-			}
-			return {
-				"intent": "device_control",
-				"route_decision": RouteDecision.from_intent(
-					"device_control",
-					max_tool_steps=MAX_TOOL_ITERATIONS,
-				),
-				"metadata": metadata,
-			}
-
 		pending = self.pending_confirmations.get(request.session_id)
 		if pending is not None:
 			confirmation_decision = await self.classify_pending_confirmation(
@@ -225,12 +187,72 @@ class Orchestrator:
 						"device_control",
 						max_tool_steps=MAX_TOOL_ITERATIONS,
 					),
-					"metadata": metadata,
+					"metadata": {
+						**metadata,
+						"route_plan": {
+							"intent": "device_control",
+							"memory_scope": "none",
+							"direct_response": None,
+							"pending_mode": "confirmation",
+							"confidence": 1.0,
+						},
+					},
 				}
 			if confirmation_decision == "new_request":
 				self.pending_confirmations.pop(request.session_id, None)
 
-		intent = await self.classify_intent(message.text, chat_id=message.chat_id)
+		pending_clarification = self.pending_device_clarifications.get(
+			request.session_id
+		)
+		route_plan = await self.classify_route(
+			message.text,
+			chat_id=message.chat_id,
+			pending_device_clarification=pending_clarification,
+		)
+		if pending_clarification is not None:
+			if route_plan.get("pending_mode") == "clarification_answer":
+				pending_action = pending_clarification.get("requested_action")
+				resolution = await self.resolve_pending_device_target(
+					message,
+					requested_action=str(pending_action),
+				)
+				resolved_target = resolution.get("target")
+				if (
+					pending_action in {"turn_on", "turn_off", "status"}
+					and resolved_target
+				):
+					metadata["pending_device_clarification"] = {
+						"requested_action": pending_action,
+						"resolved_target": resolved_target,
+						"confidence": resolution.get("confidence"),
+						"pending_request_id": pending_clarification.get("request_id"),
+					}
+					self.pending_device_clarifications.pop(request.session_id, None)
+					route_plan = {
+						**route_plan,
+						"intent": "device_control",
+						"memory_scope": "none",
+					}
+				else:
+					route_plan = {
+						**route_plan,
+						"intent": "device_control",
+						"memory_scope": "none",
+					}
+					metadata["pending_device_clarification"] = {
+						"requested_action": pending_action,
+						"resolved_target": None,
+						"confidence": resolution.get("confidence"),
+						"pending_request_id": pending_clarification.get("request_id"),
+						"clarification_question": pending_clarification.get(
+							"clarification_question"
+						),
+						"unresolved": True,
+					}
+			else:
+				self.pending_device_clarifications.pop(request.session_id, None)
+
+		intent = str(route_plan["intent"])
 		route_decision = RouteDecision.from_intent(
 			intent,
 			max_tool_steps=MAX_TOOL_ITERATIONS,
@@ -246,12 +268,28 @@ class Orchestrator:
 		return {
 			"intent": intent,
 			"route_decision": route_decision,
-			"metadata": metadata,
+			"metadata": {**metadata, "route_plan": route_plan},
 		}
 
 	async def graph_general(self, state: OrchestrationState) -> OrchestrationState:
 		log_orch("Handling as general conversation")
-		return {"response": await self.handle_general(state["message"])}
+		route_plan = state.get("metadata", {}).get("route_plan", {})
+		if isinstance(route_plan, dict):
+			direct_response = route_plan.get("direct_response")
+			if isinstance(direct_response, str) and direct_response.strip():
+				return {
+					"response": AgentResponse(
+						text=clean_user_visible_text(direct_response),
+						agent_name="orchestrator",
+						metadata={"route_direct_response": True},
+					)
+				}
+		return {
+			"response": await self.handle_general(
+				state["message"],
+				state.get("memory_context"),
+			)
+		}
 
 	async def graph_specialist(self, state: OrchestrationState) -> OrchestrationState:
 		message = state["message"]
@@ -272,7 +310,7 @@ class Orchestrator:
 						route_decision.specialist,
 						str(
 							device_clarification.get("clarification_question")
-							or "Which device should I control?"
+							or "Bạn muốn mình điều khiển thiết bị nào?"
 						),
 					)
 				}
@@ -319,6 +357,7 @@ class Orchestrator:
 				"history": self.conversations[message.chat_id],
 				"incoming_request": request,
 				"route_decision": route_decision,
+				"route_plan": state.get("metadata", {}).get("route_plan", {}),
 				"memory_context": memory_context.model_dump(mode="json"),
 				"sensor_snapshot": self.mqtt.get_sensor_snapshot(),
 			},
@@ -407,17 +446,32 @@ class Orchestrator:
 
 		return {"response": response}
 
-	def retrieve_memory(self, request: IncomingRequest) -> MemoryContext:
+	def retrieve_memory(
+		self,
+		request: IncomingRequest,
+		*,
+		memory_scope: str = "all",
+	) -> MemoryContext:
 		if self.memory_service is None:
 			return MemoryContext(
 				available=False, reason="memory_service_not_configured"
 			)
+		scopes = self.memory_scope_to_store_scopes(memory_scope)
+		if hasattr(self.memory_service, "retrieve_scoped"):
+			return self.memory_service.retrieve_scoped(request, scopes)
 		return self.memory_service.retrieve(request)
 
-	def can_skip_memory_for_device_request(self, request: IncomingRequest) -> bool:
-		return self.fast_classify_intent(
-			request.text
-		) == "device_control" and not needs_recent_action_memory(request.text)
+	@staticmethod
+	def memory_scope_to_store_scopes(memory_scope: str) -> set[str]:
+		if memory_scope == "session":
+			return {"session"}
+		if memory_scope == "actions":
+			return {"actions"}
+		if memory_scope == "profile":
+			return {"profile"}
+		if memory_scope == "all":
+			return {"session", "actions", "profile"}
+		return set()
 
 	def memory_available(self) -> bool:
 		if self.memory_service is None:
@@ -438,10 +492,6 @@ class Orchestrator:
 
 	def reset_history(self, chat_id: str) -> None:
 		self.conversations.pop(chat_id, None)
-
-	@staticmethod
-	def fast_classify_intent(text: str) -> str | None:
-		return fast_classify_intent(text)
 
 	@staticmethod
 	def _format_timestamp(value: str | None) -> str | None:
@@ -502,6 +552,71 @@ class Orchestrator:
 		self, user_text: str, specialist_response: AgentResponse
 	) -> str:
 		return render_anomaly_text(user_text, specialist_response)
+
+	def render_web_research_text(
+		self, user_text: str, specialist_response: AgentResponse
+	) -> str:
+		prefer_vietnamese = looks_vietnamese(user_text)
+		raw_report = specialist_response.metadata.get("specialist_report")
+		report = raw_report if isinstance(raw_report, dict) else {}
+		analysis_payload = report.get("analysis_payload", {})
+		if not isinstance(analysis_payload, dict):
+			analysis_payload = specialist_response.metadata.get("web_research", {})
+		if not isinstance(analysis_payload, dict):
+			analysis_payload = {}
+
+		mode = analysis_payload.get("mode")
+		if mode == "fetch":
+			fetch = analysis_payload.get("fetch", {})
+			if isinstance(fetch, dict) and fetch.get("status") == "ok":
+				title = str(fetch.get("title") or "trang này").strip()
+				url = str(fetch.get("url") or "").strip()
+				content = self._short_plain_snippet(fetch.get("content"))
+				if prefer_vietnamese:
+					return f"Mình đọc được {title}: {content} Nguồn: {url}".strip()
+				return f"I found this on {title}: {content} Source: {url}".strip()
+			reason = fetch.get("reason") if isinstance(fetch, dict) else "unknown"
+			return self.web_unavailable_text(str(reason), prefer_vietnamese)
+
+		search = analysis_payload.get("search", {})
+		if isinstance(search, dict) and search.get("status") == "ok":
+			results = search.get("results", [])
+			if not isinstance(results, list) or not results:
+				return (
+					"Mình đã tìm nhưng chưa thấy kết quả phù hợp."
+					if prefer_vietnamese
+					else "I searched but did not find a useful result."
+				)
+			top = results[0] if isinstance(results[0], dict) else {}
+			title = str(top.get("title") or "kết quả đầu tiên").strip()
+			url = str(top.get("url") or "").strip()
+			content = self._short_plain_snippet(top.get("content"))
+			if prefer_vietnamese:
+				return f"Mình tìm thấy {title}: {content} Nguồn: {url}".strip()
+			return f"I found {title}: {content} Source: {url}".strip()
+		reason = search.get("reason") if isinstance(search, dict) else "unknown"
+		return self.web_unavailable_text(str(reason), prefer_vietnamese)
+
+	@staticmethod
+	def _short_plain_snippet(value: object, max_chars: int = 420) -> str:
+		text = " ".join(str(value or "").split())
+		if len(text) <= max_chars:
+			return text
+		return text[: max_chars - 1].rstrip() + "…"
+
+	@staticmethod
+	def web_unavailable_text(reason: str, prefer_vietnamese: bool) -> str:
+		if reason == "web_search_disabled":
+			return (
+				"Web search đang bị tắt trong cấu hình."
+				if prefer_vietnamese
+				else "Web search is disabled in the current configuration."
+			)
+		return (
+			"Mình chưa lấy được kết quả web lúc này."
+			if prefer_vietnamese
+			else "I could not retrieve web results right now."
+		)
 
 	def fast_general_response(self, user_text: str) -> str | None:
 		return fast_general_response(user_text)
@@ -856,7 +971,7 @@ class Orchestrator:
 			for token in ("hủy", "huỷ", "cancel", "thôi", "bỏ đi", "không")
 		):
 			return "cancel"
-		if self.fast_classify_intent(text) == "device_control":
+		if looks_like_standalone_device_request(text):
 			return "new_request"
 		messages = [
 			{"role": "system", "content": PENDING_CONFIRMATION_SYSTEM},
@@ -882,18 +997,43 @@ class Orchestrator:
 
 	# ── intent classification ─────────────────────────────────
 
-	async def classify_intent(self, text: str, *, chat_id: str | None = None) -> str:
-		"""Use a small LLM to classify user intent."""
-		fast_intent = self.fast_classify_intent(text)
-		if fast_intent is not None:
-			log_route(f"Fast classify: {fast_intent!r}", data={"method": "regex"})
-			return fast_intent
-		# Include recent conversation history for context-aware classification
+	async def classify_route(
+		self,
+		text: str,
+		*,
+		chat_id: str | None = None,
+		pending_device_clarification: dict | None = None,
+	) -> dict:
+		"""Return a structured route and memory policy."""
+		if (
+			pending_device_clarification is None
+			and looks_like_standalone_device_request(text)
+			and not needs_recent_action_memory(text)
+		):
+			log_route(
+				"Fast route: 'device_control'",
+				data={"method": "device_parser"},
+			)
+			return {
+				"intent": "device_control",
+				"memory_scope": "none",
+				"direct_response": None,
+				"pending_mode": "none",
+				"confidence": 1.0,
+			}
+
 		history = self._get_chat_history(chat_id) if chat_id else []
+		router_payload = {
+			"current_message": text,
+			"pending_device_clarification": pending_device_clarification,
+		}
 		messages = [
 			{"role": "system", "content": ROUTER_SYSTEM},
-			*history[-4:],  # last 2 turns for context
-			{"role": "user", "content": text},
+			*history[-4:],
+			{
+				"role": "user",
+				"content": json.dumps(router_payload, ensure_ascii=False),
+			},
 		]
 		orchestrator_model = (
 			self.orchestrator_model
@@ -907,23 +1047,86 @@ class Orchestrator:
 			None,
 			orchestrator_model,
 		)
-		raw = (result["content"] or "general").strip().lower()
-		# extract first matching intent label from response
-		for intent in INTENTS:
-			if intent in raw:
-				return intent
-		return "general"
+		return self.normalise_route_plan(result.get("content"))
 
-	async def handle_general(self, message: UserMessage) -> AgentResponse:
+	async def classify_intent(self, text: str, *, chat_id: str | None = None) -> str:
+		"""Compatibility wrapper for tests and callers needing only intent."""
+		return str((await self.classify_route(text, chat_id=chat_id))["intent"])
+
+	@staticmethod
+	def normalise_route_plan(raw_text: str | None) -> dict:
+		raw = (raw_text or "").strip()
+		parsed: dict = {}
+		if raw:
+			start = raw.find("{")
+			end = raw.rfind("}")
+			if start != -1 and end > start:
+				try:
+					candidate = json.loads(raw[start : end + 1])
+				except json.JSONDecodeError:
+					candidate = {}
+				if isinstance(candidate, dict):
+					parsed = candidate
+		intent = parsed.get("intent")
+		if intent not in INTENTS:
+			lower_raw = raw.lower()
+			intent = next((item for item in INTENTS if item in lower_raw), "general")
+		memory_scope = parsed.get("memory_scope")
+		if memory_scope not in MEMORY_SCOPES:
+			memory_scope = "none"
+		direct_response = parsed.get("direct_response")
+		if intent != "general" or memory_scope != "none":
+			direct_response = None
+		if not isinstance(direct_response, str):
+			direct_response = None
+		web_query = parsed.get("web_query")
+		if (
+			intent != "web_search"
+			or not isinstance(web_query, str)
+			or not web_query.strip()
+		):
+			web_query = None
+		else:
+			web_query = " ".join(web_query.split())
+		pending_mode = parsed.get("pending_mode")
+		if pending_mode not in {"none", "clarification_answer", "new_request"}:
+			pending_mode = "none"
+		confidence = parsed.get("confidence")
+		if not isinstance(confidence, int | float):
+			confidence = 0.0
+		return {
+			"intent": intent,
+			"memory_scope": memory_scope,
+			"direct_response": direct_response,
+			"web_query": web_query,
+			"pending_mode": pending_mode,
+			"confidence": max(0.0, min(float(confidence), 1.0)),
+		}
+
+	async def handle_general(
+		self,
+		message: UserMessage,
+		memory_context: MemoryContext | None = None,
+	) -> AgentResponse:
 		"""Use the orchestrator model directly for general conversation."""
 		fast_response = self.fast_general_response(message.text)
 		if fast_response is not None:
 			return AgentResponse(
-				text=fast_response,
+				text=clean_user_visible_text(fast_response),
 				agent_name="orchestrator",
 			)
 		history = self.conversations.get(message.chat_id, [])
 		sensor_context = json.dumps(self.mqtt.get_sensor_snapshot(), indent=2)
+		memory_payload = (
+			memory_context.model_dump(mode="json")
+			if isinstance(memory_context, MemoryContext)
+			else {}
+		)
+		memory_context_text = json.dumps(
+			memory_payload,
+			ensure_ascii=False,
+			indent=2,
+		)
 		time_context = self.build_time_context()
 		messages = [
 			{
@@ -931,6 +1134,7 @@ class Orchestrator:
 				"content": GENERAL_SYSTEM.format(
 					sensor_context=sensor_context,
 					time_context=time_context,
+					memory_context=memory_context_text,
 				),
 			},
 			*history[-MAX_HISTORY:],
@@ -962,7 +1166,7 @@ class Orchestrator:
 				},
 			)
 		return AgentResponse(
-			text=(result["content"] or "(no response)").strip(),
+			text=clean_user_visible_text(result["content"] or "(no response)"),
 			agent_name="orchestrator",
 		)
 
@@ -1019,6 +1223,16 @@ class Orchestrator:
 				specialist_response,
 				system_prompt=FINAL_RESPONSE_SYSTEM,
 				fallback_text=self.render_anomaly_text(
+					message.text, specialist_response
+				),
+			)
+		if route_decision.intent == "web_search":
+			return await self.compose_natural_specialist_response(
+				message,
+				route_decision,
+				specialist_response,
+				system_prompt=FINAL_RESPONSE_SYSTEM,
+				fallback_text=self.render_web_research_text(
 					message.text, specialist_response
 				),
 			)
@@ -1079,6 +1293,7 @@ class Orchestrator:
 			"tool_runtime": specialist_response.metadata.get("tool_runtime", {}),
 			"sensor_snapshot": self.mqtt.get_sensor_snapshot(),
 			"current_time": self.build_time_context(),
+			"recent_conversation": self.conversations.get(message.chat_id, [])[-4:],
 		}
 		text = await self.compose_text_with_llm(
 			DEVICE_CONTROL_RESPONSE_SYSTEM,
@@ -1111,9 +1326,9 @@ class Orchestrator:
 			"user_message": message.text,
 			"route_decision": route_decision.model_dump(mode="json"),
 			"specialist": self.sanitise_specialist_payload(specialist_response),
-			"specialist_metadata": specialist_response.metadata,
 			"sensor_snapshot": self.mqtt.get_sensor_snapshot(),
 			"current_time": self.build_time_context(),
+			"recent_conversation": self.conversations.get(message.chat_id, [])[-4:],
 		}
 		text = await self.compose_text_with_llm(
 			system_prompt,
@@ -1167,7 +1382,7 @@ class Orchestrator:
 		except Exception as exc:
 			log_compose(f"LLM composer fallback: {exc}")
 			return fallback_text
-		return (result["content"] or fallback_text).strip()
+		return clean_user_visible_text(result["content"] or fallback_text)
 
 	async def compose_device_control_user_text(
 		self,

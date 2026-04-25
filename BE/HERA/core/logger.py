@@ -8,6 +8,7 @@ conversation turn across every layer of the system.
 
 from __future__ import annotations
 
+import sys
 import time
 import uuid
 from contextlib import contextmanager
@@ -54,6 +55,14 @@ def _c(color_key: str, text: str) -> str:
 	return f"{_COLORS.get(color_key, '')}{text}{_COLORS['reset']}"
 
 
+def _safe_print(line: str) -> None:
+	try:
+		print(line)
+	except UnicodeEncodeError:
+		encoding = sys.stdout.encoding or "utf-8"
+		print(line.encode(encoding, errors="replace").decode(encoding))
+
+
 # ── Trace context (per-request) ───────────────────────────────
 
 
@@ -82,12 +91,7 @@ def get_trace() -> TraceContext | None:
 
 @contextmanager
 def trace_scope(**extras):
-	"""
-	Usage::
-
-	    with trace_scope(user="Tran", chat_id="12345"):
-	        await orchestrator.handle(msg)
-	"""
+	"""Create a scoped trace context for one request."""
 	ctx = TraceContext(extras=extras)
 	token = _current_trace.set(ctx)
 	try:
@@ -133,11 +137,11 @@ def hera_log(
 		pairs = " ".join(f"{k}={v}" for k, v in data.items())
 		data_str = _c("dim", f"  ({pairs})")
 
-	print(f"{tag}{trace_tag} {message}{data_str}")
+	_safe_print(f"{tag}{trace_tag} {message}{data_str}")
 
 	if detail:
 		indent = "  "
-		print(f"{_c('dim', indent + '|')} {detail}")
+		_safe_print(f"{_c('dim', indent + '|')} {detail}")
 
 
 # ── Convenience helpers per-layer ─────────────────────────────

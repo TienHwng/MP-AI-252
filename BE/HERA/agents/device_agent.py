@@ -14,6 +14,7 @@ from typing import Any
 
 from config import NORMAL_HUMI_MAX, NORMAL_HUMI_MIN, NORMAL_TEMP_MAX, NORMAL_TEMP_MIN
 from core.llm_service import LLMService
+from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.runtime_settings import runtime_settings
 from domain.devices import DEVICE_TARGETS
@@ -25,7 +26,6 @@ from runtime import ToolRunner
 from schemas import SpecialistReport, ToolProposal
 
 from agents.base import AgentBase
-from core.logger import log_agent
 
 DEVICE_LABEL_TARGETS = {
 	"Main LED": "main_led",
@@ -290,6 +290,18 @@ SENSOR_UNITS = {
 	"anomaly": "",
 }
 
+TELEMETRY_SUMMARY_FIELDS = {
+	"temperature": "temperature_c",
+	"humidity": "humidity_percent",
+	"light": "light",
+	"anomaly": "anomaly_score",
+}
+
+WINDOW_CONDITION_TYPES = {
+	"sensor_window_threshold",
+	"temporal_sensor_threshold",
+}
+
 
 def extract_json_object(raw_text: str | None) -> dict:
 	text = (raw_text or "").strip()
@@ -335,6 +347,8 @@ def has_generic_device_language(tokens: set[str]) -> bool:
 
 def needs_recent_action_memory(text: str) -> bool:
 	normalized = normalize_text(text)
+	if detect_condition_window_seconds(normalized) is not None:
+		return False
 	tokens = tokenize_text(text)
 	return any(marker in normalized for marker in RECENT_REFERENCE_MARKERS) or bool(
 		tokens & RECENT_REFERENCE_TOKENS
@@ -348,6 +362,17 @@ def has_conditional_language(text: str) -> bool:
 
 def should_use_local_fast_path(text: str) -> bool:
 	return not has_conditional_language(text)
+
+
+def looks_like_standalone_device_request(text: str) -> bool:
+	"""True when a pending clarification should give way to a full new request."""
+	parsed = fast_parse_local_command(text)
+	return (
+		isinstance(parsed, dict)
+		and parsed.get("action") in {"turn_on", "turn_off", "status"}
+		and parsed.get("target") is not None
+		and not has_conditional_language(text)
+	)
 
 
 def detect_action(normalized: str) -> str | None:
@@ -571,9 +596,28 @@ def build_sensor_condition(
 	text: str,
 	sensor_snapshot: dict | None,
 	raw_condition: dict | None = None,
+	*,
+	telemetry_store: Any | None = None,
+	user_id: str | None = None,
 ) -> dict | None:
 	normalized = normalize_text(text)
+	window_seconds = detect_condition_window_seconds(normalized)
 	if raw_condition is not None:
+		condition_type = raw_condition.get("type")
+		if (
+			condition_type in WINDOW_CONDITION_TYPES
+			or raw_condition.get("window_seconds") is not None
+			or window_seconds is not None
+		):
+			window_condition = dict(raw_condition)
+			window_condition["type"] = "sensor_window_threshold"
+			if window_condition.get("window_seconds") is None:
+				window_condition["window_seconds"] = window_seconds
+			return evaluate_sensor_window_condition(
+				window_condition,
+				telemetry_store=telemetry_store,
+				user_id=user_id,
+			)
 		return evaluate_sensor_condition(raw_condition, sensor_snapshot)
 	if not has_conditional_language(normalized):
 		return None
@@ -596,15 +640,21 @@ def build_sensor_condition(
 			"reason": "missing_comparison_threshold",
 		}
 
-	return evaluate_sensor_condition(
-		{
-			"type": "sensor_threshold",
-			"sensor": sensor_name,
-			"operator": operator,
-			"threshold": threshold,
-		},
-		sensor_snapshot,
-	)
+	condition_payload = {
+		"type": "sensor_threshold",
+		"sensor": sensor_name,
+		"operator": operator,
+		"threshold": threshold,
+	}
+	if window_seconds is not None:
+		condition_payload["type"] = "sensor_window_threshold"
+		condition_payload["window_seconds"] = window_seconds
+		return evaluate_sensor_window_condition(
+			condition_payload,
+			telemetry_store=telemetry_store,
+			user_id=user_id,
+		)
+	return evaluate_sensor_condition(condition_payload, sensor_snapshot)
 
 
 def evaluate_sensor_condition(
@@ -665,11 +715,118 @@ def evaluate_sensor_condition(
 		"current_value": current_value,
 		"source": "current_sensor_snapshot",
 	}
-	if not isinstance(current_value, int | float):
+	if not isinstance(current_value, (int, float)):
 		condition["reason"] = "missing_current_sensor_value"
 		return condition
 
 	met = compare_numeric(float(current_value), operator, float(threshold))
+	condition["met"] = met
+	condition["status"] = "met" if met else "not_met"
+	return condition
+
+
+def evaluate_sensor_window_condition(
+	raw_condition: dict,
+	*,
+	telemetry_store: Any | None,
+	user_id: str | None,
+) -> dict | None:
+	sensor_name = raw_condition.get("sensor")
+	if sensor_name not in SENSOR_CONDITION_ALIASES:
+		return {
+			"type": "sensor_window_threshold",
+			"status": "unknown",
+			"reason": "missing_or_invalid_sensor",
+		}
+
+	operator = raw_condition.get("operator")
+	if operator not in {">", ">=", "<", "<="}:
+		return {
+			"type": "sensor_window_threshold",
+			"status": "unknown",
+			"sensor": sensor_name,
+			"sensor_label": SENSOR_LABELS_VI.get(sensor_name, sensor_name),
+			"reason": "missing_or_invalid_operator",
+		}
+
+	try:
+		threshold = float(raw_condition.get("threshold"))
+	except TypeError, ValueError:
+		return {
+			"type": "sensor_window_threshold",
+			"status": "unknown",
+			"sensor": sensor_name,
+			"sensor_label": SENSOR_LABELS_VI.get(sensor_name, sensor_name),
+			"operator": operator,
+			"reason": "missing_or_invalid_threshold",
+		}
+
+	try:
+		window_seconds = int(float(raw_condition.get("window_seconds")))
+	except TypeError, ValueError:
+		window_seconds = 0
+	if window_seconds <= 0:
+		return {
+			"type": "sensor_window_threshold",
+			"status": "unknown",
+			"sensor": sensor_name,
+			"sensor_label": SENSOR_LABELS_VI.get(sensor_name, sensor_name),
+			"operator": operator,
+			"threshold": threshold,
+			"reason": "missing_or_invalid_window_seconds",
+		}
+
+	condition = {
+		"type": "sensor_window_threshold",
+		"status": "unknown",
+		"sensor": sensor_name,
+		"sensor_label": SENSOR_LABELS_VI.get(sensor_name, sensor_name),
+		"unit": SENSOR_UNITS.get(sensor_name, ""),
+		"operator": operator,
+		"threshold": threshold,
+		"window_seconds": window_seconds,
+		"aggregation": raw_condition.get("aggregation") or "any",
+		"source": "telemetry_window",
+	}
+	if telemetry_store is None:
+		condition["reason"] = "telemetry_store_not_configured"
+		return condition
+
+	limit = max(20, min(300, window_seconds * 4))
+	window = telemetry_store.recent_summary_seconds(
+		user_id=user_id,
+		window_seconds=window_seconds,
+		limit=limit,
+	)
+	condition["window"] = {
+		"available": window.get("available"),
+		"reason": window.get("reason"),
+		"point_count": window.get("point_count", 0),
+		"first_recorded_at": window.get("first_recorded_at"),
+		"last_recorded_at": window.get("last_recorded_at"),
+	}
+	if not window.get("available") or window.get("reason") != "ok":
+		condition["reason"] = str(window.get("reason") or "telemetry_unavailable")
+		return condition
+
+	summary_field = TELEMETRY_SUMMARY_FIELDS[sensor_name]
+	summary = window.get(summary_field, {})
+	if not isinstance(summary, dict) or not summary.get("available"):
+		condition["reason"] = "missing_sensor_series"
+		return condition
+
+	observed_key = "max" if operator in {">", ">="} else "min"
+	observed_value = summary.get(observed_key)
+	condition["observed_key"] = observed_key
+	condition["observed_value"] = observed_value
+	condition["current_value"] = summary.get("current")
+	condition["min_value"] = summary.get("min")
+	condition["max_value"] = summary.get("max")
+	if not isinstance(observed_value, (int, float)):
+		condition["reason"] = "missing_observed_value"
+		return condition
+
+	met = compare_numeric(float(observed_value), operator, threshold)
 	condition["met"] = met
 	condition["status"] = "met" if met else "not_met"
 	return condition
@@ -682,12 +839,45 @@ def detect_condition_sensor(normalized: str) -> str | None:
 	return None
 
 
+def detect_condition_window_seconds(normalized: str) -> int | None:
+	patterns = (
+		r"(?:trong|tong|vòng|vong|within|last)\s+(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)",
+		r"(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)\s+(?:vừa rồi|vua roi|qua|gần đây|gan day|last|ago)",
+	)
+	for pattern in patterns:
+		match = re.search(pattern, normalized)
+		if not match:
+			continue
+		value = float(match.group(1).replace(",", "."))
+		unit = match.group(2)
+		if unit in {"phút", "phut", "m", "min", "mins", "minute", "minutes"}:
+			value *= 60
+		return max(1, int(value))
+	return None
+
+
 def detect_condition_operator_threshold(
 	normalized: str,
 	sensor_name: str,
 ) -> tuple[str | None, float | None]:
 	operator_patterns: tuple[tuple[str, tuple[str, ...]], ...] = (
-		(">=", (r">=\s*", r"ít nhất\s+", r"it nhat\s+", r"từ\s+", r"tu\s+")),
+		(
+			">=",
+			(
+				r">=\s*",
+				r"ít nhất\s+",
+				r"it nhat\s+",
+				r"từ\s+",
+				r"tu\s+",
+				r"lên\s+",
+				r"len\s+",
+				r"đạt\s+",
+				r"dat\s+",
+				r"chạm\s+",
+				r"cham\s+",
+				r"tới\s+",
+			),
+		),
 		("<=", (r"<=\s*", r"tối đa\s+", r"toi da\s+")),
 		(
 			">",
@@ -864,9 +1054,11 @@ class DeviceControlAgent(AgentBase):
 		self,
 		llm: LLMService,
 		tool_runner: ToolRunner,
+		telemetry_store: Any | None = None,
 	) -> None:
 		self.llm = llm
 		self.tool_runner = tool_runner
+		self.telemetry_store = telemetry_store
 
 	@property
 	def name(self) -> str:
@@ -886,6 +1078,8 @@ class DeviceControlAgent(AgentBase):
 			"user_profile": raw_memory_context.get("user_profile", {}),
 		}
 		sensor_snapshot = context.get("sensor_snapshot", {})
+		incoming_request = context.get("incoming_request")
+		user_id = getattr(incoming_request, "user_id", None)
 		fast_parsed = (
 			fast_parse_local_command(message.text)
 			if should_use_local_fast_path(message.text)
@@ -901,6 +1095,8 @@ class DeviceControlAgent(AgentBase):
 				message.text,
 				sensor_snapshot,
 				raw_condition if isinstance(raw_condition, dict) else None,
+				telemetry_store=self.telemetry_store,
+				user_id=user_id,
 			)
 			if condition is not None:
 				command["condition"] = condition
@@ -943,6 +1139,8 @@ class DeviceControlAgent(AgentBase):
 			message.text,
 			sensor_snapshot,
 			raw_condition if isinstance(raw_condition, dict) else None,
+			telemetry_store=self.telemetry_store,
+			user_id=user_id,
 		)
 		if condition is not None:
 			command["condition"] = condition
@@ -1004,7 +1202,7 @@ class DeviceControlAgent(AgentBase):
 			else ""
 		)
 		log_agent(
-			f"DeviceControl: {command['action']} → {command['target']}",
+			f"DeviceControl: {command['action']} -> {command['target']}",
 			data={
 				"confidence": command.get("confidence"),
 				"reference": command.get("reference"),
@@ -1035,7 +1233,7 @@ class DeviceControlAgent(AgentBase):
 			and command["target"] is None
 		):
 			summary = "awaiting_target_clarification"
-			clarification_question = "Which device should I control?"
+			clarification_question = "Bạn muốn mình điều khiển thiết bị nào?"
 		elif tool_proposal:
 			summary = "tool_proposal_ready"
 

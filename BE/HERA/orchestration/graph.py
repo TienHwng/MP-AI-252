@@ -41,11 +41,11 @@ class OrchestrationGraph:
 		graph.add_node("finalize", self.orchestrator.graph_finalize)
 
 		graph.set_entry_point("intake")
-		graph.add_edge("intake", "retrieve_memory")
-		graph.add_edge("retrieve_memory", "route")
+		graph.add_edge("intake", "route")
+		graph.add_edge("route", "retrieve_memory")
 		graph.add_conditional_edges(
-			"route",
-			self._route_after_route,
+			"retrieve_memory",
+			self._route_after_memory,
 			{
 				"general": "general",
 				"specialist": "specialist",
@@ -66,7 +66,7 @@ class OrchestrationGraph:
 		return graph.compile()
 
 	@staticmethod
-	def _route_after_route(state: OrchestrationState) -> str:
+	def _route_after_memory(state: OrchestrationState) -> str:
 		route_decision = state["route_decision"]
 		return "general" if route_decision.intent == "general" else "specialist"
 

@@ -15,6 +15,7 @@ import runtime.tool_runner as tool_runner_module
 from agents.anomaly_agent import classify_anomaly
 from agents.device_agent import DeviceControlAgent, build_tool_proposal
 from agents.orchestrator import Orchestrator
+from agents.web_research_agent import WebResearchAgent
 from core.message import AgentResponse, MessageSource, UserMessage
 from domain.devices.device_executor import DeviceExecutor
 from prompts import (
@@ -22,10 +23,13 @@ from prompts import (
 	DEVICE_CONTROL_RESPONSE_SYSTEM,
 	DEVICE_TARGET_CLARIFICATION_PROMPT,
 	FINAL_RESPONSE_SYSTEM,
+	ROUTER_SYSTEM,
 )
 from runtime.capability_registry import CapabilityRegistry
 from runtime.policy_engine import PolicyEngine
 from runtime.tool_runner import ToolRunner
+from schemas import MemoryContext
+from web_search import DuckDuckGoSearchService
 
 
 class FakeLLM:
@@ -34,10 +38,14 @@ class FakeLLM:
 	def __init__(self) -> None:
 		self.device_call_count = 0
 		self.general_call_count = 0
+		self.route_call_count = 0
 
 	def completion(self, messages: list[dict], tools: Any, model: str) -> dict:
 		system = messages[0]["content"]
 		user = messages[-1]["content"]
+		if system.startswith(ROUTER_SYSTEM):
+			self.route_call_count += 1
+			return {"content": json.dumps(self._route(user))}
 		if system.startswith(DEVICE_COMMAND_INTERPRETER_PROMPT):
 			self.device_call_count += 1
 			return {"content": json.dumps(self._parse_command(user))}
@@ -57,7 +65,70 @@ class FakeLLM:
 		raise AssertionError(f"Unexpected prompt in fake LLM: {system[:80]!r}")
 
 	@staticmethod
+	def _route(payload_text: str) -> dict:
+		try:
+			payload = json.loads(payload_text)
+		except json.JSONDecodeError:
+			payload = {"current_message": payload_text}
+		text = str(payload.get("current_message") or payload_text).lower()
+		pending = payload.get("pending_device_clarification")
+		pending_mode = "none"
+		if isinstance(pending, dict):
+			pending_mode = "new_request" if "nếu" in text else "clarification_answer"
+		intent = "general"
+		memory_scope = "none"
+		direct_response = None
+		web_query = None
+		if "vừa rồi" in text and "thiết bị" in text:
+			memory_scope = "actions"
+		elif any(
+			marker in text
+			for marker in ("tìm web", "tìm kiếm", "search web", "tin mới", "mới nhất")
+		):
+			intent = "web_search"
+			web_query = text
+		elif "bất thường" in text or "lưu ý" in text:
+			intent = "anomaly_query"
+		elif (
+			"báo cáo tình hình" in text
+			or "tình hình ngôi nhà" in text
+			or (
+				any(marker in text for marker in ("nhiệt độ", "độ ẩm", "ánh sáng"))
+				and not any(marker in text for marker in ("bật", "tắt"))
+			)
+		):
+			intent = "sensor_query"
+		elif any(marker in text for marker in ("nếu", "bật", "tắt", "relay", "quạt")):
+			intent = "device_control"
+		if text.strip() in {"xin chào", "chào", "hello", "hi"}:
+			direct_response = "Chào bạn, mình đây."
+		if "bạn là ai" in text:
+			direct_response = "Mình là HERA, trợ lý nhà thông minh của bạn."
+		return {
+			"intent": intent,
+			"memory_scope": memory_scope,
+			"direct_response": direct_response,
+			"web_query": web_query,
+			"pending_mode": pending_mode,
+			"confidence": 0.9,
+		}
+
+	@staticmethod
 	def _parse_command(text: str) -> dict:
+		if "10 giây" in text and "35" in text and "quạt" in text:
+			return {
+				"action": "turn_on",
+				"target": "mini_fan",
+				"reference": "none",
+				"confidence": 0.92,
+				"condition": {
+					"type": "sensor_window_threshold",
+					"sensor": "temperature",
+					"operator": ">=",
+					"threshold": 35,
+					"window_seconds": 10,
+				},
+			}
 		if "trên 30" in text and "quạt" in text:
 			return {
 				"action": "turn_on",
@@ -126,6 +197,8 @@ class FakeLLM:
 
 	@staticmethod
 	def _general_response(text: str) -> str:
+		if "vừa rồi" in text:
+			return "Mình chưa thấy bạn yêu cầu bật thiết bị nào ngay trước đó."
 		if "hôm nay" in text:
 			return "Hôm nay là Thứ Sáu, ngày 24/04/2026."
 		return "Xin chào Tran, mình đây."
@@ -138,6 +211,8 @@ class FakeLLM:
 		command = analysis.get("parsed_command", {})
 		condition = command.get("condition", {})
 		if condition.get("status") == "not_met":
+			if condition.get("type") == "sensor_window_threshold":
+				return "Mình đã kiểm tra 10 giây gần đây: nhiệt độ chưa lên 35°C, nên mình chưa bật quạt."
 			return "Mình đã kiểm tra nhiệt độ: hiện chưa trên 30°C, nên mình chưa bật quạt."
 		results = payload.get("execution_results", [])
 		if results and results[0].get("status") == "noop":
@@ -154,6 +229,8 @@ class FakeLLM:
 			return "Mọi chỉ số hiện trong vùng an toàn, chưa có gì cần lưu ý đặc biệt."
 		if route == "sensor_query":
 			return "Hiện tại nhiệt độ 29.1°C, độ ẩm 37.6%, ánh sáng 420.0."
+		if route == "web_search":
+			return "Theo kết quả web, Ollama là nền tảng chạy mô hình AI. Nguồn: Ollama https://ollama.com/"
 		return "Mình đã xem xong."
 
 
@@ -188,6 +265,98 @@ class FakeMemoryService:
 	) -> list:
 		self.tool_write_count += 1
 		return []
+
+
+class FakeReadableMemoryService(FakeMemoryService):
+	def __init__(self, recent_actions: list[dict] | None = None) -> None:
+		super().__init__()
+		self.recent_actions = recent_actions or []
+
+	def retrieve(self, request):
+		self.retrieve_count += 1
+		return MemoryContext(
+			available=True,
+			recent_actions=self.recent_actions,
+			recent_turns=[],
+			user_profile={},
+		)
+
+
+class FakeTelemetryStore:
+	def __init__(self, max_temperature: float, point_count: int = 4) -> None:
+		self.max_temperature = max_temperature
+		self.point_count = point_count
+		self.calls: list[dict[str, Any]] = []
+
+	def recent_summary_seconds(
+		self,
+		*,
+		user_id: str | None,
+		window_seconds: int,
+		limit: int,
+	) -> dict[str, Any]:
+		self.calls.append(
+			{
+				"user_id": user_id,
+				"window_seconds": window_seconds,
+				"limit": limit,
+			}
+		)
+		return {
+			"available": True,
+			"reason": "ok",
+			"window_seconds": window_seconds,
+			"point_limit": limit,
+			"point_count": self.point_count,
+			"first_recorded_at": "2026-04-24T15:20:00+00:00",
+			"last_recorded_at": "2026-04-24T15:20:09+00:00",
+			"temperature_c": {
+				"available": True,
+				"current": 27.3,
+				"min": 27.1,
+				"max": self.max_temperature,
+				"avg": 28.0,
+				"delta": 0.2,
+				"trend": "stable",
+			},
+		}
+
+
+class FakeWebSearchService:
+	available = True
+	unavailable_reason = None
+
+	def __init__(self) -> None:
+		self.search_calls: list[dict[str, Any]] = []
+		self.fetch_calls: list[str] = []
+
+	def search(self, query: str, max_results: int | None = None) -> dict[str, Any]:
+		self.search_calls.append({"query": query, "max_results": max_results})
+		return {
+			"available": True,
+			"status": "ok",
+			"query": query,
+			"max_results": max_results,
+			"result_count": 1,
+			"results": [
+				{
+					"title": "Ollama",
+					"url": "https://ollama.com/",
+					"content": "Ollama lets users run and build with AI models.",
+				}
+			],
+		}
+
+	def fetch(self, url: str) -> dict[str, Any]:
+		self.fetch_calls.append(url)
+		return {
+			"available": True,
+			"status": "ok",
+			"url": url,
+			"title": "Ollama",
+			"content": "Ollama web page content.",
+			"links": [],
+		}
 
 
 class FakeMQTT:
@@ -380,6 +549,10 @@ async def test_fast_read_only_routing_and_rendering() -> None:
 	assert (
 		await orchestrator.classify_intent("hôm nay là thứ mấy, ngày mấy") == "general"
 	)
+	assert (
+		await orchestrator.classify_intent("tìm kiếm tin mới nhất về Ollama")
+		== "web_search"
+	)
 
 	general = await orchestrator.handle_general(message("xin chào"))
 	assert "mình đây" in general.text.lower(), general.text
@@ -471,6 +644,54 @@ async def test_fast_device_pipeline_skips_memory_and_parser_llm() -> None:
 	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
 
 
+async def test_simple_general_pipeline_skips_memory_retrieval() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	memory = FakeMemoryService()
+	orchestrator = Orchestrator(
+		fake_llm,
+		{},
+		FakeMQTT(),
+		memory_service=memory,
+	)
+
+	response = await orchestrator.handle(message("xin chào"))
+
+	assert memory.retrieve_count == 0, memory.retrieve_count
+	assert memory.turn_write_count == 1, memory.turn_write_count
+	assert "mình" in response.text.lower(), response.text
+	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
+	assert fake_llm.general_call_count == 0, fake_llm.general_call_count
+
+
+async def test_action_memory_question_is_not_device_control() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	memory = FakeReadableMemoryService()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(FakeMQTT()),
+		policy_engine=PolicyEngine(),
+	)
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner)},
+		FakeMQTT(),
+		tool_runner=runner,
+		memory_service=memory,
+	)
+
+	response = await orchestrator.handle(
+		message("vừa rồi tôi đã kêu bạn bật thiết bị nào chưa")
+	)
+
+	assert response.metadata["intent"] == "general", response.metadata
+	assert memory.retrieve_count == 1, memory.retrieve_count
+	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
+	assert "which device" not in response.text.lower(), response.text
+
+
 async def test_conditional_device_request_checks_sensor_before_acting() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
@@ -507,6 +728,49 @@ async def test_conditional_device_request_checks_sensor_before_acting() -> None:
 	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
 
 
+async def test_temporal_condition_checks_telemetry_window_before_acting() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	telemetry = FakeTelemetryStore(max_temperature=34.8)
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(fake_mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner, telemetry)},
+		fake_mqtt,
+		tool_runner=runner,
+		memory_service=FakeMemoryService(),
+	)
+	orchestrator.pending_device_clarifications["behavior-test"] = {
+		"request_id": "previous",
+		"requested_action": "turn_on",
+		"clarification_question": "Bạn muốn mình điều khiển thiết bị nào?",
+	}
+
+	response = await orchestrator.handle(
+		message(
+			"kiếm tra giúp tôi xem nếu tong 10 giây vừa rồi có lúc nào nhiệt độ lên 35 độ thì bật quạt giúp tôi nhé"
+		)
+	)
+
+	assert telemetry.calls and telemetry.calls[0]["window_seconds"] == 10
+	assert fake_mqtt.published == [], fake_mqtt.published
+	assert "chưa" in response.text.lower(), response.text
+	parsed = response.metadata["specialist_report"]["analysis_payload"][
+		"parsed_command"
+	]
+	assert parsed["condition"]["type"] == "sensor_window_threshold", parsed
+	assert parsed["condition"]["status"] == "not_met", parsed
+	assert "behavior-test" not in orchestrator.pending_device_clarifications
+	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
+
 async def test_conditional_noop_response_stays_vietnamese() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
@@ -536,6 +800,35 @@ async def test_conditional_noop_response_stays_vietnamese() -> None:
 	assert "quạt đang bật sẵn" in response.text.lower(), response.text
 	assert "requested device state" not in response.text.lower(), response.text
 	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
+
+async def test_web_search_pipeline_uses_search_service() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	web_service = FakeWebSearchService()
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"web_research": WebResearchAgent(web_service)},
+		FakeMQTT(),
+		memory_service=FakeMemoryService(),
+	)
+
+	response = await orchestrator.handle(message("tìm kiếm tin mới nhất về Ollama"))
+
+	assert response.metadata["intent"] == "web_search", response.metadata
+	assert web_service.search_calls, web_service.search_calls
+	assert web_service.search_calls[0]["max_results"] == 5
+	assert "ollama" in web_service.search_calls[0]["query"].lower()
+	assert "nguồn" in response.text.lower(), response.text
+	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
+	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
+
+
+def test_duckduckgo_web_search_service_disabled_without_network() -> None:
+	service = DuckDuckGoSearchService(enabled=False)
+	result = service.search("what is ollama?")
+	assert result["status"] == "unavailable", result
+	assert result["reason"] == "web_search_disabled", result
 
 
 def test_all_devices_confirmation_policy() -> None:
@@ -613,8 +906,13 @@ async def main() -> None:
 	await test_fast_device_intent_routing()
 	await test_fast_read_only_routing_and_rendering()
 	await test_fast_device_pipeline_skips_memory_and_parser_llm()
+	await test_simple_general_pipeline_skips_memory_retrieval()
+	await test_action_memory_question_is_not_device_control()
 	await test_conditional_device_request_checks_sensor_before_acting()
+	await test_temporal_condition_checks_telemetry_window_before_acting()
 	await test_conditional_noop_response_stays_vietnamese()
+	await test_web_search_pipeline_uses_search_service()
+	test_duckduckgo_web_search_service_disabled_without_network()
 	test_all_devices_confirmation_policy()
 	test_command_is_not_verified_without_readback()
 	test_static_thresholds_are_reported_even_with_low_ml_score()

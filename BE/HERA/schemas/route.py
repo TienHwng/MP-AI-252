@@ -6,7 +6,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-IntentName = Literal["device_control", "sensor_query", "anomaly_query", "general"]
+IntentName = Literal[
+	"device_control",
+	"sensor_query",
+	"anomaly_query",
+	"web_search",
+	"general",
+]
 RiskLevel = Literal["low", "medium", "high"]
 
 
@@ -55,6 +61,15 @@ class RouteDecision(BaseModel):
 				requires_execution=False,
 				risk_level="low",
 				capability_scope=["analyze_anomaly"],
+				max_tool_steps=1,
+			)
+		if intent == "web_search":
+			return cls(
+				intent="web_search",
+				specialist="web_research",
+				requires_execution=False,
+				risk_level="low",
+				capability_scope=["web_search", "web_fetch"],
 				max_tool_steps=1,
 			)
 		return cls(

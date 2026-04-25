@@ -47,6 +47,17 @@ class MemoryService:
 	def retrieve(self, request: IncomingRequest) -> MemoryContext:
 		return self.retrieval.retrieve(request, available=self.mongo.available)
 
+	def retrieve_scoped(
+		self,
+		request: IncomingRequest,
+		scopes: set[str],
+	) -> MemoryContext:
+		return self.retrieval.retrieve(
+			request,
+			available=self.mongo.available,
+			scopes=scopes,
+		)
+
 	def record_turn(
 		self,
 		request: IncomingRequest,

@@ -8,96 +8,19 @@ from datetime import UTC, datetime
 from core.message import AgentResponse
 
 
-def fast_classify_intent(text: str) -> str | None:
-	"""Fast-path only for *unambiguous imperative* device commands.
-
-	Returns ``"device_control"`` when the text contains BOTH an action verb
-	AND a device noun, with NO question particles that would turn it into
-	a status inquiry.  Everything else returns ``None`` so the LLM router
-	handles it with full contextual understanding.
-	"""
-	normalized = " ".join(text.strip().lower().split())
-	if not normalized:
-		return None
-
-	# ── Question / inquiry particles disqualify fast-path ─────
-	# Multi-char particles: safe for substring matching
-	question_phrases = (
-		"chưa",
-		"chua",
-		"không",
-		"khong",
-		"hả",
-		"nhỉ",
-		"nhi",
-		"hay",
-		"sao",
-		"đã",
-		"đang",
-		"dang",
-		"được",
-		"duoc",
-		"bao nhiêu",
-		"bao nhieu",
-		"mấy",
-		"how",
-		"what",
-		"is",
-		"are",
-		"does",
-		"did",
-	)
-	# Single-char particles: need word-boundary regex to avoid
-	# matching inside words like "quạt" or "trà"
-	question_char_patterns = (
-		r"\bà\b",
-		r"\bạ\b",
-		r"\bha\b",
-		r"\bda\b",
-		r"\bmay\b",
-	)
-	if (
-		"?" in normalized
-		or any(q in normalized for q in question_phrases)
-		or any(re.search(p, normalized) for p in question_char_patterns)
-	):
-		return None
-
-	# ── Require BOTH an action verb AND a device noun ─────────
-	action_verbs = (
-		r"\bbật\b",
-		r"\bbat\b",
-		r"\btắt\b",
-		r"\btat\b",
-		r"\bmở\b",
-		r"\bmo\b",
-		r"\bđóng\b",
-		r"\bdong\b",
-		r"\bturn on\b",
-		r"\bturn off\b",
-		r"\bswitch on\b",
-		r"\bswitch off\b",
-	)
-	device_nouns = (
-		"đèn",
-		"den",
-		"led",
-		"relay",
-		"quạt",
-		"quat",
-		"fan",
-		"thiết bị",
-		"thiet bi",
-		"device",
-		"devices",
-	)
-	has_action = any(re.search(p, normalized) for p in action_verbs)
-	has_device = any(noun in normalized for noun in device_nouns)
-
-	if has_action and has_device:
-		return "device_control"
-
-	return None
+def clean_user_visible_text(text: str) -> str:
+	"""Keep LLM replies as plain Telegram text."""
+	cleaned = (text or "").strip()
+	if not cleaned:
+		return cleaned
+	cleaned = re.sub(r"\*\*(.*?)\*\*", r"\1", cleaned)
+	cleaned = re.sub(r"__(.*?)__", r"\1", cleaned)
+	cleaned = re.sub(r"`([^`]*)`", r"\1", cleaned)
+	cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
+	cleaned = re.sub(r"(?m)^\s*[-*+]\s+", "", cleaned)
+	cleaned = re.sub(r"(?m)^\s*\d+\.\s+", "", cleaned)
+	cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+	return cleaned.strip()
 
 
 def format_timestamp(value: str | None) -> str | None:
@@ -115,6 +38,9 @@ def format_timestamp(value: str | None) -> str | None:
 
 def looks_vietnamese(text: str) -> bool:
 	normalized = text.lower()
+	vietnamese_chars = (
+		"àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ"
+	)
 	markers = (
 		"đ",
 		"ă",
@@ -131,8 +57,14 @@ def looks_vietnamese(text: str) -> bool:
 		"giúp",
 		"xác nhận",
 		"xin chào",
+		"tìm",
+		"kiếm",
+		"mới nhất",
+		"về",
 	)
-	return any(marker in normalized for marker in markers)
+	return any(char in normalized for char in vietnamese_chars) or any(
+		marker in normalized for marker in markers
+	)
 
 
 def format_entity_list(items: list[str], prefer_vietnamese: bool) -> str:
@@ -322,6 +254,28 @@ def render_device_specialist_fallback_text(
 		operator = condition.get("operator")
 		threshold = condition.get("threshold")
 		unit = condition.get("unit") or ""
+		if condition.get("type") == "sensor_window_threshold":
+			window_seconds = condition.get("window_seconds")
+			observed = condition.get("observed_value")
+			observed_key = condition.get("observed_key")
+			window_text = (
+				f"{window_seconds} giây gần đây"
+				if isinstance(window_seconds, int | float)
+				else "cửa sổ telemetry gần đây"
+			)
+			observed_label = "cao nhất" if observed_key == "max" else "thấp nhất"
+			if status == "not_met":
+				return (
+					f"Mình đã kiểm tra {label} trong {window_text}: giá trị {observed_label} là {observed}{unit}, chưa {operator} {threshold}{unit}, nên mình chưa gửi lệnh điều khiển."
+					if prefer_vietnamese
+					else f"I checked {label} over the last {window_seconds} seconds: the {observed_key} value was {observed}{unit}, not {operator} {threshold}{unit}, so I did not send the device command."
+				)
+			if status == "unknown":
+				return (
+					f"Mình chưa đủ dữ liệu telemetry để kiểm tra {label} trong {window_text}, nên mình chưa gửi lệnh điều khiển."
+					if prefer_vietnamese
+					else f"I do not have enough telemetry to check {label} over that window, so I did not send the device command."
+				)
 		if status == "not_met":
 			return (
 				f"Mình đã kiểm tra {label}: hiện là {current}{unit}, chưa {operator} {threshold}{unit}, nên chưa gửi lệnh điều khiển."

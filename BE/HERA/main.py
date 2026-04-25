@@ -7,7 +7,9 @@ from agents.anomaly_agent import AnomalyExpertAgent
 from agents.device_agent import DeviceControlAgent
 from agents.orchestrator import Orchestrator
 from agents.sensor_agent import SensorAnalysisAgent
+from agents.web_research_agent import WebResearchAgent
 from config import (
+	DUCKDUCKGO_SEARCH_REGION,
 	MODE,
 	MONGODB_COLLECTION,
 	MONGODB_DB,
@@ -15,6 +17,11 @@ from config import (
 	MQTT_BROKER,
 	MQTT_PORT,
 	TELEGRAM_BOT_TOKEN,
+	WEB_FETCH_TIMEOUT_SECONDS,
+	WEB_SEARCH_ENABLED,
+	WEB_SEARCH_MAX_RESULTS,
+	WEB_SEARCH_PROVIDER,
+	WEB_SEARCH_TIMEOUT_SECONDS,
 )
 from core.llm_service import LLMService
 from core.logger import log_hera, log_memory, log_mqtt
@@ -25,6 +32,7 @@ from domain.devices.device_executor import DeviceExecutor
 from memory import MemoryService, MongoMemoryClient
 from runtime import CapabilityRegistry, PolicyEngine, ToolRunner, VerificationService
 from telemetry import TelemetryStore
+from web_search import DuckDuckGoSearchService
 
 NOISY_LOGGERS = (
 	"httpx",
@@ -104,6 +112,25 @@ def build_memory_service() -> MemoryService:
 	return MemoryService(mongo)
 
 
+def build_web_search_service() -> DuckDuckGoSearchService:
+	if WEB_SEARCH_PROVIDER != "duckduckgo":
+		log_hera(
+			f"Unsupported WEB_SEARCH_PROVIDER={WEB_SEARCH_PROVIDER}; using duckduckgo"
+		)
+	service = DuckDuckGoSearchService(
+		enabled=WEB_SEARCH_ENABLED,
+		default_max_results=WEB_SEARCH_MAX_RESULTS,
+		search_timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
+		fetch_timeout_seconds=WEB_FETCH_TIMEOUT_SECONDS,
+		region=DUCKDUCKGO_SEARCH_REGION,
+	)
+	if service.available:
+		log_hera("DuckDuckGo web search enabled")
+	else:
+		log_hera(f"DuckDuckGo web search unavailable: {service.unavailable_reason}")
+	return service
+
+
 def build_agents(
 	llm_svc: LLMService,
 	mqtt_svc: MQTTService,
@@ -115,10 +142,15 @@ def build_agents(
 		memory_service.mongo,
 		collection_name=MONGODB_COLLECTION,
 	)
+	web_search_service = build_web_search_service()
 	return {
-		"device_control": DeviceControlAgent(llm_svc, tool_runner),
+		"device_control": DeviceControlAgent(llm_svc, tool_runner, telemetry_store),
 		"sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
 		"anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc, telemetry_store),
+		"web_research": WebResearchAgent(
+			web_search_service,
+			max_results=WEB_SEARCH_MAX_RESULTS,
+		),
 	}
 
 
@@ -132,7 +164,8 @@ def print_runtime_summary(settings: dict, agents: dict) -> None:
 		"Agent models: "
 		f"device_control={provider_models['deviceControlModel']}, "
 		f"sensor_analysis={provider_models['sensorAnalysisModel']}, "
-		f"anomaly_expert={provider_models['anomalyExpertModel']}"
+		f"anomaly_expert={provider_models['anomalyExpertModel']}, "
+		"web_research=duckduckgo"
 	)
 	log_hera(f"Agents: {', '.join(agents)}")
 	log_hera("Bot running ... (Ctrl+C to stop)\n")

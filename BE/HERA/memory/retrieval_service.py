@@ -23,22 +23,41 @@ class RetrievalService:
 		self.profiles = profiles
 		self.recent_action_limit = recent_action_limit
 
-	def retrieve(self, request: IncomingRequest, *, available: bool) -> MemoryContext:
+	def retrieve(
+		self,
+		request: IncomingRequest,
+		*,
+		available: bool,
+		scopes: set[str] | None = None,
+	) -> MemoryContext:
 		if not available:
 			return MemoryContext(
 				available=False,
 				reason="mongo_unavailable",
 			)
+		scopes = scopes or {"session", "actions", "profile"}
 		return MemoryContext(
 			available=True,
-			recent_turns=self.sessions.get_recent_turns(
-				request.session_id,
-				request.user_id,
+			recent_turns=(
+				self.sessions.get_recent_turns(
+					request.session_id,
+					request.user_id,
+				)
+				if "session" in scopes
+				else []
 			),
-			recent_actions=self.actions.recent_for_session(
-				request.session_id,
-				request.user_id,
-				self.recent_action_limit,
+			recent_actions=(
+				self.actions.recent_for_session(
+					request.session_id,
+					request.user_id,
+					self.recent_action_limit,
+				)
+				if "actions" in scopes
+				else []
 			),
-			user_profile=self.profiles.get_profile(request.user_id),
+			user_profile=(
+				self.profiles.get_profile(request.user_id)
+				if "profile" in scopes
+				else {}
+			),
 		)

@@ -22,13 +22,13 @@ from config import (
 	TELEMETRY_STALE_SECONDS,
 )
 from core.llm_service import LLMService
+from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from schemas import SpecialistReport
 from telemetry import TelemetryStore
 
 from agents.base import AgentBase
-from core.logger import log_agent
 
 # ── Rule engine ───────────────────────────────────────────────
 

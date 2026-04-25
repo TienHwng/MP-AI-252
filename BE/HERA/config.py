@@ -52,8 +52,30 @@ TELEGRAM_CONNECT_TIMEOUT = env_int("TELEGRAM_CONNECT_TIMEOUT", 30)
 # ===================== LLM PROVIDERS =====================
 
 OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
+if not (os.getenv("OLLAMA_API_KEY") or "").strip() or OLLAMA_API_BASE.startswith(
+	("http://localhost", "http://127.0.0.1")
+):
+	os.environ.pop("OLLAMA_API_KEY", None)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL")
+
+
+# ===================== WEB SEARCH =====================
+
+WEB_SEARCH_PROVIDER = (
+	(os.getenv("WEB_SEARCH_PROVIDER", "duckduckgo") or "duckduckgo").strip().lower()
+)
+WEB_SEARCH_ENABLED = env_bool("WEB_SEARCH_ENABLED", True)
+WEB_SEARCH_MAX_RESULTS = env_int("WEB_SEARCH_MAX_RESULTS", 5)
+WEB_SEARCH_TIMEOUT_SECONDS = env_float(
+	"WEB_SEARCH_TIMEOUT_SECONDS",
+	10.0,
+)
+WEB_FETCH_TIMEOUT_SECONDS = env_float(
+	"WEB_FETCH_TIMEOUT_SECONDS",
+	10.0,
+)
+DUCKDUCKGO_SEARCH_REGION = os.getenv("DUCKDUCKGO_SEARCH_REGION", "wt-wt")
 
 
 # ===================== MQTT =====================
