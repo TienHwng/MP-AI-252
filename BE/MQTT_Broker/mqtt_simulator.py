@@ -451,23 +451,47 @@ def build_telemetry_payload():
 				"uptime_ms": uptime_ms(),
 			},
 			"devices": {
-				"led_status": device_state["led_status"],
-				"neo_led_status": device_state["neo_led_status"],
-				"ws2812_status": device_state["ws2812_status"],
-				"ws2812_brightness": device_state["ws2812_brightness"],
-				"strip_brightness": device_state["strip_brightness"],
-				"relay_status": device_state["relay_status"],
-				"mini_fan_status": device_state["mini_fan_status"],
-				"fan_speed": device_state["fan_speed"],
+				"led": {
+					"status": device_state["led_status"],
+					"brightness": 255,
+					"voltage": 3.3,
+				},
+				"neo_led": {
+					"status": device_state["neo_led_status"],
+					"brightness": device_state["strip_brightness"],
+					"color": "#FF0000",
+					"voltage": 5.0,
+				},
+				"ws2812": {
+					"status": device_state["ws2812_status"],
+					"brightness": device_state["ws2812_brightness"],
+					"color": "#00FF00",
+					"voltage": 5.0,
+				},
+				"relay": {
+					"status": device_state["relay_status"],
+					"voltage": 5.0,
+				},
+				"mini_fan": {
+					"status": device_state["mini_fan_status"],
+					"speed": device_state["fan_speed"],
+					"voltage": 5.0,
+				},
 			},
 			"sensors": {
-				"temperature": sensor_state["temperature"],
-				"humidity": sensor_state["humidity"],
-				"light": sensor_state["light"],
-				"gas": sensor_state["gas"],
-				"gas_ppm": sensor_state["gas"],
-				"gas_detected": sensor_state["gas_detected"],
-				"anomaly": compute_anomaly_score(),
+				"dht20": {
+					"temperature": sensor_state["temperature"],
+					"humidity": sensor_state["humidity"],
+					"voltage": 3.3,
+				},
+				"light": {
+					"value": sensor_state["light"],
+					"voltage": 3.3,
+				},
+				"gas": {
+					"value": sensor_state["gas"],
+					"voltage": 3.3,
+				},
 			},
 		}
 	return payload

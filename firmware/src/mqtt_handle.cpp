@@ -298,7 +298,7 @@ void reconnect() {
 void setup_mqtt() {
 	forceConnectWiFi();
 	Serial.println("[INIT] CoreIOT task created successfully.");
-	client.setBufferSize(1024);
+	client.setBufferSize(2048);
 
 	// while (1) {
 	// 	// if (WiFi.status() == WL_CONNECTED) {
@@ -318,7 +318,7 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	if (!client.connected())
 		return;
 
-	StaticJsonDocument<1024> doc;
+	StaticJsonDocument<2048> doc;
 	const unsigned long now = millis();
 
 	// // Flattened fields for compatibility with current backend parsing
@@ -348,19 +348,45 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	network["uptime_ms"] = now;
 	
 	JsonObject devices = doc.createNestedObject("devices");
-	devices["led_status"] = is_LED_on;
-	devices["neo_led_status"] = is_NeoLED_on;
-	devices["ws2812_status"] = is_ws2812_on;
-	devices["ws2812_brightness"] = ws2812_brightness;
-	devices["relay_status"] = is_relay_on;
-	devices["mini_fan_status"] = is_mini_fan_on;
-	devices["fan_speed"] = fan_speed;
+	JsonObject led = devices.createNestedObject("led");
+	led["status"] = led_state;
+	led["brightness"] = 255; // LED thường chỉ có on/off
+	led["voltage"] = 3.3;
+
+	JsonObject neo_led = devices.createNestedObject("neo_led");
+	neo_led["status"] = neo_state;
+	neo_led["brightness"] = strip_brightness;
+	neo_led["color"] = "#FF0000"; // Giá trị màu hiện tại đang giả lập
+	neo_led["voltage"] = 5.0;
+
+	JsonObject ws2812 = devices.createNestedObject("ws2812");
+	ws2812["status"] = is_ws2812_on;
+	ws2812["brightness"] = ws2812_brightness;
+	ws2812["color"] = "#00FF00"; // Giá trị màu hiện tại đang giả lập
+	ws2812["voltage"] = 5.0;
+
+	JsonObject relay = devices.createNestedObject("relay");
+	relay["status"] = is_relay_on;
+	relay["voltage"] = 5.0;
+
+	JsonObject mini_fan = devices.createNestedObject("mini_fan");
+	mini_fan["status"] = is_mini_fan_on;
+	mini_fan["speed"] = fan_speed;
+	mini_fan["voltage"] = 5.0;
 	
 	JsonObject sensors = doc.createNestedObject("sensors");
-	sensors["temperature"] = temp;
-	sensors["humidity"] = hum;
-	sensors["light"] = light;
-	sensors["gas"] = gas;
+	JsonObject dht20 = sensors.createNestedObject("dht20");
+	dht20["temperature"] = temp;
+	dht20["humidity"] = hum;
+	dht20["voltage"] = 3.3;
+
+	JsonObject light_sensor = sensors.createNestedObject("light");
+	light_sensor["value"] = light;
+	light_sensor["voltage"] = 3.3;
+
+	JsonObject gas_sensor = sensors.createNestedObject("gas");
+	gas_sensor["value"] = gas;
+	gas_sensor["voltage"] = 3.3;
 	
 	// doc["lcd_screen"] = static_cast<int>(current_lcd_screen);
 	// doc["anomaly"] = anomaly;

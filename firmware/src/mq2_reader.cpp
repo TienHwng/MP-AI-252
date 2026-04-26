@@ -67,8 +67,7 @@ void mq2_reader(void *pvParameters) {
 			xSemaphoreGive(xMQ2Semaphore);
 
 			if (IS_DEBUG_MODE || IS_SHOW_MQ2_STATUS) {
-				Serial.printf("[MQ2] ADC=%d -> Gas=%.2f ppm (R0=%.3f kOhm)\n", rawAdc, gas_ppm,
-							  mq2_r0);
+				Serial.printf("[MQ2] ADC=%d -> Gas=%.2f ppm (R0=%.3f kOhm)\n", rawAdc, gas_ppm, mq2_r0);
 			}
 		}
 
