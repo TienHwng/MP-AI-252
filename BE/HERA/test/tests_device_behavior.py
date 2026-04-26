@@ -1156,9 +1156,9 @@ def test_specialized_intent_classifier_supports_vietnamese_and_english() -> None
 	classifier = SearchIntentClassifier(default_location="Ho Chi Minh City, Vietnam")
 	assert classifier.classify("mai thời tiết có mưa không").intent == "weather"
 	assert classifier.classify("latest AI news").intent == "news"
-	assert classifier.classify("bitcoin price in usd").intent == "price"
-	assert classifier.classify("quán cafe gần đây").intent == "places"
-	assert classifier.classify("lịch họp ngày mai").intent == "calendar"
+	assert classifier.classify("bitcoin in usd").intent == "generic"
+	assert classifier.classify("quán cafe gần đây").intent == "generic"
+	assert classifier.classify("lịch họp ngày mai").intent == "generic"
 	assert classifier.classify("what is ollama").intent == "generic"
 
 

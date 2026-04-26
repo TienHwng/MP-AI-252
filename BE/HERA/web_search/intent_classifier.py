@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-SEARCH_INTENTS = {"weather", "calendar", "news", "price", "places", "generic"}
+SEARCH_INTENTS = {"weather", "news", "generic"}
 
 
 @dataclass(slots=True)
@@ -38,21 +38,6 @@ class SearchIntentClassifier:
 		"bão",
 		"bao",
 	)
-	CALENDAR = (
-		"calendar",
-		"schedule",
-		"event",
-		"meeting",
-		"agenda",
-		"lịch",
-		"lich",
-		"cuộc họp",
-		"cuoc hop",
-		"sự kiện",
-		"su kien",
-		"lịch trình",
-		"lich trinh",
-	)
 	NEWS = (
 		"news",
 		"headline",
@@ -66,46 +51,6 @@ class SearchIntentClassifier:
 		"moi nhat",
 		"thời sự",
 		"thoi su",
-	)
-	PRICE = (
-		"price",
-		"stock",
-		"crypto",
-		"bitcoin",
-		"ethereum",
-		"exchange rate",
-		"giá",
-		"gia",
-		"cổ phiếu",
-		"co phieu",
-		"tiền số",
-		"tien so",
-		"tỷ giá",
-		"ty gia",
-		"bao nhiêu tiền",
-		"bao nhieu tien",
-	)
-	PLACES = (
-		"nearby",
-		"near me",
-		"restaurant",
-		"cafe",
-		"hospital",
-		"school",
-		"pharmacy",
-		"place",
-		"địa điểm",
-		"dia diem",
-		"gần đây",
-		"gan day",
-		"quán",
-		"quan",
-		"nhà hàng",
-		"nha hang",
-		"bệnh viện",
-		"benh vien",
-		"hiệu thuốc",
-		"hieu thuoc",
 	)
 
 	def __init__(
@@ -122,10 +67,7 @@ class SearchIntentClassifier:
 		lower = text.lower()
 		for intent, keywords in (
 			("weather", self.WEATHER),
-			("calendar", self.CALENDAR),
 			("news", self.NEWS),
-			("price", self.PRICE),
-			("places", self.PLACES),
 		):
 			matched = [keyword for keyword in keywords if keyword in lower]
 			if matched:
@@ -158,18 +100,8 @@ class SearchIntentClassifier:
 				"location": self._extract_location(query),
 				"days_ahead": self._extract_days_ahead(query),
 			}
-		if intent == "calendar":
-			return {"days_ahead": self._extract_days_ahead(query)}
 		if intent == "news":
 			return {"query": query, "country": self._extract_country(query)}
-		if intent == "price":
-			return {"query": query}
-		if intent == "places":
-			return {
-				"query": self._clean_places_query(query),
-				"location": self.default_location,
-				"category": self._extract_place_category(query),
-			}
 		return {"query": query}
 
 	def _extract_location(self, query: str) -> str:
@@ -214,35 +146,6 @@ class SearchIntentClassifier:
 			marker in lower for marker in ("us", "usa", "united states", "mỹ", "my")
 		):
 			return "us"
-		return None
-
-	@staticmethod
-	def _clean_places_query(query: str) -> str:
-		cleaned = query
-		for marker in SearchIntentClassifier.PLACES:
-			cleaned = re.sub(re.escape(marker), " ", cleaned, flags=re.IGNORECASE)
-		cleaned = " ".join(cleaned.split())
-		return cleaned or query
-
-	@staticmethod
-	def _extract_place_category(query: str) -> str | None:
-		lower = query.lower()
-		categories = {
-			"restaurant": ("restaurant", "nhà hàng", "nha hang", "quán ăn", "quan an"),
-			"cafe": ("cafe", "coffee", "cà phê", "ca phe"),
-			"hospital": ("hospital", "bệnh viện", "benh vien"),
-			"pharmacy": (
-				"pharmacy",
-				"hiệu thuốc",
-				"hieu thuoc",
-				"nhà thuốc",
-				"nha thuoc",
-			),
-			"school": ("school", "trường", "truong"),
-		}
-		for category, markers in categories.items():
-			if any(marker in lower for marker in markers):
-				return category
 		return None
 
 	@staticmethod

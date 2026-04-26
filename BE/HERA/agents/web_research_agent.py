@@ -300,24 +300,10 @@ class WebResearchAgent:
 				parameters.get("location"),
 				parameters.get("days_ahead", 0),
 			)
-		if intent == "calendar":
-			return service.events(
-				getattr(message, "chat_id", None),
-				parameters.get("days_ahead", 0),
-			)
 		if intent == "news":
 			return service.search(
 				parameters.get("query") or query,
 				country=parameters.get("country"),
-				category=parameters.get("category"),
-				max_results=5,
-			)
-		if intent == "price":
-			return service.search(parameters.get("query") or query)
-		if intent == "places":
-			return service.search(
-				parameters.get("query") or query,
-				location=parameters.get("location"),
 				category=parameters.get("category"),
 				max_results=5,
 			)

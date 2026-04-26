@@ -9,11 +9,7 @@ from agents.orchestrator import Orchestrator
 from agents.sensor_agent import SensorAnalysisAgent
 from agents.web_research_agent import WebResearchAgent
 from config import (
-	CALENDAR_CACHE_TTL_SECONDS,
-	CALENDAR_SEARCH_ENABLED,
 	DUCKDUCKGO_SEARCH_REGION,
-	GOOGLE_CALENDAR_CREDENTIALS_PATH,
-	GOOGLE_CALENDAR_ID,
 	MODE,
 	MONGODB_COLLECTION,
 	MONGODB_DB,
@@ -25,12 +21,6 @@ from config import (
 	NEWS_SEARCH_ENABLED,
 	NEWSAPI_API_KEY,
 	OPENWEATHERMAP_API_KEY,
-	PLACES_CACHE_TTL_SECONDS,
-	PLACES_SEARCH_ENABLED,
-	PLACES_USER_AGENT,
-	PRICE_CACHE_TTL_SECONDS,
-	PRICE_DEFAULT_CURRENCY,
-	PRICE_SEARCH_ENABLED,
 	SPECIALIZED_SEARCH_ENABLED,
 	TELEGRAM_BOT_TOKEN,
 	WEATHER_CACHE_TTL_SECONDS,
@@ -54,11 +44,8 @@ from runtime import CapabilityRegistry, PolicyEngine, ToolRunner, VerificationSe
 from telemetry import TelemetryStore
 from web_search import (
 	DuckDuckGoSearchService,
-	GoogleCalendarService,
 	NewsAPIService,
-	NominatimPlacesService,
 	OpenWeatherMapService,
-	PriceSearchService,
 	SearchIntentClassifier,
 )
 
@@ -172,32 +159,12 @@ def build_specialized_search_services() -> tuple[SearchIntentClassifier, dict]:
 			cache_ttl_seconds=WEATHER_CACHE_TTL_SECONDS,
 			default_location=WEB_SEARCH_DEFAULT_LOCATION,
 		),
-		"calendar": GoogleCalendarService(
-			credentials_path=GOOGLE_CALENDAR_CREDENTIALS_PATH,
-			enabled=CALENDAR_SEARCH_ENABLED,
-			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
-			cache_ttl_seconds=CALENDAR_CACHE_TTL_SECONDS,
-			calendar_id=GOOGLE_CALENDAR_ID,
-		),
 		"news": NewsAPIService(
 			api_key=NEWSAPI_API_KEY,
 			enabled=NEWS_SEARCH_ENABLED,
 			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
 			cache_ttl_seconds=NEWS_CACHE_TTL_SECONDS,
 			default_country=NEWS_DEFAULT_COUNTRY,
-		),
-		"price": PriceSearchService(
-			enabled=PRICE_SEARCH_ENABLED,
-			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
-			cache_ttl_seconds=PRICE_CACHE_TTL_SECONDS,
-			default_currency=PRICE_DEFAULT_CURRENCY,
-		),
-		"places": NominatimPlacesService(
-			enabled=PLACES_SEARCH_ENABLED,
-			timeout_seconds=WEB_SEARCH_TIMEOUT_SECONDS,
-			cache_ttl_seconds=PLACES_CACHE_TTL_SECONDS,
-			default_location=WEB_SEARCH_DEFAULT_LOCATION,
-			user_agent=PLACES_USER_AGENT,
 		),
 	}
 	enabled = ", ".join(
