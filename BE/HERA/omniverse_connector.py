@@ -156,8 +156,12 @@ def on_message(client, userdata, msg):
 		data = json.loads(msg.payload.decode())
 
 		devices = data.get("devices") if isinstance(data.get("devices"), dict) else {}
-		main_state = devices.get("led_status")
-		neo_state = devices.get("neo_led_status")
+		main_device = devices.get("led") if isinstance(devices.get("led"), dict) else {}
+		neo_device = (
+			devices.get("neo_led") if isinstance(devices.get("neo_led"), dict) else {}
+		)
+		main_state = main_device.get("status")
+		neo_state = neo_device.get("status")
 
 		if main_state is not None:
 			new_state = bool(main_state)

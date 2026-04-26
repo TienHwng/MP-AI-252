@@ -3,7 +3,14 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
-import { controlDeviceState, fetchLatestSensorData, subscribeLatestSensorData, logoutUser } from '../services/api';
+import {
+  controlDeviceState,
+  fetchLatestSensorData,
+  getDeviceStatus,
+  getSensorValue,
+  subscribeLatestSensorData,
+  logoutUser,
+} from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
@@ -109,9 +116,10 @@ const Home = ({ user, onLogout }) => {
     };
   }, []);
 
-  const handleToggleDevice = async (target, statusKey) => {
-    if (typeof sensorData?.[statusKey] !== 'boolean') return;
-    const nextValue = !sensorData[statusKey];
+  const handleToggleDevice = async (target) => {
+    const currentStatus = getDeviceStatus(sensorData, target);
+    if (typeof currentStatus !== 'boolean') return;
+    const nextValue = !currentStatus;
     setIsSubmittingControl(true);
 
     try {
@@ -130,12 +138,16 @@ const Home = ({ user, onLogout }) => {
   };
 
   const updatedLabel = sensorData ? getRelativeUpdatedLabel(sensorData.updatedAt) : 'unavailable';
+  const temperature = getSensorValue(sensorData, 'temperature');
+  const humidity = getSensorValue(sensorData, 'humidity');
+  const gasPpm = getSensorValue(sensorData, 'gas_ppm');
+  const gasDetected = getSensorValue(sensorData, 'gas_detected');
   const airState = getAirQualityState(
-    sensorData?.airQualityIndex,
-    sensorData?.temperature,
-    sensorData?.humidity,
+    getSensorValue(sensorData, 'air_quality'),
+    temperature,
+    humidity,
   );
-  const gasState = getGasState(sensorData?.gasPpm, sensorData?.gasDetected);
+  const gasState = getGasState(gasPpm, gasDetected);
 
   return (
     <div className="p-6 lg:p-8 w-full h-full min-h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8">
@@ -190,14 +202,14 @@ const Home = ({ user, onLogout }) => {
           <EnvironmentCards data={sensorData} />
           <SafetyStatusCards
             airQuality={{
-              value: sensorData?.airQualityIndex == null ? '--' : Number(sensorData.airQualityIndex).toFixed(0),
+              value: getSensorValue(sensorData, 'air_quality') == null ? '--' : Number(getSensorValue(sensorData, 'air_quality')).toFixed(0),
               unit: 'AQI',
               level: airState.level,
               progress: airState.progress,
               updatedAt: updatedLabel,
             }}
             gasDetection={{
-              value: sensorData?.gasPpm == null ? '--' : Number(sensorData.gasPpm).toFixed(0),
+              value: gasPpm == null ? '--' : Number(gasPpm).toFixed(0),
               unit: 'ppm',
               level: gasState.level,
               progress: gasState.progress,

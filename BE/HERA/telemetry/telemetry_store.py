@@ -184,13 +184,36 @@ class TelemetryStore:
 		return list(reversed(docs))
 
 	@staticmethod
+	def _sensor_value(sensors: dict[str, Any], field: str) -> Any:
+		value = sensors.get(field)
+		if isinstance(value, dict):
+			value = value.get("value")
+		if value is not None:
+			return value
+
+		dht20 = sensors.get("dht20")
+		if field in {"temperature", "humidity"} and isinstance(dht20, dict):
+			return dht20.get(field)
+
+		if field == "gas":
+			gas = sensors.get("gas_ppm")
+			if isinstance(gas, dict):
+				return gas.get("value")
+			return gas
+
+		if field == "anomaly":
+			return sensors.get("anomaly_score")
+
+		return None
+
+	@staticmethod
 	def _series(points: list[dict[str, Any]], field: str) -> list[float]:
 		values: list[float] = []
 		for point in points:
 			sensors = point.get("sensors")
 			if not isinstance(sensors, dict):
 				continue
-			value = sensors.get(field)
+			value = TelemetryStore._sensor_value(sensors, field)
 			if isinstance(value, (int, float)):
 				values.append(float(value))
 		return values

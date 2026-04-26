@@ -105,9 +105,13 @@ class PolicyEngine:
 		if not isinstance(devices, dict):
 			return False
 
-		current_states = [
-			devices.get(device_key) for _, device_key, _ in DEVICE_TARGETS[target]
-		]
+		current_states = []
+		for _, device_key, _ in DEVICE_TARGETS[target]:
+			device = devices.get(device_key)
+			if isinstance(device, dict):
+				current_states.append(device.get("status"))
+			else:
+				current_states.append(device)
 		return bool(current_states) and all(
 			current_state is requested_state for current_state in current_states
 		)

@@ -14,6 +14,121 @@ const toNullableNumber = (value) => {
 	return Number.isFinite(parsed) ? parsed : null;
 };
 
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const scalarValue = (value) => {
+	if (isPlainObject(value) && Object.prototype.hasOwnProperty.call(value, 'value')) {
+		return value.value;
+	}
+	return value;
+};
+
+const firstPresent = (...values) => values.find((value) => value !== undefined && value !== null);
+
+const toNullableScalarNumber = (value) => toNullableNumber(scalarValue(value));
+
+const toNullableBoolean = (value) => {
+	const scalar = scalarValue(value);
+	if (typeof scalar === 'boolean') return scalar;
+	if (typeof scalar === 'number') {
+		if (scalar === 1) return true;
+		if (scalar === 0) return false;
+	}
+	if (typeof scalar === 'string') {
+		const normalized = scalar.trim().toLowerCase();
+		if (['1', 'true', 'on', 'active'].includes(normalized)) return true;
+		if (['0', 'false', 'off', 'inactive'].includes(normalized)) return false;
+	}
+	return null;
+};
+
+const normalizeNestedSensors = (raw = {}) => {
+	const sensors = raw.sensors ?? {};
+	const dht20 = isPlainObject(sensors.dht20) ? sensors.dht20 : {};
+	const light = isPlainObject(sensors.light) ? sensors.light : {};
+	const gas = isPlainObject(sensors.gas) ? sensors.gas : {};
+
+	return {
+		...sensors,
+		dht20: {
+			...dht20,
+			temperature: toNullableScalarNumber(firstPresent(dht20.temperature, sensors.temperature, raw.temperature, raw.temp)),
+			humidity: toNullableScalarNumber(firstPresent(dht20.humidity, sensors.humidity, raw.humidity, raw.humi)),
+		},
+		light: {
+			...light,
+			value: toNullableScalarNumber(firstPresent(light.value, sensors.light, raw.light, raw.lux)),
+		},
+		gas: {
+			...gas,
+			value: toNullableScalarNumber(firstPresent(gas.value, sensors.gas, sensors.gas_ppm, raw.gas_ppm, raw.gasPpm, raw.gas)),
+			detected: toNullableBoolean(firstPresent(gas.detected, gas.gas_detected, sensors.gas_detected, raw.gas_detected, raw.gasDetected)),
+		},
+	};
+};
+
+const normalizeNestedDevices = (raw = {}) => {
+	const devices = raw.devices ?? {};
+	const led = isPlainObject(devices.led) ? devices.led : {};
+	const neoLed = isPlainObject(devices.neo_led) ? devices.neo_led : {};
+	const ws2812 = isPlainObject(devices.ws2812) ? devices.ws2812 : {};
+	const relay = isPlainObject(devices.relay) ? devices.relay : {};
+	const miniFan = isPlainObject(devices.mini_fan) ? devices.mini_fan : {};
+
+	return {
+		...devices,
+		led: {
+			...led,
+			status: toNullableBoolean(firstPresent(led.status, devices.led_status, raw.led_state)),
+		},
+		neo_led: {
+			...neoLed,
+			status: toNullableBoolean(firstPresent(neoLed.status, devices.neo_led_status, raw.neo_led_state)),
+			brightness: toNullableScalarNumber(firstPresent(neoLed.brightness, devices.strip_brightness)),
+		},
+		ws2812: {
+			...ws2812,
+			status: toNullableBoolean(firstPresent(ws2812.status, devices.ws2812_status)),
+			brightness: toNullableScalarNumber(firstPresent(ws2812.brightness, devices.ws2812_brightness)),
+		},
+		relay: {
+			...relay,
+			status: toNullableBoolean(firstPresent(relay.status, devices.relay_status)),
+		},
+		mini_fan: {
+			...miniFan,
+			status: toNullableBoolean(firstPresent(miniFan.status, devices.mini_fan_status)),
+			speed: toNullableScalarNumber(firstPresent(miniFan.speed, devices.fan_speed)),
+		},
+	};
+};
+
+export const getSensorValue = (telemetry, sensor) => {
+	const sensors = telemetry?.sensors ?? telemetry ?? {};
+	if (sensor === 'temperature') return sensors.dht20?.temperature ?? sensors.temperature ?? null;
+	if (sensor === 'humidity') return sensors.dht20?.humidity ?? sensors.humidity ?? null;
+	if (sensor === 'light') return scalarValue(sensors.light) ?? null;
+	if (sensor === 'gas' || sensor === 'gas_ppm') return scalarValue(sensors.gas ?? sensors.gas_ppm) ?? null;
+	if (sensor === 'gas_detected') return sensors.gas?.detected ?? sensors.gas_detected ?? null;
+	if (sensor === 'anomaly') return sensors.anomaly ?? sensors.anomaly_score ?? null;
+	return scalarValue(sensors[sensor]) ?? null;
+};
+
+export const getDeviceStatus = (telemetry, target) => {
+	const devices = telemetry?.devices ?? telemetry ?? {};
+	const deviceKey = {
+		main_led: 'led',
+		neo_led: 'neo_led',
+		ws2812: 'ws2812',
+		relay: 'relay',
+		mini_fan: 'mini_fan',
+	}[target] || target;
+	const nested = devices[deviceKey];
+	if (isPlainObject(nested)) return nested.status ?? null;
+	if (typeof nested === 'boolean') return nested;
+	return devices[`${deviceKey}_status`] ?? null;
+};
+
 const serviceOrigin = (url) => {
 	try {
 		return new URL(url).origin;
@@ -38,8 +153,8 @@ const fetchJson = async (url, options = {}, serviceName = 'API service') => {
 };
 
 const normalizeSensorData = (raw = {}) => {
-	const sensors = raw.sensors ?? {};
-	const devices = raw.devices ?? {};
+	const sensors = normalizeNestedSensors(raw);
+	const devices = normalizeNestedDevices(raw);
 	const network = raw.network ?? {};
 	const runtime = raw.runtime ?? {};
 
@@ -52,28 +167,20 @@ const normalizeSensorData = (raw = {}) => {
 		Date.now();
 
 	return {
-		temperature: toNullableNumber(sensors.temperature ?? raw.temperature ?? raw.temp),
-		humidity: toNullableNumber(sensors.humidity ?? raw.humidity ?? raw.humi),
-		light: toNullableNumber(sensors.light ?? raw.light ?? raw.lux),
-		airQualityIndex: toNullableNumber(sensors.air_quality ?? raw.air_quality ?? raw.airQuality ?? raw.aqi),
-		gasPpm: toNullableNumber(sensors.gas_ppm ?? raw.gas_ppm ?? raw.gasPpm ?? raw.gas),
-		gasDetected: Boolean(sensors.gas_detected ?? raw.gas_detected ?? raw.gasDetected),
+		...raw,
+		sensors,
+		devices,
+		network,
+		runtime,
 		updatedAt: timestamp,
-		led_state: devices.led_status ?? raw.led_state ?? false,
-		neo_led_state: devices.neo_led_status ?? raw.neo_led_state ?? false,
-		ws2812_status: devices.ws2812_status ?? false,
-		relay_status: devices.relay_status ?? false,
-		mini_fan_status: devices.mini_fan_status ?? false,
 		wifi_connected: network.wifi_connected ?? false,
 		mqtt_connected: network.mqtt_connected ?? false,
 		wifi_rssi: toNullableNumber(network.wifi_rssi),
 		uptime_ms: toNullableNumber(network.uptime_ms),
-		inference_result: toNullableNumber(sensors.anomaly ?? raw.inference_result),
 		mode: runtime.mode ?? raw.metadata?.mode ?? raw.mode ?? null,
 		source: runtime.source_kind ?? raw.metadata?.source ?? raw.source ?? null,
 		last_seen_at: raw.last_seen_at ?? raw.recorded_at ?? raw.timestamp ?? null,
 		metadata: raw.metadata ?? {},
-		runtime,
 		raw,
 	};
 };
@@ -205,9 +312,10 @@ export const subscribeTelemetrySeries = ({ limit = 500, onData, onError } = {}) 
 				chart_timestamp: payload.chart_timestamp ?? payload.chartTimestamp ?? payload.timestamp,
 				chart_recorded_at: payload.chart_recorded_at ?? payload.chartRecordedAt ?? payload.recorded_at,
 				chart_time: payload.chart_time ?? payload.chartTime ?? payload.time,
-				temp: payload.sensors?.temperature ?? payload.temp ?? null,
-				humidity: payload.sensors?.humidity ?? payload.humidity ?? null,
-				light: payload.sensors?.light ?? payload.light ?? null,
+				sensors: normalizeNestedSensors(payload),
+				devices: normalizeNestedDevices(payload),
+				network: payload.network ?? {},
+				runtime: payload.runtime ?? {},
 			};
 			onData?.(point, limit);
 		} catch (error) {

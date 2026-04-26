@@ -181,47 +181,194 @@ class MQTTManager:
 		# self.latest_sensor_data = {"temperature": "25"}
 
 	@staticmethod
-	def _normalize_sensor_payload(payload: dict) -> dict:
+	def _mapping(value: object) -> dict:
+		return value if isinstance(value, dict) else {}
+
+	@staticmethod
+	def _first_present(*values):
+		for value in values:
+			if value is not None:
+				return value
+		return None
+
+	@classmethod
+	def _scalar_value(cls, value):
+		if isinstance(value, dict):
+			return value.get("value")
+		return value
+
+	@classmethod
+	def _number_value(cls, value):
+		value = cls._scalar_value(value)
+		if isinstance(value, bool) or value is None:
+			return None
+		if isinstance(value, int | float):
+			return value
+		if isinstance(value, str):
+			try:
+				return float(value.strip())
+			except ValueError:
+				return None
+		return None
+
+	@classmethod
+	def _bool_value(cls, value):
+		value = cls._scalar_value(value)
+		if isinstance(value, bool):
+			return value
+		if isinstance(value, int | float):
+			if value == 1:
+				return True
+			if value == 0:
+				return False
+		if isinstance(value, str):
+			normalized = value.strip().lower()
+			if normalized in {"1", "true", "on", "active"}:
+				return True
+			if normalized in {"0", "false", "off", "inactive"}:
+				return False
+		return None
+
+	@classmethod
+	def _normalize_sensor_payload(cls, payload: dict) -> dict:
 		if not isinstance(payload, dict):
 			return {}
 
-		network = (
-			payload.get("network") if isinstance(payload.get("network"), dict) else {}
-		)
-		devices = (
-			payload.get("devices") if isinstance(payload.get("devices"), dict) else {}
-		)
-		sensors = (
-			payload.get("sensors") if isinstance(payload.get("sensors"), dict) else {}
-		)
-		gas_value = sensors.get("gas_ppm", sensors.get("gas"))
+		network = cls._mapping(payload.get("network"))
+		devices = cls._mapping(payload.get("devices"))
+		sensors = cls._mapping(payload.get("sensors"))
+		dht20 = cls._mapping(cls._first_present(sensors.get("dht20"), sensors.get("dht")))
+		led = cls._mapping(devices.get("led"))
+		neo_led = cls._mapping(cls._first_present(devices.get("neo_led"), devices.get("neo")))
+		ws2812 = cls._mapping(devices.get("ws2812"))
+		relay = cls._mapping(devices.get("relay"))
+		mini_fan = cls._mapping(cls._first_present(devices.get("mini_fan"), devices.get("fan")))
+		gas = cls._mapping(sensors.get("gas"))
 
 		return {
 			"network": {
-				"wifi_connected": network.get("wifi_connected"),
-				"wifi_rssi": network.get("wifi_rssi"),
-				"wifi_ip": network.get("wifi_ip"),
-				"mqtt_connected": network.get("mqtt_connected"),
-				"uptime_ms": network.get("uptime_ms"),
+				"wifi_connected": cls._bool_value(
+					cls._first_present(network.get("wifi_connected"), payload.get("wifi_connected"))
+				),
+				"wifi_rssi": cls._number_value(
+					cls._first_present(network.get("wifi_rssi"), payload.get("wifi_rssi"))
+				),
+				"wifi_ip": cls._first_present(network.get("wifi_ip"), payload.get("wifi_ip")),
+				"mqtt_connected": cls._bool_value(
+					cls._first_present(network.get("mqtt_connected"), payload.get("mqtt_connected"))
+				),
+				"uptime_ms": cls._number_value(
+					cls._first_present(network.get("uptime_ms"), payload.get("uptime_ms"))
+				),
 			},
 			"devices": {
-				"led_status": devices.get("led_status"),
-				"neo_led_status": devices.get("neo_led_status"),
-				"ws2812_status": devices.get("ws2812_status"),
-				"ws2812_brightness": devices.get("ws2812_brightness"),
-				"strip_brightness": devices.get("strip_brightness"),
-				"relay_status": devices.get("relay_status"),
-				"mini_fan_status": devices.get("mini_fan_status"),
-				"fan_speed": devices.get("fan_speed"),
+				"led": {
+					**led,
+					"status": cls._bool_value(
+						cls._first_present(
+							led.get("status"),
+							devices.get("led_status"),
+							payload.get("led_state"),
+						)
+					),
+					"brightness": cls._number_value(led.get("brightness")),
+					"voltage": cls._number_value(led.get("voltage")),
+				},
+				"neo_led": {
+					**neo_led,
+					"status": cls._bool_value(
+						cls._first_present(
+							neo_led.get("status"),
+							devices.get("neo_led_status"),
+							payload.get("neo_led_state"),
+						)
+					),
+					"brightness": cls._number_value(
+						cls._first_present(neo_led.get("brightness"), devices.get("strip_brightness"))
+					),
+					"color": cls._first_present(neo_led.get("color"), devices.get("neo_led_color")),
+					"voltage": cls._number_value(neo_led.get("voltage")),
+				},
+				"ws2812": {
+					**ws2812,
+					"status": cls._bool_value(
+						cls._first_present(ws2812.get("status"), devices.get("ws2812_status"))
+					),
+					"brightness": cls._number_value(
+						cls._first_present(ws2812.get("brightness"), devices.get("ws2812_brightness"))
+					),
+					"color": ws2812.get("color"),
+					"voltage": cls._number_value(ws2812.get("voltage")),
+				},
+				"relay": {
+					**relay,
+					"status": cls._bool_value(
+						cls._first_present(relay.get("status"), devices.get("relay_status"))
+					),
+					"voltage": cls._number_value(relay.get("voltage")),
+				},
+				"mini_fan": {
+					**mini_fan,
+					"status": cls._bool_value(
+						cls._first_present(mini_fan.get("status"), devices.get("mini_fan_status"))
+					),
+					"speed": cls._number_value(
+						cls._first_present(mini_fan.get("speed"), devices.get("fan_speed"))
+					),
+					"voltage": cls._number_value(mini_fan.get("voltage")),
+				},
 			},
 			"sensors": {
-				"temperature": sensors.get("temperature"),
-				"humidity": sensors.get("humidity"),
-				"light": sensors.get("light"),
-				"gas": gas_value,
-				"gas_ppm": gas_value,
-				"gas_detected": sensors.get("gas_detected"),
-				"anomaly": sensors.get("anomaly"),
+				"dht20": {
+					**dht20,
+					"temperature": cls._number_value(
+						cls._first_present(
+							dht20.get("temperature"),
+							sensors.get("temperature"),
+							payload.get("temperature"),
+							payload.get("temp"),
+						)
+					),
+					"humidity": cls._number_value(
+						cls._first_present(
+							dht20.get("humidity"),
+							sensors.get("humidity"),
+							payload.get("humidity"),
+							payload.get("humi"),
+						)
+					),
+					"voltage": cls._number_value(dht20.get("voltage")),
+				},
+				"light": {
+					**cls._mapping(sensors.get("light")),
+					"value": cls._number_value(
+						cls._first_present(sensors.get("light"), payload.get("light"), payload.get("lux"))
+					),
+					"voltage": cls._number_value(cls._mapping(sensors.get("light")).get("voltage")),
+				},
+				"gas": {
+					**gas,
+					"value": cls._number_value(
+						cls._first_present(
+							gas.get("value"),
+							sensors.get("gas"),
+							sensors.get("gas_ppm"),
+							payload.get("gas_ppm"),
+							payload.get("gasPpm"),
+							payload.get("gas"),
+						)
+					),
+					"detected": cls._bool_value(
+						cls._first_present(
+							gas.get("detected"),
+							gas.get("gas_detected"),
+							sensors.get("gas_detected"),
+							payload.get("gas_detected"),
+							payload.get("gasDetected"),
+						)
+					),
+					"voltage": cls._number_value(gas.get("voltage")),
+				},
 			},
 		}
 
@@ -688,9 +835,11 @@ if __name__ == "__main__":
 					and mqtt_system.latest_sensor_data
 				):
 					sensors = mqtt_system.latest_sensor_data.get("sensors", {})
-					temp = sensors.get("temperature", "N/A")
-					hum = sensors.get("humidity", "N/A")
-					light = sensors.get("light", "N/A")
+					dht20 = sensors.get("dht20", {})
+					light_sensor = sensors.get("light", {})
+					temp = dht20.get("temperature", "N/A")
+					hum = dht20.get("humidity", "N/A")
+					light = light_sensor.get("value", "N/A")
 
 					print(f"  - Temperature : {Color.YELLOW}{temp}°C{Color.RESET}")
 					print(f"  - Humidity    : {Color.BLUE}{hum}%{Color.RESET}")
@@ -719,19 +868,19 @@ if __name__ == "__main__":
 						return str(status)
 
 					print(
-						f"  - LED       : {format_status(devices.get('led_status', 'Unknown'))}"
+						f"  - LED       : {format_status(devices.get('led', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - NeoPixel  : {format_status(devices.get('neo_led_status', 'Unknown'))}"
+						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - WS2812    : {format_status(devices.get('ws2812_status', 'Unknown'))}"
+						f"  - WS2812    : {format_status(devices.get('ws2812', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - Relay     : {format_status(devices.get('relay_status', 'Unknown'))}"
+						f"  - Relay     : {format_status(devices.get('relay', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - Mini fan  : {format_status(devices.get('mini_fan_status', 'Unknown'))}"
+						f"  - Mini fan  : {format_status(devices.get('mini_fan', {}).get('status', 'Unknown'))}"
 					)
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)

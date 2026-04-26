@@ -147,12 +147,170 @@ const floorToTelemetryBucket = (value) => {
 	return new Date(Math.floor(date.getTime() / TELEMETRY_BUCKET_MS) * TELEMETRY_BUCKET_MS);
 };
 
+const isPlainObject = (value) =>
+	value !== null && typeof value === "object" && !Array.isArray(value);
+
+const firstPresent = (...values) =>
+	values.find((value) => value !== undefined && value !== null);
+
+const scalarValue = (value) => {
+	if (isPlainObject(value) && Object.prototype.hasOwnProperty.call(value, "value")) {
+		return value.value;
+	}
+	return value;
+};
+
+const toNullableNumber = (value) => {
+	const scalar = scalarValue(value);
+	if (scalar === null || scalar === undefined || scalar === "" || typeof scalar === "boolean") {
+		return null;
+	}
+	const parsed = Number(scalar);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toNullableBoolean = (value) => {
+	const scalar = scalarValue(value);
+	if (typeof scalar === "boolean") return scalar;
+	if (typeof scalar === "number") {
+		if (scalar === 1) return true;
+		if (scalar === 0) return false;
+	}
+	if (typeof scalar === "string") {
+		const normalized = scalar.trim().toLowerCase();
+		if (["1", "true", "on", "active"].includes(normalized)) return true;
+		if (["0", "false", "off", "inactive"].includes(normalized)) return false;
+	}
+	return null;
+};
+
+const asObject = (value) => (isPlainObject(value) ? value : {});
+
+const normalizeTelemetrySensors = (doc = {}) => {
+	const sensors = asObject(doc.sensors);
+	const dht20 = asObject(firstPresent(sensors.dht20, sensors.dht));
+	const light = asObject(sensors.light);
+	const gas = asObject(sensors.gas);
+	const gasValue = toNullableNumber(
+		firstPresent(
+			gas.value,
+			sensors.gas,
+			sensors.gas_ppm,
+			doc.gas_ppm,
+			doc.gasPpm,
+			doc.gas,
+		),
+	);
+
+	return {
+		dht20: {
+			...dht20,
+			temperature: toNullableNumber(
+				firstPresent(sensors.temperature, dht20.temperature, doc.temperature, doc.temp),
+			),
+			humidity: toNullableNumber(
+				firstPresent(sensors.humidity, dht20.humidity, doc.humidity, doc.humi),
+			),
+		},
+		light: {
+			...light,
+			value: toNullableNumber(firstPresent(light.value, sensors.light, doc.light, doc.lux)),
+		},
+		gas: {
+			...gas,
+			value: gasValue,
+			detected: toNullableBoolean(
+				firstPresent(
+					gas.detected,
+					gas.gas_detected,
+					sensors.gas_detected,
+					doc.gas_detected,
+					doc.gasDetected,
+				),
+			),
+		},
+	};
+};
+
+const normalizeTelemetryDevices = (doc = {}) => {
+	const devices = asObject(doc.devices);
+	const led = asObject(devices.led);
+	const neoLed = asObject(firstPresent(devices.neo_led, devices.neo));
+	const ws2812 = asObject(devices.ws2812);
+	const relay = asObject(devices.relay);
+	const miniFan = asObject(firstPresent(devices.mini_fan, devices.fan));
+
+	return {
+		led: {
+			...led,
+			status: toNullableBoolean(
+				firstPresent(devices.led_status, led.status, doc.led_status, doc.led_state),
+			),
+		},
+		neo_led: {
+			...neoLed,
+			status: toNullableBoolean(
+				firstPresent(
+					devices.neo_led_status,
+					neoLed.status,
+					doc.neo_led_status,
+					doc.neo_led_state,
+				),
+			),
+			brightness: toNullableNumber(
+				firstPresent(devices.strip_brightness, neoLed.brightness),
+			),
+		},
+		ws2812: {
+			...ws2812,
+			status: toNullableBoolean(
+				firstPresent(devices.ws2812_status, ws2812.status, doc.ws2812_status),
+			),
+			brightness: toNullableNumber(
+				firstPresent(devices.ws2812_brightness, ws2812.brightness),
+			),
+		},
+		relay: {
+			...relay,
+			status: toNullableBoolean(
+				firstPresent(devices.relay_status, relay.status, doc.relay_status),
+			),
+		},
+		mini_fan: {
+			...miniFan,
+			status: toNullableBoolean(
+				firstPresent(devices.mini_fan_status, miniFan.status, doc.mini_fan_status),
+			),
+			speed: toNullableNumber(firstPresent(devices.fan_speed, miniFan.speed)),
+		},
+	};
+};
+
+const normalizeTelemetryNetwork = (doc = {}) => {
+	const network = asObject(doc.network);
+
+	return {
+		wifi_connected: toNullableBoolean(
+			firstPresent(network.wifi_connected, doc.wifi_connected),
+		),
+		wifi_rssi: toNullableNumber(firstPresent(network.wifi_rssi, doc.wifi_rssi)),
+		wifi_ip: firstPresent(network.wifi_ip, doc.wifi_ip) ?? null,
+		mqtt_connected: toNullableBoolean(
+			firstPresent(network.mqtt_connected, doc.mqtt_connected),
+		),
+		uptime_ms: toNullableNumber(firstPresent(network.uptime_ms, doc.uptime_ms)),
+	};
+};
+
 const telemetryDocToPayload = (doc, index = 0) => {
 	const recordedAt = toValidDate(doc.recorded_at) || new Date();
 	const chartRecordedAt =
 		toValidDate(doc.chart_recorded_at) ||
 		floorToTelemetryBucket(recordedAt) ||
 		recordedAt;
+	const sensors = normalizeTelemetrySensors(doc);
+	const devices = normalizeTelemetryDevices(doc);
+	const network = normalizeTelemetryNetwork(doc);
 
 	return {
 		id: index + 1,
@@ -170,12 +328,9 @@ const telemetryDocToPayload = (doc, index = 0) => {
 			minute: "2-digit",
 			second: "2-digit",
 		}),
-		temp: doc.sensors?.temperature ?? null,
-		humidity: doc.sensors?.humidity ?? null,
-		light: doc.sensors?.light ?? null,
-		sensors: doc.sensors || {},
-		devices: doc.devices || {},
-		network: doc.network || {},
+		sensors,
+		devices,
+		network,
 		runtime: doc.runtime || {},
 		last_seen_at: doc.last_seen_at || null,
 		source_topic: doc.source_topic || null,
@@ -403,7 +558,7 @@ async function start() {
 				return res.status(404).json({ error: "No sensor data found for this user" });
 			}
 
-			res.json(docs[0]);
+			res.json(telemetryDocToPayload(docs[0]));
 		} catch (err) {
 			console.error(err);
 			res.status(500).json({ error: "Failed to fetch latest sensor data" });

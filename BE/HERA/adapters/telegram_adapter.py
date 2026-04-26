@@ -25,6 +25,7 @@ from core.logger import log_alert, log_telegram
 from core.message import AgentResponse, MessageSource, UserMessage
 from core.mqtt_service import MQTTService
 from core.runtime_settings import runtime_settings
+from telemetry import device_status, sensor_value
 from telegram import Update
 from telegram.ext import (
 	Application,
@@ -86,18 +87,18 @@ class TelegramAdapter:
 		sensors = self.mqtt.get_sensor_readings_snapshot()
 		devices = self.mqtt.get_device_snapshot()
 		network = self.mqtt.get_network_snapshot()
-		anomaly_score = sensors.get("anomaly")
+		anomaly_score = sensor_value(sensors, "anomaly")
 		await update.message.reply_text(
 			f"*Sensor state*\n"
-			f"Temperature: `{sensors.get('temperature')}` °C\n"
-			f"Humidity: `{sensors.get('humidity')}` %\n"
-			f"Light: `{sensors.get('light')}`\n"
+			f"Temperature: `{sensor_value(sensors, 'temperature')}` °C\n"
+			f"Humidity: `{sensor_value(sensors, 'humidity')}` %\n"
+			f"Light: `{sensor_value(sensors, 'light')}`\n"
 			f"Anomaly: `{anomaly_score}`\n"
-			f"White LED: `{'ON' if devices.get('led_status') else 'OFF'}`\n"
-			f"NeoPixel: `{'ON' if devices.get('neo_led_status') else 'OFF'}`\n"
-			f"WS2812: `{'ON' if devices.get('ws2812_status') else 'OFF'}`\n"
-			f"Relay: `{'ON' if devices.get('relay_status') else 'OFF'}`\n"
-			f"Mini fan: `{'ON' if devices.get('mini_fan_status') else 'OFF'}`\n"
+			f"White LED: `{'ON' if device_status(devices, 'main_led') else 'OFF'}`\n"
+			f"NeoPixel: `{'ON' if device_status(devices, 'neo_led') else 'OFF'}`\n"
+			f"WS2812: `{'ON' if device_status(devices, 'ws2812') else 'OFF'}`\n"
+			f"Relay: `{'ON' if device_status(devices, 'relay') else 'OFF'}`\n"
+			f"Mini fan: `{'ON' if device_status(devices, 'mini_fan') else 'OFF'}`\n"
 			f"WiFi RSSI: `{network.get('wifi_rssi')}` dBm\n"
 			f"Uptime: `{network.get('uptime_ms')}` ms",
 			parse_mode="Markdown",
@@ -115,7 +116,7 @@ class TelegramAdapter:
 				return
 			sensor_state = self.mqtt.get_sensor_snapshot()
 			sensors = sensor_state.get("sensors", {})
-			current_score = sensors.get("anomaly") or 0
+			current_score = sensor_value(sensors, "anomaly") or 0
 
 			# Alert on every anomaly detection (score > 0.5) in real-time
 			if current_score > 0.5:
@@ -124,8 +125,8 @@ class TelegramAdapter:
 					f"\n{'=' * 60}\n"
 					f"{severity} Environmental Anomaly Detected!\n"
 					f"{'=' * 60}\n"
-					f"Temperature: {sensors.get('temperature')}°C\n"
-					f"Humidity: {sensors.get('humidity')}%\n"
+					f"Temperature: {sensor_value(sensors, 'temperature')}°C\n"
+					f"Humidity: {sensor_value(sensors, 'humidity')}%\n"
 					f"ML Score: {current_score:.4f}\n"
 					f"{'=' * 60}\n"
 				)
@@ -135,8 +136,8 @@ class TelegramAdapter:
 					f"{severity} anomaly detected",
 					data={
 						"score": f"{current_score:.4f}",
-						"temp": sensors.get("temperature"),
-						"humi": sensors.get("humidity"),
+						"temp": sensor_value(sensors, "temperature"),
+						"humi": sensor_value(sensors, "humidity"),
 					},
 				)
 				self.last_anomaly_alert_at = now

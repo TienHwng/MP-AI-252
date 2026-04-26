@@ -6,6 +6,7 @@ import re
 from datetime import UTC, datetime
 
 from core.message import AgentResponse
+from telemetry import device_status, sensor_value
 
 
 def clean_user_visible_text(text: str) -> str:
@@ -324,10 +325,10 @@ def render_sensor_text(user_text: str, specialist_response: AgentResponse) -> st
 	if not isinstance(devices, dict):
 		devices = {}
 	normalized = " ".join(user_text.strip().lower().split())
-	temp = sensors.get("temperature")
-	humi = sensors.get("humidity")
-	light = sensors.get("light")
-	anomaly = sensors.get("anomaly")
+	temp = sensor_value(sensors, "temperature")
+	humi = sensor_value(sensors, "humidity")
+	light = sensor_value(sensors, "light")
+	anomaly = sensor_value(sensors, "anomaly")
 
 	if any(
 		marker in normalized for marker in ("nhiệt độ", "nhiet do", "temperature")
@@ -386,8 +387,9 @@ def render_sensor_text(user_text: str, specialist_response: AgentResponse) -> st
 		prefix = "Hiện tại " if prefer_vietnamese else "Currently, "
 		return prefix + ", ".join(parts) + "."
 	if devices:
-		on_devices = [name for name, state in devices.items() if state is True]
-		off_devices = [name for name, state in devices.items() if state is False]
+		device_names = ("main_led", "neo_led", "ws2812", "relay", "mini_fan")
+		on_devices = [name for name in device_names if device_status(devices, name) is True]
+		off_devices = [name for name in device_names if device_status(devices, name) is False]
 		return (
 			f"Đang bật: {format_entity_list(on_devices, True) or 'không có'}. Đang tắt: {format_entity_list(off_devices, True) or 'không có'}."
 			if prefer_vietnamese

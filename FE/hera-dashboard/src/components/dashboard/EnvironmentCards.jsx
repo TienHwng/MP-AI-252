@@ -1,4 +1,5 @@
 import React from 'react';
+import { getSensorValue } from '../../services/api';
 
 const formatMetric = (value, decimals = 1) => {
   const parsed = Number(value);
@@ -7,9 +8,9 @@ const formatMetric = (value, decimals = 1) => {
 
 const EnvironmentCards = ({ data }) => {
   const currentEnv = {
-    temperature: data?.temperature,
-    humidity: data?.humidity,
-    light: data?.light,
+    temperature: getSensorValue(data, 'temperature'),
+    humidity: getSensorValue(data, 'humidity'),
+    light: getSensorValue(data, 'light'),
   };
 
   return (

@@ -153,11 +153,11 @@ class ToolRunner:
 	@staticmethod
 	def _status_matches_expected(status: dict, expected: dict) -> bool:
 		status_key_by_name = {
-			"main_led": "led_status",
-			"neo_led": "neo_led_status",
-			"ws2812": "ws2812_status",
-			"relay": "relay_status",
-			"mini_fan": "mini_fan_status",
+			"main_led": "led",
+			"neo_led": "neo_led",
+			"ws2812": "ws2812",
+			"relay": "relay",
+			"mini_fan": "mini_fan",
 		}
 		name_by_status_key = {
 			status_key: name for name, status_key in status_key_by_name.items()

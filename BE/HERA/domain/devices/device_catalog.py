@@ -6,40 +6,40 @@ from typing import Any
 
 DEVICE_TARGETS = {
 	"main_led": [
-		("setValueLedBlinky", "led_status", "Main LED"),
+		("setValueLedBlinky", "led", "Main LED"),
 	],
 	"neo_led": [
-		("setValueNeoLed", "neo_led_status", "NeoPixel LED"),
+		("setValueNeoLed", "neo_led", "NeoPixel LED"),
 	],
 	"ws2812": [
-		("setValueWS2812", "ws2812_status", "WS2812 LED"),
+		("setValueWS2812", "ws2812", "WS2812 LED"),
 	],
 	"relay": [
-		("setValueRelay", "relay_status", "Relay"),
+		("setValueRelay", "relay", "Relay"),
 	],
 	"mini_fan": [
-		("setValueMiniFan", "mini_fan_status", "Mini fan"),
+		("setValueMiniFan", "mini_fan", "Mini fan"),
 	],
 	"all_lights": [
-		("setValueLedBlinky", "led_status", "Main LED"),
-		("setValueNeoLed", "neo_led_status", "NeoPixel LED"),
-		("setValueWS2812", "ws2812_status", "WS2812 LED"),
+		("setValueLedBlinky", "led", "Main LED"),
+		("setValueNeoLed", "neo_led", "NeoPixel LED"),
+		("setValueWS2812", "ws2812", "WS2812 LED"),
 	],
 	"all_devices": [
-		("setValueLedBlinky", "led_status", "Main LED"),
-		("setValueNeoLed", "neo_led_status", "NeoPixel LED"),
-		("setValueWS2812", "ws2812_status", "WS2812 LED"),
-		("setValueRelay", "relay_status", "Relay"),
-		("setValueMiniFan", "mini_fan_status", "Mini fan"),
+		("setValueLedBlinky", "led", "Main LED"),
+		("setValueNeoLed", "neo_led", "NeoPixel LED"),
+		("setValueWS2812", "ws2812", "WS2812 LED"),
+		("setValueRelay", "relay", "Relay"),
+		("setValueMiniFan", "mini_fan", "Mini fan"),
 	],
 }
 
 DEVICE_STATUS_KEYS = {
-	"main_led": "led_status",
-	"neo_led": "neo_led_status",
-	"ws2812": "ws2812_status",
-	"relay": "relay_status",
-	"mini_fan": "mini_fan_status",
+	"main_led": "led",
+	"neo_led": "neo_led",
+	"ws2812": "ws2812",
+	"relay": "relay",
+	"mini_fan": "mini_fan",
 }
 
 DEVICE_TOOL_PARAMS = {

@@ -25,8 +25,8 @@ class DeviceExecutor:
 	def get_device_status_report(self) -> dict:
 		devices = self.mqtt.get_device_snapshot()
 		return {
-			device_name: devices.get(status_key)
-			for device_name, status_key in DEVICE_STATUS_KEYS.items()
+			device_name: self._device_status(devices, device_key)
+			for device_name, device_key in DEVICE_STATUS_KEYS.items()
 		}
 
 	def control_device_state(self, raw_target: Any, state: bool) -> dict:
@@ -52,7 +52,11 @@ class DeviceExecutor:
 		states_before: dict[str, bool | None] = {}
 
 		for method, device_key, label in DEVICE_TARGETS[target]:
-			current_state = devices.get(device_key)
+			device_state = devices.setdefault(device_key, {})
+			if not isinstance(device_state, dict):
+				device_state = {"status": device_state}
+				devices[device_key] = device_state
+			current_state = device_state.get("status")
 			states_before[device_key] = current_state
 			if current_state is state:
 				unchanged.append(label)
@@ -110,3 +114,12 @@ class DeviceExecutor:
 			if target not in self._locks:
 				self._locks[target] = threading.Lock()
 			return self._locks[target]
+
+	@staticmethod
+	def _device_status(devices: dict, device_key: str) -> bool | None:
+		device = devices.get(device_key)
+		if isinstance(device, dict):
+			return device.get("status")
+		if isinstance(device, bool):
+			return device
+		return None

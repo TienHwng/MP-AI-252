@@ -21,6 +21,7 @@ from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from core.tool_registry import ToolRegistry
 from schemas import SpecialistReport
+from telemetry import sensor_value
 
 
 class SensorAnalysisAgent:
@@ -81,10 +82,10 @@ class SensorAnalysisAgent:
 				"anomaly_threshold": ANOMALY_THRESHOLD,
 			},
 			"status": {
-				"temperature_available": sensors.get("temperature") is not None,
-				"humidity_available": sensors.get("humidity") is not None,
-				"light_available": sensors.get("light") is not None,
-				"anomaly_available": sensors.get("anomaly") is not None,
+				"temperature_available": sensor_value(sensors, "temperature") is not None,
+				"humidity_available": sensor_value(sensors, "humidity") is not None,
+				"light_available": sensor_value(sensors, "light") is not None,
+				"anomaly_available": sensor_value(sensors, "anomaly") is not None,
 			},
 		}
 		analysis_payload = dict(report)
@@ -95,15 +96,15 @@ class SensorAnalysisAgent:
 			analysis_payload=analysis_payload,
 		)
 		report["specialist_report"] = specialist_report.model_dump(mode="json")
-		temp = sensors.get("temperature")
-		humi = sensors.get("humidity")
+		temp = sensor_value(sensors, "temperature")
+		humi = sensor_value(sensors, "humidity")
 		log_agent(
 			"SensorAnalysis: snapshot ready",
 			data={
 				"temp": f"{temp:.1f}°C" if isinstance(temp, (int, float)) else "N/A",
 				"humi": f"{humi:.1f}%" if isinstance(humi, (int, float)) else "N/A",
-				"light": sensors.get("light"),
-				"anomaly": sensors.get("anomaly"),
+				"light": sensor_value(sensors, "light"),
+				"anomaly": sensor_value(sensors, "anomaly"),
 			},
 		)
 

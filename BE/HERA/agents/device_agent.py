@@ -30,6 +30,7 @@ from runtime import (
 	set_device_state_call,
 )
 from schemas import SpecialistReport, ToolProposal
+from telemetry import sensor_value
 
 DEVICE_LABEL_TARGETS = {
 	"Main LED": "main_led",
@@ -826,7 +827,7 @@ def evaluate_sensor_condition(
 		raw_sensors = sensor_snapshot.get("sensors", {})
 		if isinstance(raw_sensors, dict):
 			sensors = raw_sensors
-	current_value = sensors.get(sensor_name)
+	current_value = sensor_value(sensors, sensor_name)
 	condition = {
 		"type": "sensor_threshold",
 		"status": "unknown",

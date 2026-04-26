@@ -17,6 +17,8 @@ import {
   controlDeviceState,
   fetchRuntimeStatus,
   fetchLatestSensorData,
+  getDeviceStatus,
+  getSensorValue,
   sendAssistantMessage,
   subscribeLatestSensorData,
   writeSensorValue,
@@ -34,7 +36,6 @@ const markerDefinitions = [
     x: 15,
     y: 50,
     target: 'main_led',
-    statusKey: 'led_state',
     Icon: Lightbulb,
   },
   {
@@ -45,7 +46,6 @@ const markerDefinitions = [
     x: 60,
     y: 40,
     target: 'neo_led',
-    statusKey: 'neo_led_state',
     Icon: Lightbulb,
   },
   {
@@ -56,7 +56,6 @@ const markerDefinitions = [
     x: 78,
     y: 47,
     target: 'ws2812',
-    statusKey: 'ws2812_status',
     Icon: Lightbulb,
   },
   {
@@ -67,7 +66,6 @@ const markerDefinitions = [
     x: 35,
     y: 6,
     target: 'mini_fan',
-    statusKey: 'mini_fan_status',
     Icon: Fan,
   },
   {
@@ -78,7 +76,6 @@ const markerDefinitions = [
     x: 30,
     y: 58,
     target: 'relay',
-    statusKey: 'relay_status',
     Icon: Plug,
   },
   {
@@ -150,13 +147,13 @@ const buildMarkers = (telemetry) =>
     if (definition.type === 'sensor') {
       return {
         ...definition,
-        value: telemetry?.[definition.sensor],
+        value: getSensorValue(telemetry, definition.sensor),
       };
     }
 
     return {
       ...definition,
-      status: telemetry?.[definition.statusKey],
+      status: getDeviceStatus(telemetry, definition.target),
     };
   });
 

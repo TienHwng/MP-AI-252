@@ -9,7 +9,7 @@ import {
 	ResponsiveContainer,
 	CartesianGrid,
 } from "recharts";
-import { subscribeTelemetrySeries } from "../services/api";
+import { getSensorValue, subscribeTelemetrySeries } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 const CHART_BUCKET_MS = 5 * 1000;
@@ -266,6 +266,13 @@ const getLightStatus = (value) => {
 	return { label: "Normal", className: "bg-green-100 text-green-700" };
 };
 
+const withNestedSensorMetrics = (entry) => ({
+	...entry,
+	temp: getSensorValue(entry, "temperature"),
+	humidity: getSensorValue(entry, "humidity"),
+	light: getSensorValue(entry, "light"),
+});
+
 const CustomTooltip = ({ active, payload, label }) => {
 	if (!active || !payload?.length) return null;
 
@@ -451,19 +458,23 @@ const Analytics = () => {
 		return filterDataByWindow(data, windowKey, windowRange);
 	}, [data, windowKey, windowRange]);
 
+	const chartSourceData = useMemo(() => {
+		return visibleData.map(withNestedSensorMetrics);
+	}, [visibleData]);
+
 	const chartTimeScale = useMemo(() => {
-		return getFixedTimeScale(visibleData, windowRange);
-	}, [visibleData, windowRange]);
+		return getFixedTimeScale(chartSourceData, windowRange);
+	}, [chartSourceData, windowRange]);
 
 	const temperatureData = useMemo(() => {
-		return buildFixedIntervalData(visibleData.filter((entry) => entry.temp != null));
-	}, [visibleData]);
+		return buildFixedIntervalData(chartSourceData.filter((entry) => entry.temp != null));
+	}, [chartSourceData]);
 	const humidityData = useMemo(() => {
-		return buildFixedIntervalData(visibleData.filter((entry) => entry.humidity != null));
-	}, [visibleData]);
+		return buildFixedIntervalData(chartSourceData.filter((entry) => entry.humidity != null));
+	}, [chartSourceData]);
 	const lightData = useMemo(() => {
-		return buildFixedIntervalData(visibleData.filter((entry) => entry.light != null));
-	}, [visibleData]);
+		return buildFixedIntervalData(chartSourceData.filter((entry) => entry.light != null));
+	}, [chartSourceData]);
 
 	const tempSeries = temperatureData.map((entry) => entry.temp);
 	const humiditySeries = humidityData.map((entry) => entry.humidity);

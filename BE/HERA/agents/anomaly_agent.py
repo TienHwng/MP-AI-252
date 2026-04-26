@@ -26,7 +26,7 @@ from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.mqtt_service import MQTTService
 from schemas import SpecialistReport
-from telemetry import TelemetryStore
+from telemetry import TelemetryStore, sensor_value
 
 # ── Rule engine ───────────────────────────────────────────────
 
@@ -76,9 +76,9 @@ def classify_anomaly(sensor: dict, freshness: dict | None = None) -> dict:
 		}
 
 	sensors = sensor.get("sensors", {})
-	temp = sensors.get("temperature")
-	humi = sensors.get("humidity")
-	score = sensors.get("anomaly")
+	temp = sensor_value(sensors, "temperature")
+	humi = sensor_value(sensors, "humidity")
+	score = sensor_value(sensors, "anomaly")
 
 	if temp is None or humi is None or score is None:
 		return {
