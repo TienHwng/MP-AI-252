@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import FloorPlanPage from './pages/FloorPlanPage';
 import Sidebar from './components/layout/Sidebar';
 import { getStoredUser, logoutUser } from './services/api';
 
@@ -14,7 +15,7 @@ const Devices = () => (
 );
 
 const DASHBOARD_PAGE_KEY = 'hera_active_page';
-const VALID_PAGES = new Set(['home', 'analytics', 'devices', 'settings']);
+const VALID_PAGES = new Set(['home', 'analytics', 'floorplan', 'devices', 'settings']);
 
 const isPageReload = () => {
   const navigation = performance.getEntriesByType('navigation')[0];
@@ -57,6 +58,8 @@ const App = () => {
     switch (activePage) {
       case 'analytics':
         return <Analytics />;
+      case 'floorplan':
+        return <FloorPlanPage />;
       case 'devices':
         return <Devices />;
       case 'settings':

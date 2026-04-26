@@ -150,6 +150,7 @@ sensor_state = {
 	"gas": 80.0,
 	"gas_detected": False,
 }
+sensor_overrides = {}
 
 network_state = {
 	"wifi_connected": True,
@@ -236,6 +237,12 @@ def update_fake_sensor_data():
 		else:
 			sensor_state["gas"] = round(random.uniform(gas_min, gas_max), 2)
 		sensor_state["gas_detected"] = sensor_state["gas"] >= SIM_GAS_DETECTED_THRESHOLD
+		for key, value in sensor_overrides.items():
+			sensor_state[key] = value
+		if "gas" in sensor_overrides or "gas_ppm" in sensor_overrides:
+			sensor_state["gas_detected"] = (
+				sensor_state["gas"] >= SIM_GAS_DETECTED_THRESHOLD
+			)
 		network_state["wifi_rssi"] = random.randint(rssi_min, rssi_max)
 
 
@@ -420,6 +427,50 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
 				print(f"[ACTION] Fan speed -> {value}")
 				response["Fan_Speed"] = value
 				response["Fan_Status"] = device_state["mini_fan_status"]
+
+		elif method == "setSensorValue":
+			if not isinstance(params, dict):
+				response["error"] = "params must be object"
+			else:
+				sensor = str(params.get("sensor") or "").strip().lower()
+				value = params.get("value")
+				if sensor == "gas_ppm":
+					sensor = "gas"
+				if sensor not in {
+					"temperature",
+					"humidity",
+					"light",
+					"gas",
+					"gas_detected",
+				}:
+					response["error"] = "Unknown sensor"
+				elif sensor == "gas_detected" and not isinstance(value, bool):
+					response["error"] = "gas_detected value must be bool"
+				elif sensor != "gas_detected" and (
+					isinstance(value, bool) or not isinstance(value, int | float)
+				):
+					response["error"] = "sensor value must be numeric"
+				else:
+					sensor_overrides[sensor] = value
+					sensor_state[sensor] = value
+					if sensor == "gas":
+						sensor_state["gas_detected"] = (
+							sensor_state["gas"] >= SIM_GAS_DETECTED_THRESHOLD
+						)
+					print(f"[ACTION] Sensor override {sensor} -> {value}")
+					response["Sensor"] = sensor
+					response["Value"] = value
+
+		elif method == "clearSensorOverride":
+			if params in (None, True, "all"):
+				sensor_overrides.clear()
+				response["Cleared"] = "all"
+			else:
+				sensor = str(params).strip().lower()
+				if sensor == "gas_ppm":
+					sensor = "gas"
+				sensor_overrides.pop(sensor, None)
+				response["Cleared"] = sensor
 
 		else:
 			print(f"[MQTT] Unknown method: {method}")

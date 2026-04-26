@@ -1,12 +1,15 @@
 import React from 'react';
 
-const formatMetric = (value) => Number(value || 0).toFixed(1);
+const formatMetric = (value, decimals = 1) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(decimals) : '--';
+};
 
 const EnvironmentCards = ({ data }) => {
   const currentEnv = {
-    temperature: data?.temperature ?? 0,
-    humidity: data?.humidity ?? 0,
-    light: data?.light ?? 0,
+    temperature: data?.temperature,
+    humidity: data?.humidity,
+    light: data?.light,
   };
 
   return (
@@ -22,7 +25,7 @@ const EnvironmentCards = ({ data }) => {
       </div>
       <div className="bg-white p-4 rounded-xl shadow-sm w-full">
         <p className="text-textMuted text-sm">Light</p>
-        <p className="text-2xl font-medium">{Math.round(currentEnv.light)} lux</p>
+        <p className="text-2xl font-medium">{formatMetric(currentEnv.light, 0)} lux</p>
       </div>
     </div>
   );

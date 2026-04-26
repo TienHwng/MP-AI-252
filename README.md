@@ -30,6 +30,7 @@ End-to-end flow:
 
 Main runtime entry points:
 - HERA runtime: `BE/HERA/main.py`
+- HERA dashboard API: `BE/HERA/api_server.py`
 - MQTT manager: `BE/MQTT_Broker/mqtt_manager.py`
 - MQTT simulator: `BE/MQTT_Broker/mqtt_simulator.py`
 - API server: `BE/Database/server.js`
@@ -156,7 +157,14 @@ cd BE\HERA
 python main.py
 ```
 
-Terminal 5 - Dashboard:
+Terminal 5 - HERA dashboard API:
+
+```powershell
+cd BE\HERA
+python api_server.py
+```
+
+Terminal 6 - Dashboard:
 
 ```powershell
 cd FE\hera-dashboard
@@ -167,6 +175,7 @@ npm run dev
 
 - Dashboard: http://localhost:5173
 - Database API: http://localhost:3001
+- HERA dashboard API: http://localhost:3002
 
 Key API routes (Database service):
 - `POST /api/auth/login`
@@ -176,6 +185,13 @@ Key API routes (Database service):
 - `GET /api/sensors/stream`
 - `GET /api/settings/models`
 - `PUT /api/settings/models`
+
+Key API routes (HERA dashboard service):
+- `GET /api/runtime/status`
+- `GET /api/devices/status`
+- `POST /api/devices/:target/state`
+- `POST /api/sensors/:sensor/value` (simulation mode only)
+- `POST /api/assistant/message`
 
 ## Runtime Modes
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, BarChart3, Lightbulb, Settings } from 'lucide-react';
+import { Home, BarChart3, House, Lightbulb, Settings } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -7,6 +7,7 @@ const Sidebar = ({ activePage, setActivePage }) => {
   const menuItems = [
     { id: 'home', Icon: Home, label: 'Home' },
     { id: 'analytics', Icon: BarChart3, label: 'Analytics' },
+    { id: 'floorplan', Icon: House, label: 'House' },
     { id: 'devices', Icon: Lightbulb, label: 'Devices' },
     { id: 'settings', Icon: Settings, label: 'Settings' },
   ];

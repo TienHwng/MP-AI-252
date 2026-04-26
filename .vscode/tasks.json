@@ -10,6 +10,7 @@
         "MQTT: Simulator",
         "MQTT: Manager",
         "DB: API Server (run)",
+        "HERA: Dashboard API",
         "Model: HERA",
         "Web: Dashboard (install+run)"
       ],
@@ -39,6 +40,19 @@
       "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; npm install && npm run dev",
       "options": {
         "cwd": "${workspaceFolder}\\FE\\hera-dashboard"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HERA: Dashboard API",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\Activate.ps1; python api_server.py",
+      "options": {
+        "cwd": "${workspaceFolder}\\BE\\HERA"
       },
       "presentation": {
         "reveal": "always",

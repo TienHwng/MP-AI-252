@@ -811,7 +811,7 @@ def evaluate_sensor_condition(
 
 	try:
 		threshold = float(raw_condition.get("threshold"))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		return {
 			"type": "sensor_threshold",
 			"status": "unknown",
@@ -874,7 +874,7 @@ def evaluate_sensor_window_condition(
 
 	try:
 		threshold = float(raw_condition.get("threshold"))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		return {
 			"type": "sensor_window_threshold",
 			"status": "unknown",
@@ -886,7 +886,7 @@ def evaluate_sensor_window_condition(
 
 	try:
 		window_seconds = int(float(raw_condition.get("window_seconds")))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		window_seconds = 0
 	if window_seconds <= 0:
 		return {

@@ -149,7 +149,7 @@ class DuckDuckGoSearchService:
 		value = max_results if max_results is not None else self.default_max_results
 		try:
 			number = int(value)
-		except TypeError, ValueError:
+		except (TypeError, ValueError):
 			number = self.default_max_results
 		return max(1, min(number, 10))
 

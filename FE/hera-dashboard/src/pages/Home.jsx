@@ -3,7 +3,7 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
-import { fetchLatestSensorData, subscribeLatestSensorData, toggleLedLight, toggleNeoLight, logoutUser } from '../services/api';
+import { controlDeviceState, fetchLatestSensorData, subscribeLatestSensorData, logoutUser } from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
@@ -27,6 +27,8 @@ const getRelativeUpdatedLabel = (timestamp) => {
 
 const getAirQualityState = (aqi, temperature, humidity) => {
   const hasAqi = Number.isFinite(aqi) && aqi > 0;
+  const hasEnvironment = Number.isFinite(temperature) && Number.isFinite(humidity);
+  if (!hasAqi && !hasEnvironment) return { level: 'unknown', progress: 0 };
   const safeTemperature = Number.isFinite(temperature) ? temperature : 25;
   const safeHumidity = Number.isFinite(humidity) ? humidity : 60;
 
@@ -40,6 +42,7 @@ const getAirQualityState = (aqi, temperature, humidity) => {
 };
 
 const getGasState = (gasPpm, gasDetected) => {
+  if (!gasDetected && !Number.isFinite(gasPpm)) return { level: 'unknown', progress: 0 };
   if (gasDetected || gasPpm >= 300) return { level: 'danger', progress: 95 };
   if (gasPpm >= 120) return { level: 'warning', progress: 65 };
   return { level: 'good', progress: 20 };
@@ -47,25 +50,8 @@ const getGasState = (gasPpm, gasDetected) => {
 
 const Home = ({ user, onLogout }) => {
   const [currentTime, setCurrentTime] = useState(() => new Date());
-  const [sensorData, setSensorData] = useState({
-    temperature: null,
-    humidity: null,
-    light: null,
-    airQualityIndex: null,
-    gasPpm: null,
-    gasDetected: false,
-    updatedAt: Date.now(),
-    led_state: false,
-    neo_led_state: false,
-    ws2812_status: false,
-    relay_status: false,
-    mini_fan_status: false,
-    wifi_connected: false,
-    mqtt_connected: false,
-    wifi_rssi: null,
-    uptime_ms: null,
-    inference_result: null,
-  });
+  const [sensorData, setSensorData] = useState(null);
+  const [telemetryError, setTelemetryError] = useState('');
   const [isSubmittingControl, setIsSubmittingControl] = useState(false);
 
   useEffect(() => {
@@ -86,9 +72,13 @@ const Home = ({ user, onLogout }) => {
         const latest = await fetchLatestSensorData();
         if (!cancelled) {
           setSensorData(latest);
+          setTelemetryError('');
         }
       } catch (error) {
         console.error('Failed to fetch sensor data:', error);
+        if (!cancelled) {
+          setTelemetryError(error.message || 'Failed to fetch sensor data');
+        }
       }
     };
 
@@ -98,14 +88,17 @@ const Home = ({ user, onLogout }) => {
         onData: (latest) => {
           if (!cancelled) {
             setSensorData(latest);
+            setTelemetryError('');
           }
         },
         onError: (error) => {
           console.error('Sensor stream error:', error);
+          setTelemetryError('Sensor stream error. Waiting for MQTT telemetry.');
         },
       });
     } catch (error) {
       console.error('Failed to open sensor stream:', error);
+      setTelemetryError(error.message || 'Failed to open sensor stream');
     }
     const intervalId = setInterval(loadLatestData, 15000);
 
@@ -116,37 +109,16 @@ const Home = ({ user, onLogout }) => {
     };
   }, []);
 
-  const handleToggleLed = async () => {
-    const nextValue = !sensorData.led_state;
+  const handleToggleDevice = async (target, statusKey) => {
+    if (typeof sensorData?.[statusKey] !== 'boolean') return;
+    const nextValue = !sensorData[statusKey];
     setIsSubmittingControl(true);
 
     try {
-      await toggleLedLight(nextValue);
-      setSensorData((prev) => ({
-        ...prev,
-        led_state: nextValue,
-        updatedAt: Date.now(),
-      }));
+      await controlDeviceState(target, nextValue);
     } catch (error) {
-      console.error('Failed to toggle LED light:', error);
-    } finally {
-      setIsSubmittingControl(false);
-    }
-  };
-
-  const handleToggleNeo = async () => {
-    const nextValue = !sensorData.neo_led_state;
-    setIsSubmittingControl(true);
-
-    try {
-      await toggleNeoLight(nextValue);
-      setSensorData((prev) => ({
-        ...prev,
-        neo_led_state: nextValue,
-        updatedAt: Date.now(),
-      }));
-    } catch (error) {
-      console.error('Failed to toggle neon light:', error);
+      console.error(`Failed to toggle ${target}:`, error);
+      setTelemetryError(error.message || `Failed to toggle ${target}`);
     } finally {
       setIsSubmittingControl(false);
     }
@@ -157,13 +129,13 @@ const Home = ({ user, onLogout }) => {
     onLogout();
   };
 
-  const updatedLabel = getRelativeUpdatedLabel(sensorData.updatedAt);
+  const updatedLabel = sensorData ? getRelativeUpdatedLabel(sensorData.updatedAt) : 'unavailable';
   const airState = getAirQualityState(
-    sensorData.airQualityIndex,
-    sensorData.temperature,
-    sensorData.humidity,
+    sensorData?.airQualityIndex,
+    sensorData?.temperature,
+    sensorData?.humidity,
   );
-  const gasState = getGasState(sensorData.gasPpm, sensorData.gasDetected);
+  const gasState = getGasState(sensorData?.gasPpm, sensorData?.gasDetected);
 
   return (
     <div className="p-6 lg:p-8 w-full h-full min-h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8">
@@ -194,8 +166,8 @@ const Home = ({ user, onLogout }) => {
             </h3>
             <div className="mt-2 flex items-center justify-end gap-2">
               <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                All Systems Normal
+                <span className={`w-2 h-2 rounded-full ${sensorData?.mqtt_connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                {sensorData?.mqtt_connected ? 'MQTT Live' : 'MQTT Offline'}
               </span>
               <button
                 type="button"
@@ -210,17 +182,22 @@ const Home = ({ user, onLogout }) => {
 
         <section>
           <h4 className="font-medium mb-3">Environment & Safety</h4>
+          {telemetryError && (
+            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {telemetryError}
+            </div>
+          )}
           <EnvironmentCards data={sensorData} />
           <SafetyStatusCards
             airQuality={{
-              value: sensorData.airQualityIndex == null ? '--' : Number(sensorData.airQualityIndex).toFixed(0),
+              value: sensorData?.airQualityIndex == null ? '--' : Number(sensorData.airQualityIndex).toFixed(0),
               unit: 'AQI',
               level: airState.level,
               progress: airState.progress,
               updatedAt: updatedLabel,
             }}
             gasDetection={{
-              value: sensorData.gasPpm == null ? '--' : Number(sensorData.gasPpm).toFixed(0),
+              value: sensorData?.gasPpm == null ? '--' : Number(sensorData.gasPpm).toFixed(0),
               unit: 'ppm',
               level: gasState.level,
               progress: gasState.progress,
@@ -232,11 +209,9 @@ const Home = ({ user, onLogout }) => {
         <section>
           <h4 className="font-medium mb-3">Quick Controls</h4>
           <ControlCard
-            ledState={sensorData.led_state}
-            neoLedState={sensorData.neo_led_state}
+            data={sensorData}
             isSubmitting={isSubmittingControl}
-            onToggleLed={handleToggleLed}
-            onToggleNeoLed={handleToggleNeo}
+            onToggleDevice={handleToggleDevice}
           />
         </section>
       </div>

@@ -176,6 +176,9 @@ const telemetryDocToPayload = (doc, index = 0) => {
 		sensors: doc.sensors || {},
 		devices: doc.devices || {},
 		network: doc.network || {},
+		runtime: doc.runtime || {},
+		last_seen_at: doc.last_seen_at || null,
+		source_topic: doc.source_topic || null,
 		metadata: doc.metadata || {},
 	};
 };

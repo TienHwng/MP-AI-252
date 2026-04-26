@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const HERA_API_BASE_URL = import.meta.env.VITE_HERA_API_BASE_URL || 'http://localhost:3002';
 
 const SENSOR_ENDPOINTS = [
 	'/api/sensors/latest',
@@ -13,10 +14,34 @@ const toNullableNumber = (value) => {
 	return Number.isFinite(parsed) ? parsed : null;
 };
 
+const serviceOrigin = (url) => {
+	try {
+		return new URL(url).origin;
+	} catch {
+		return url;
+	}
+};
+
+const fetchJson = async (url, options = {}, serviceName = 'API service') => {
+	let response;
+	try {
+		response = await fetch(url, options);
+	} catch {
+		throw new Error(`${serviceName} is not reachable at ${serviceOrigin(url)}.`);
+	}
+
+	const payload = await response.json().catch(() => ({}));
+	if (!response.ok) {
+		throw new Error(payload.error || payload.reason || `${serviceName} request failed: ${response.status}`);
+	}
+	return payload;
+};
+
 const normalizeSensorData = (raw = {}) => {
 	const sensors = raw.sensors ?? {};
 	const devices = raw.devices ?? {};
 	const network = raw.network ?? {};
+	const runtime = raw.runtime ?? {};
 
 	const timestamp =
 		raw.recorded_at ||
@@ -44,6 +69,11 @@ const normalizeSensorData = (raw = {}) => {
 		wifi_rssi: toNullableNumber(network.wifi_rssi),
 		uptime_ms: toNullableNumber(network.uptime_ms),
 		inference_result: toNullableNumber(sensors.anomaly ?? raw.inference_result),
+		mode: runtime.mode ?? raw.metadata?.mode ?? raw.mode ?? null,
+		source: runtime.source_kind ?? raw.metadata?.source ?? raw.source ?? null,
+		last_seen_at: raw.last_seen_at ?? raw.recorded_at ?? raw.timestamp ?? null,
+		metadata: raw.metadata ?? {},
+		runtime,
 		raw,
 	};
 };
@@ -193,35 +223,55 @@ export const subscribeTelemetrySeries = ({ limit = 500, onData, onError } = {}) 
 };
 
 export const toggleLedLight = async (enabled) => {
-	const response = await fetch(`${API_BASE_URL}/api/control/led`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify({ enabled }),
-	});
-
-	if (!response.ok) {
-		throw new Error(`Failed to toggle LED light: ${response.status}`);
-	}
-
-	return response.json();
+	return controlDeviceState('main_led', enabled);
 };
 
 export const toggleNeoLight = async (enabled) => {
-	const response = await fetch(`${API_BASE_URL}/api/control/neon`, {
+	return controlDeviceState('neo_led', enabled);
+};
+
+export const controlDeviceState = async (deviceTarget, enabled) => {
+	const user = getStoredUser();
+	return fetchJson(`${HERA_API_BASE_URL}/api/devices/${deviceTarget}/state`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
-		body: JSON.stringify({ enabled }),
-	});
+		body: JSON.stringify({
+			state: enabled,
+			user_id: user?.user_id || 'dashboard',
+			session_id: user?.user_id || 'dashboard',
+		}),
+	}, 'HERA dashboard API');
+};
 
-	if (!response.ok) {
-		throw new Error(`Failed to toggle neon light: ${response.status}`);
-	}
+export const writeSensorValue = async (sensor, value) => {
+	return fetchJson(`${HERA_API_BASE_URL}/api/sensors/${sensor}/value`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ value }),
+	}, 'HERA dashboard API');
+};
 
-	return response.json();
+export const sendAssistantMessage = async (text) => {
+	const user = getStoredUser();
+	return fetchJson(`${HERA_API_BASE_URL}/api/assistant/message`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({
+			text,
+			user_id: user?.user_id || 'dashboard',
+			session_id: user?.user_id || 'dashboard',
+		}),
+	}, 'HERA dashboard API');
+};
+
+export const fetchRuntimeStatus = async () => {
+	return fetchJson(`${HERA_API_BASE_URL}/api/runtime/status`, {}, 'HERA dashboard API');
 };
 
 const MODEL_SETTING_FIELDS = [

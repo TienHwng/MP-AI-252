@@ -105,3 +105,4 @@ Dự án được triển khai theo **4 giai đoạn**, trong đó:
 - Ưu tiên **ổn định > thêm tính năng**
 - Không mở scope mới sát mốc báo cáo
 - Feature nâng cao chỉ làm khi core chạy tốt
+98690262e41df2246257820fc73ad03f93d46685

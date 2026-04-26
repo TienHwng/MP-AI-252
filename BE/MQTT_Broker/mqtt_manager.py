@@ -37,6 +37,7 @@ class Color:
 
 
 from BE.HERA.config import (
+	MODE,
 	MQTT_BROKER,
 	MQTT_BROKER_BIND_HOST,
 	MQTT_PORT,
@@ -267,6 +268,11 @@ class MQTTManager:
 				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 				self.latest_sensor_data["last_seen_at"] = observed_at.isoformat()
 				self.latest_sensor_data["source_topic"] = topic
+				self.latest_sensor_data["runtime"] = {
+					"mode": MODE,
+					"source": "mqtt",
+					"source_kind": "sim" if MODE == "sim" else "real",
+				}
 
 				if (
 					self.persist_telemetry
@@ -292,6 +298,8 @@ class MQTTManager:
 								"env_id": "env_0001",
 								"user_id": current_user_id,
 								"telemetry_bucket_seconds": TELEMETRY_BUCKET_SECONDS,
+								"source": "mqtt_manager",
+								"mode": MODE,
 							},
 							**{
 								k: v

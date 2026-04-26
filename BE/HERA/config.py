@@ -22,7 +22,7 @@ def env_int(name: str, default: int) -> int:
 	"""Parse environment variable as integer."""
 	try:
 		return int(os.getenv(name))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		return default
 
 
@@ -30,7 +30,7 @@ def env_float(name: str, default: float) -> float:
 	"""Parse environment variable as float."""
 	try:
 		return float(os.getenv(name))
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		return default
 
 

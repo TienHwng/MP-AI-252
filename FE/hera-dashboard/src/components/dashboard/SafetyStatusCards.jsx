@@ -2,6 +2,13 @@ import React from 'react';
 import { CircleAlert, CircleCheck, ShieldAlert } from 'lucide-react';
 
 const statusConfig = {
+  unknown: {
+    label: 'Unknown',
+    ToneIcon: CircleAlert,
+    toneClass: 'text-slate-500',
+    chipClass: 'bg-slate-100 text-slate-600',
+    progressClass: 'bg-slate-300',
+  },
   good: {
     label: 'Good',
     ToneIcon: CircleCheck,
