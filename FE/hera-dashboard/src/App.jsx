@@ -16,16 +16,31 @@ const Devices = () => (
 const DASHBOARD_PAGE_KEY = 'hera_active_page';
 const VALID_PAGES = new Set(['home', 'analytics', 'devices', 'settings']);
 
+const isPageReload = () => {
+  const navigation = performance.getEntriesByType('navigation')[0];
+  return navigation?.type === 'reload';
+};
+
+const getSavedDashboardPage = () => {
+  const savedPage = localStorage.getItem(DASHBOARD_PAGE_KEY);
+  return VALID_PAGES.has(savedPage) ? savedPage : 'home';
+};
+
 const App = () => {
-  const [user, setUser] = useState(() => getStoredUser());
-  const [activePage, setActivePage] = useState(() => {
-    const savedPage = localStorage.getItem(DASHBOARD_PAGE_KEY);
-    return VALID_PAGES.has(savedPage) ? savedPage : 'home';
-  });
+  const [shouldResetOnOpen] = useState(() => !isPageReload());
+  const [user, setUser] = useState(() => shouldResetOnOpen ? null : getStoredUser());
+  const [activePage, setActivePage] = useState(() => shouldResetOnOpen ? 'home' : getSavedDashboardPage());
 
   useEffect(() => {
+    if (!shouldResetOnOpen) return;
+    logoutUser();
+    localStorage.removeItem(DASHBOARD_PAGE_KEY);
+  }, [shouldResetOnOpen]);
+
+  useEffect(() => {
+    if (!user || !VALID_PAGES.has(activePage)) return;
     localStorage.setItem(DASHBOARD_PAGE_KEY, activePage);
-  }, [activePage]);
+  }, [activePage, user]);
 
   if (!user) {
     return <Login onLoginSuccess={setUser} />;

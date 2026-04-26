@@ -25,6 +25,7 @@ const ANSI = {
 	red: "\x1b[31m",
 };
 const VN_TIMEZONE = "Asia/Ho_Chi_Minh";
+const TELEMETRY_BUCKET_MS = 5 * 1000;
 
 const DEFAULT_MODEL_SETTINGS = {
 	provider: "openrouter",
@@ -134,14 +135,37 @@ const toVnTimestamp = (value) => {
 	});
 };
 
+const toValidDate = (value) => {
+	if (!value) return null;
+	const date = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const floorToTelemetryBucket = (value) => {
+	const date = toValidDate(value);
+	if (!date) return null;
+	return new Date(Math.floor(date.getTime() / TELEMETRY_BUCKET_MS) * TELEMETRY_BUCKET_MS);
+};
+
 const telemetryDocToPayload = (doc, index = 0) => {
-	const recordedAt = new Date(doc.recorded_at);
+	const recordedAt = toValidDate(doc.recorded_at) || new Date();
+	const chartRecordedAt =
+		toValidDate(doc.chart_recorded_at) ||
+		floorToTelemetryBucket(recordedAt) ||
+		recordedAt;
 
 	return {
 		id: index + 1,
 		timestamp: recordedAt.getTime(),
 		recorded_at: recordedAt.toISOString(),
 		time: recordedAt.toLocaleTimeString("vi-VN", {
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+		}),
+		chart_timestamp: chartRecordedAt.getTime(),
+		chart_recorded_at: chartRecordedAt.toISOString(),
+		chart_time: chartRecordedAt.toLocaleTimeString("vi-VN", {
 			hour: "2-digit",
 			minute: "2-digit",
 			second: "2-digit",
