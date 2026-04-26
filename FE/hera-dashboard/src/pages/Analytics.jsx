@@ -12,6 +12,46 @@ import {
 import { subscribeTelemetrySeries } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const CHART_BUCKET_MS = 5 * 1000;
+const DEFAULT_POINT_LIMIT = 40;
+const EXTENDED_POINT_LIMIT = 60;
+
+const TIME_WINDOW_CONFIG = {
+	"5m": {
+		duration: 5 * 60 * 1000,
+		tickStep: 60 * 1000,
+	},
+	"15m": {
+		duration: 15 * 60 * 1000,
+		tickStep: 3 * 60 * 1000,
+	},
+	"1h": {
+		duration: 60 * 60 * 1000,
+		tickStep: 10 * 60 * 1000,
+	},
+};
+
+const DATA_TICK_STEPS = [
+	10 * 1000,
+	20 * 1000,
+	30 * 1000,
+	60 * 1000,
+	2 * 60 * 1000,
+	3 * 60 * 1000,
+	5 * 60 * 1000,
+	10 * 60 * 1000,
+	15 * 60 * 1000,
+	30 * 60 * 1000,
+	60 * 60 * 1000,
+];
+
+const WINDOW_OPTIONS = [
+	{ key: "all", label: "All" },
+	{ key: "last60", label: "60 latest points" },
+	{ key: "5m", label: "5 minutes" },
+	{ key: "15m", label: "15 minutes" },
+	{ key: "1h", label: "1 hour" },
+];
 
 const getStats = (series) => {
 	if (!series.length) {
@@ -34,24 +74,175 @@ const formatFullDateTime = (value) => {
 	});
 };
 
-const filterDataByWindow = (data, windowKey) => {
+const getTimeValue = (value) => {
+	if (value == null || value === "") return null;
+
+	const numericValue = Number(value);
+	if (Number.isFinite(numericValue)) return numericValue;
+
+	const parsed = new Date(value).getTime();
+	return Number.isNaN(parsed) ? null : parsed;
+};
+
+const floorToChartBucket = (timestamp) => {
+	return Math.floor(timestamp / CHART_BUCKET_MS) * CHART_BUCKET_MS;
+};
+
+const ceilToChartBucket = (timestamp) => {
+	return Math.ceil(timestamp / CHART_BUCKET_MS) * CHART_BUCKET_MS;
+};
+
+const formatAxisTime = (value) => {
+	const timestamp = getTimeValue(value);
+	if (timestamp == null) return "--";
+
+	return new Date(timestamp).toLocaleTimeString("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	});
+};
+
+const formatAxisMinute = (value) => {
+	const timestamp = getTimeValue(value);
+	if (timestamp == null) return "--";
+
+	return new Date(timestamp).toLocaleTimeString("vi-VN", {
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	});
+};
+
+const createFixedTimeTicks = (start, end, step = CHART_BUCKET_MS) => {
+	const ticks = [];
+	for (let tick = start; tick <= end; tick += step) {
+		ticks.push(tick);
+	}
+	return ticks;
+};
+
+const getChartTimestamp = (entry) => {
+	const timestamp = getTimeValue(
+		entry?.chartTimestamp ?? entry?.chart_timestamp ?? entry?.timestamp ?? entry?.recorded_at,
+	);
+	return timestamp == null ? null : floorToChartBucket(timestamp);
+};
+
+const getLatestChartTimestamp = (data) => {
+	const timestamps = data
+		.map(getChartTimestamp)
+		.filter((value) => Number.isFinite(value));
+
+	if (!timestamps.length) return null;
+
+	return Math.max(...timestamps);
+};
+
+const getDataTickStep = (range) => {
+	const target = Math.max(range / 6, DATA_TICK_STEPS[0]);
+	return DATA_TICK_STEPS.find((step) => step >= target) || DATA_TICK_STEPS[DATA_TICK_STEPS.length - 1];
+};
+
+const getWindowRange = (data, windowKey) => {
+	const config = TIME_WINDOW_CONFIG[windowKey];
+	if (!config) return null;
+
+	const end = getLatestChartTimestamp(data);
+	if (end == null) return null;
+
+	return {
+		start: end - config.duration,
+		end,
+		tickStep: config.tickStep,
+		tickFormatter: formatAxisMinute,
+	};
+};
+
+const getFixedTimeScale = (series, windowRange = null) => {
+	if (windowRange) {
+		return {
+			domain: [windowRange.start, windowRange.end],
+			ticks: createFixedTimeTicks(windowRange.start, windowRange.end, windowRange.tickStep),
+			tickFormatter: windowRange.tickFormatter,
+		};
+	}
+
+	const timestamps = series
+		.map(getChartTimestamp)
+		.filter((value) => Number.isFinite(value));
+
+	if (!timestamps.length) {
+		return { domain: ["auto", "auto"], ticks: [] };
+	}
+
+	const start = floorToChartBucket(Math.min(...timestamps));
+	const rawEnd = Math.max(ceilToChartBucket(Math.max(...timestamps)), start + CHART_BUCKET_MS);
+	const tickStep = getDataTickStep(rawEnd - start);
+	const end = Math.max(rawEnd, start + tickStep);
+
+	return {
+		domain: [start, end],
+		ticks: createFixedTimeTicks(start, end, tickStep),
+	};
+};
+
+const buildFixedIntervalData = (series) => {
+	const buckets = new Map();
+
+	for (const entry of series) {
+		const sourceTimestamp = getTimeValue(
+			entry.chart_timestamp ?? entry.chartTimestamp ?? entry.timestamp ?? entry.recorded_at,
+		);
+		if (sourceTimestamp == null) continue;
+
+		const chartTimestamp = floorToChartBucket(sourceTimestamp);
+		const recordedTimestamp = getTimeValue(entry.timestamp ?? entry.recorded_at) ?? sourceTimestamp;
+		const current = buckets.get(chartTimestamp);
+
+		if (!current || recordedTimestamp >= current.__recordedTimestamp) {
+			buckets.set(chartTimestamp, {
+				...entry,
+				chartTimestamp,
+				chart_timestamp: chartTimestamp,
+				chart_recorded_at: new Date(chartTimestamp).toISOString(),
+				chart_time: formatAxisTime(chartTimestamp),
+				__recordedTimestamp: recordedTimestamp,
+			});
+		}
+	}
+
+	return Array.from(buckets.values())
+		.sort((a, b) => a.chartTimestamp - b.chartTimestamp)
+		.map((entry) => {
+			const { __recordedTimestamp: _recordedTimestamp, ...cleanEntry } = entry;
+			return cleanEntry;
+		});
+};
+
+const filterDataByWindow = (data, windowKey, windowRange) => {
 	if (!data.length) return [];
 
-	if (windowKey === "all") return data;
-	if (windowKey === "last30") return data.slice(-30);
+	if (windowKey === "all") return data.slice(-DEFAULT_POINT_LIMIT);
+	if (windowKey === "last60") return data.slice(-EXTENDED_POINT_LIMIT);
 
-	const now = data[data.length - 1]?.timestamp ?? Date.now();
+	if (!windowRange) return data.slice(-DEFAULT_POINT_LIMIT);
 
-	const windows = {
-		"5m": 5 * 60 * 1000,
-		"15m": 15 * 60 * 1000,
-		"1h": 60 * 60 * 1000,
-	};
+	return data.filter((item) => {
+		const timestamp = getChartTimestamp(item);
+		return timestamp != null && timestamp >= windowRange.start && timestamp <= windowRange.end;
+	});
+};
 
-	const duration = windows[windowKey];
-	if (!duration) return data;
+const getTimeSpanLabel = (series) => {
+	if (!series.length) return "--";
 
-	return data.filter((item) => now - item.timestamp <= duration);
+	const start = getChartTimestamp(series[0]);
+	const end = getChartTimestamp(series[series.length - 1]);
+	if (start == null || end == null) return "--";
+
+	return `${formatAxisTime(start)} - ${formatAxisTime(end)}`;
 };
 
 const getTemperatureStatus = (value) => {
@@ -79,10 +270,12 @@ const CustomTooltip = ({ active, payload, label }) => {
 	if (!active || !payload?.length) return null;
 
 	const point = payload[0]?.payload;
+	const chartTimestamp = point?.chartTimestamp ?? point?.chart_timestamp ?? label;
+	const chartTime = point?.chart_time ?? point?.chartTime ?? formatAxisTime(chartTimestamp);
 
 	return (
 		<div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-md text-sm">
-			<p className="font-medium text-textMain">{label}</p>
+			<p className="font-medium text-textMain">{chartTime}</p>
 			<p className="text-textMuted">{formatFullDateTime(point?.recorded_at)}</p>
 			{payload.map((entry) => (
 				<p key={entry.dataKey} className="mt-1 text-textMain">
@@ -93,7 +286,10 @@ const CustomTooltip = ({ active, payload, label }) => {
 	);
 };
 
-const ChartCard = ({ title, value, unit, dataKey, color, data, Icon, stats, status }) => {
+const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, timeScale, ...props }) => {
+	const Icon = props.Icon;
+	const resolvedTimeScale = useMemo(() => timeScale || getFixedTimeScale(data), [data, timeScale]);
+
 	return (
 		<div className="bg-white p-6 rounded-2xl shadow-sm">
 			<div className="flex flex-col gap-4 mb-6 md:flex-row md:items-start md:justify-between">
@@ -120,7 +316,7 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, Icon, stats, stat
 
 			<div className="h-[280px] w-full">
 				<ResponsiveContainer width="100%" height="100%">
-					<AreaChart data={data} margin={{ top: 10, right: 12, left: -20, bottom: 18 }}>
+					<AreaChart data={data} margin={{ top: 10, right: 0, left: -12, bottom: 18 }}>
 						<defs>
 							<linearGradient id={`color${dataKey}`} x1="0" y1="0" x2="0" y2="1">
 								<stop offset="5%" stopColor={color} stopOpacity={0.3} />
@@ -131,7 +327,15 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, Icon, stats, stat
 						<CartesianGrid strokeDasharray="3 3" vertical={false} />
 
 						<XAxis
-							dataKey="time"
+							dataKey="chartTimestamp"
+							type="number"
+							scale="time"
+							domain={resolvedTimeScale.domain}
+							ticks={resolvedTimeScale.ticks}
+							tickFormatter={resolvedTimeScale.tickFormatter || formatAxisTime}
+							padding={{ left: 0, right: 0 }}
+							allowDataOverflow
+							interval="preserveStartEnd"
 							axisLine={false}
 							tickLine={false}
 							tick={{ fill: "#888", fontSize: 12 }}
@@ -239,17 +443,33 @@ const Analytics = () => {
 		};
 	}, []);
 
-	const visibleData = useMemo(() => {
-		return filterDataByWindow(data, windowKey);
+	const windowRange = useMemo(() => {
+		return getWindowRange(data, windowKey);
 	}, [data, windowKey]);
 
-	const temperatureData = useMemo(() => visibleData.filter((entry) => entry.temp != null), [visibleData]);
-	const humidityData = useMemo(() => visibleData.filter((entry) => entry.humidity != null), [visibleData]);
-	const lightData = useMemo(() => visibleData.filter((entry) => entry.light != null), [visibleData]);
+	const visibleData = useMemo(() => {
+		return filterDataByWindow(data, windowKey, windowRange);
+	}, [data, windowKey, windowRange]);
+
+	const chartTimeScale = useMemo(() => {
+		return getFixedTimeScale(visibleData, windowRange);
+	}, [visibleData, windowRange]);
+
+	const temperatureData = useMemo(() => {
+		return buildFixedIntervalData(visibleData.filter((entry) => entry.temp != null));
+	}, [visibleData]);
+	const humidityData = useMemo(() => {
+		return buildFixedIntervalData(visibleData.filter((entry) => entry.humidity != null));
+	}, [visibleData]);
+	const lightData = useMemo(() => {
+		return buildFixedIntervalData(visibleData.filter((entry) => entry.light != null));
+	}, [visibleData]);
 
 	const tempSeries = temperatureData.map((entry) => entry.temp);
 	const humiditySeries = humidityData.map((entry) => entry.humidity);
 	const lightSeries = lightData.map((entry) => entry.light);
+	const chartPointCount = Math.max(temperatureData.length, humidityData.length, lightData.length);
+	const timeSpanLabel = getTimeSpanLabel(visibleData);
 
 	const tempStats = getStats(tempSeries);
 	const humidityStats = getStats(humiditySeries);
@@ -277,13 +497,7 @@ const Analytics = () => {
 				</div>
 
 				<div className="flex flex-wrap gap-2">
-					{[
-						{ key: "last30", label: "30 closet points" },
-						{ key: "5m", label: "5 minutes" },
-						{ key: "15m", label: "15 minutes" },
-						{ key: "1h", label: "1 hour" },
-						{ key: "all", label: "All" },
-					].map((item) => (
+					{WINDOW_OPTIONS.map((item) => (
 						<button
 							key={item.key}
 							type="button"
@@ -301,10 +515,25 @@ const Analytics = () => {
 			</div>
 
 			<div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
-				<p className="text-sm text-textMuted">Latest Records</p>
-				<p className="mt-1 text-base text-textMain">
-					{latestRecord.recorded_at ? formatFullDateTime(latestRecord.recorded_at) : "--"}
-				</p>
+				<div className="grid gap-4 md:grid-cols-3">
+					<div>
+						<p className="text-sm text-textMuted">Latest Records</p>
+						<p className="mt-1 text-base text-textMain">
+							{latestRecord.recorded_at ? formatFullDateTime(latestRecord.recorded_at) : "--"}
+						</p>
+					</div>
+					<div>
+						<p className="text-sm text-textMuted">Selected Records</p>
+						<p className="mt-1 text-base text-textMain">
+							{visibleData.length} / {data.length}
+						</p>
+					</div>
+					<div>
+						<p className="text-sm text-textMuted">Chart Span</p>
+						<p className="mt-1 text-base text-textMain">{timeSpanLabel}</p>
+						<p className="mt-1 text-xs text-textMuted">{chartPointCount} chart points</p>
+					</div>
+				</div>
 			</div>
 
 			<div className="flex flex-col gap-6">
@@ -318,6 +547,7 @@ const Analytics = () => {
 					Icon={Thermometer}
 					stats={tempStats}
 					status={temperatureStatus}
+					timeScale={chartTimeScale}
 				/>
 
 				<ChartCard
@@ -330,6 +560,7 @@ const Analytics = () => {
 					Icon={Droplets}
 					stats={humidityStats}
 					status={humidityStatus}
+					timeScale={chartTimeScale}
 				/>
 
 				<ChartCard
@@ -342,6 +573,7 @@ const Analytics = () => {
 					Icon={Sun}
 					stats={lightStats}
 					status={lightStatus}
+					timeScale={chartTimeScale}
 				/>
 			</div>
 		</div>

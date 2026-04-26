@@ -52,8 +52,19 @@ def _env_bool(name: str, default: bool) -> bool:
 	return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_int(name: str, default: int) -> int:
+	raw = os.getenv(name)
+	if raw is None:
+		return default
+	try:
+		return int(raw.strip())
+	except ValueError:
+		return default
+
+
 ENABLE_MONGODB = _env_bool("MQTT_ENABLE_MONGODB", False)
 TELEMETRY_DB_DEBUG = _env_bool("TELEMETRY_DB_DEBUG", False)
+TELEMETRY_BUCKET_SECONDS = max(_env_int("TELEMETRY_BUCKET_SECONDS", 5), 1)
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "HERA")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "telemetry_points")
@@ -91,6 +102,12 @@ def connect_mongo_collections():
 
 if ENABLE_MONGODB:
 	collection, devices_collection = connect_mongo_collections()
+
+
+def floor_datetime_to_bucket(value: datetime) -> datetime:
+	timestamp = int(value.timestamp())
+	bucket_timestamp = timestamp - (timestamp % TELEMETRY_BUCKET_SECONDS)
+	return datetime.fromtimestamp(bucket_timestamp, tz=UTC)
 
 
 class MQTTManager:
@@ -176,6 +193,7 @@ class MQTTManager:
 		sensors = (
 			payload.get("sensors") if isinstance(payload.get("sensors"), dict) else {}
 		)
+		gas_value = sensors.get("gas_ppm", sensors.get("gas"))
 
 		return {
 			"network": {
@@ -189,13 +207,19 @@ class MQTTManager:
 				"led_status": devices.get("led_status"),
 				"neo_led_status": devices.get("neo_led_status"),
 				"ws2812_status": devices.get("ws2812_status"),
+				"ws2812_brightness": devices.get("ws2812_brightness"),
+				"strip_brightness": devices.get("strip_brightness"),
 				"relay_status": devices.get("relay_status"),
 				"mini_fan_status": devices.get("mini_fan_status"),
+				"fan_speed": devices.get("fan_speed"),
 			},
 			"sensors": {
 				"temperature": sensors.get("temperature"),
 				"humidity": sensors.get("humidity"),
 				"light": sensors.get("light"),
+				"gas": gas_value,
+				"gas_ppm": gas_value,
+				"gas_detected": sensors.get("gas_detected"),
 				"anomaly": sensors.get("anomaly"),
 			},
 		}
@@ -239,6 +263,7 @@ class MQTTManager:
 			try:
 				parsed = json.loads(payload)
 				observed_at = datetime.now(UTC)
+				chart_recorded_at = floor_datetime_to_bucket(observed_at)
 				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
 				self.latest_sensor_data["last_seen_at"] = observed_at.isoformat()
 				self.latest_sensor_data["source_topic"] = topic
@@ -261,10 +286,12 @@ class MQTTManager:
 
 						doc = {
 							"recorded_at": observed_at,
+							"chart_recorded_at": chart_recorded_at,
 							"metadata": {
 								"device_id": "device_0001",
 								"env_id": "env_0001",
 								"user_id": current_user_id,
+								"telemetry_bucket_seconds": TELEMETRY_BUCKET_SECONDS,
 							},
 							**{
 								k: v
