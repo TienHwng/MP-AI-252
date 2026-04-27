@@ -177,10 +177,6 @@ const Home = ({ user, onLogout }) => {
               })}
             </h3>
             <div className="mt-2 flex items-center justify-end gap-2">
-              <span className={`text-xs px-3 py-1 rounded-full flex items-center gap-2 transition-colors ${sensorData?.mqtt_connected ? 'bg-[#E8F5E9] text-[#3A7D44]' : 'bg-[#FED7AA] text-[#DF6D14]'}`}>
-                <span className={`w-2 h-2 rounded-full ${sensorData?.mqtt_connected ? 'bg-[#3A7D44]' : 'bg-[#DF6D14]'}`}></span>
-                {sensorData?.mqtt_connected ? 'MQTT Live' : 'MQTT Offline'}
-              </span>
               <button onClick={handleLogout} className="text-xs bg-[#E8F5E9] text-[#3A7D44] px-3 py-1 rounded-full font-medium hover:bg-[#DF6D14] hover:text-white transition-colors">
                 Logout
               </button>
