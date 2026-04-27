@@ -232,6 +232,49 @@ export const claimDevice = async (userId, deviceId = 'device_0001') => {
 	}
 };
 
+const appendTimeRangeParam = (params, key, value) => {
+	if (value === undefined || value === null || value === '') return;
+
+	const numericValue = Number(value);
+	if (Number.isFinite(numericValue)) {
+		params.set(key, String(numericValue));
+		return;
+	}
+
+	const parsed = new Date(value);
+	if (!Number.isNaN(parsed.getTime())) {
+		params.set(key, parsed.toISOString());
+	}
+};
+
+export const fetchTelemetrySeries = async ({
+	deviceId = 'device_0001',
+	limit = 10000,
+	from,
+	to,
+} = {}) => {
+	const user = getStoredUser();
+	if (!user) {
+		throw new Error('User not logged in');
+	}
+
+	const params = new URLSearchParams({
+		user_id: user.user_id,
+		device_id: deviceId,
+		limit: String(limit),
+	});
+	appendTimeRangeParam(params, 'from', from);
+	appendTimeRangeParam(params, 'to', to);
+
+	const response = await fetch(`${API_BASE_URL}/api/telemetry?${params.toString()}`);
+	const payload = await response.json().catch(() => []);
+	if (!response.ok) {
+		throw new Error(payload.error || 'Failed to fetch telemetry');
+	}
+
+	return Array.isArray(payload) ? payload : [];
+};
+
 export const fetchLatestSensorData = async () => {
 	let lastError = null;
     const user = getStoredUser();

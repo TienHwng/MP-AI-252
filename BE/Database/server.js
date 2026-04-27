@@ -26,6 +26,7 @@ const ANSI = {
 };
 const VN_TIMEZONE = "Asia/Ho_Chi_Minh";
 const TELEMETRY_BUCKET_MS = 5 * 1000;
+const MAX_TELEMETRY_LIMIT = 20000;
 
 const DEFAULT_MODEL_SETTINGS = {
 	provider: "openrouter",
@@ -139,6 +140,25 @@ const toValidDate = (value) => {
 	if (!value) return null;
 	const date = value instanceof Date ? value : new Date(value);
 	return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const parseDateQuery = (value) => {
+	if (value === undefined || value === null || value === "") return null;
+
+	const numericValue = Number(value);
+	const date = Number.isFinite(numericValue)
+		? new Date(numericValue)
+		: new Date(value);
+
+	return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const hasQueryValue = (value) => value !== undefined && value !== null && value !== "";
+
+const parseTelemetryLimit = (value, fallback = 300) => {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.min(Math.max(Math.trunc(parsed), 1), MAX_TELEMETRY_LIMIT);
 };
 
 const floorToTelemetryBucket = (value) => {
@@ -338,24 +358,31 @@ const telemetryDocToPayload = (doc, index = 0) => {
 	};
 };
 
-const telemetryFilter = (deviceId, userId, includeUser = true) => {
+const telemetryFilter = (deviceId, userId, includeUser = true, range = {}) => {
 	const filter = { "metadata.device_id": deviceId };
 	if (includeUser && userId) {
 		filter["metadata.user_id"] = userId;
 	}
+	const recordedAtRange = {};
+	if (range.from) recordedAtRange.$gte = range.from;
+	if (range.to) recordedAtRange.$lte = range.to;
+	if (Object.keys(recordedAtRange).length) {
+		filter.recorded_at = recordedAtRange;
+	}
 	return filter;
 };
 
-const findTelemetryDocs = async ({ deviceId, userId, limit }) => {
+const findTelemetryDocs = async ({ deviceId, userId, limit, from = null, to = null }) => {
+	const range = { from, to };
 	let docs = await collection
-		.find(telemetryFilter(deviceId, userId, true))
+		.find(telemetryFilter(deviceId, userId, true, range))
 		.sort({ recorded_at: -1 })
 		.limit(limit)
 		.toArray();
 
 	if (docs.length === 0) {
 		docs = await collection
-			.find(telemetryFilter(deviceId, userId, false))
+			.find(telemetryFilter(deviceId, userId, false, range))
 			.sort({ recorded_at: -1 })
 			.limit(limit)
 			.toArray();
@@ -526,13 +553,27 @@ async function start() {
 		try {
 			const deviceId = req.query.device_id || "device_0001";
             const userId = req.query.user_id; // Bắt buộc nhận user_id
-			const limit = Math.min(Number(req.query.limit || 300), 5000);
+			const fromValue = req.query.from ?? req.query.start ?? req.query.since;
+			const toValue = req.query.to ?? req.query.end ?? req.query.until;
+			const from = parseDateQuery(fromValue);
+			const to = parseDateQuery(toValue);
+			const hasFrom = hasQueryValue(fromValue);
+			const hasTo = hasQueryValue(toValue);
+			const limit = parseTelemetryLimit(req.query.limit, hasFrom || hasTo ? 10000 : 300);
 
             if (!userId) {
                 return res.status(400).json({ error: "user_id parameter is required to fetch personalized data" });
             }
 
-			const docs = await findTelemetryDocs({ deviceId, userId, limit });
+			if ((hasFrom && !from) || (hasTo && !to)) {
+				return res.status(400).json({ error: "Invalid telemetry time range" });
+			}
+
+			if (from && to && from.getTime() > to.getTime()) {
+				return res.status(400).json({ error: "from must be before to" });
+			}
+
+			const docs = await findTelemetryDocs({ deviceId, userId, limit, from, to });
 
 			const data = docs.reverse().map(telemetryDocToPayload);
 

@@ -9,11 +9,11 @@ import {
 	ResponsiveContainer,
 	CartesianGrid,
 } from "recharts";
-import { getSensorValue, subscribeTelemetrySeries } from "../services/api";
+import { fetchTelemetrySeries, getSensorValue, subscribeTelemetrySeries } from "../services/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 const CHART_BUCKET_MS = 5 * 1000;
-const DEFAULT_POINT_LIMIT = 40;
+const TELEMETRY_HISTORY_LIMIT = 10000;
+const TELEMETRY_REFRESH_MS = 30 * 1000;
 const EXTENDED_POINT_LIMIT = 60;
 
 const TIME_WINDOW_CONFIG = {
@@ -130,14 +130,15 @@ const getChartTimestamp = (entry) => {
 	return timestamp == null ? null : floorToChartBucket(timestamp);
 };
 
-const getLatestChartTimestamp = (data) => {
-	const timestamps = data
-		.map(getChartTimestamp)
-		.filter((value) => Number.isFinite(value));
+const getRecordedTimestamp = (entry) => {
+	const timestamp = getTimeValue(
+		entry?.timestamp ?? entry?.recorded_at ?? entry?.chartTimestamp ?? entry?.chart_timestamp,
+	);
+	return Number.isFinite(timestamp) ? timestamp : null;
+};
 
-	if (!timestamps.length) return null;
-
-	return Math.max(...timestamps);
+const getCurrentChartTimestamp = () => {
+	return floorToChartBucket(Date.now());
 };
 
 const getDataTickStep = (range) => {
@@ -145,12 +146,11 @@ const getDataTickStep = (range) => {
 	return DATA_TICK_STEPS.find((step) => step >= target) || DATA_TICK_STEPS[DATA_TICK_STEPS.length - 1];
 };
 
-const getWindowRange = (data, windowKey) => {
+const getWindowRange = (windowKey, currentTimestamp) => {
 	const config = TIME_WINDOW_CONFIG[windowKey];
 	if (!config) return null;
 
-	const end = getLatestChartTimestamp(data);
-	if (end == null) return null;
+	const end = floorToChartBucket(currentTimestamp ?? Date.now());
 
 	return {
 		start: end - config.duration,
@@ -158,6 +158,36 @@ const getWindowRange = (data, windowKey) => {
 		tickStep: config.tickStep,
 		tickFormatter: formatAxisMinute,
 	};
+};
+
+const getTelemetryFetchParams = (windowKey) => {
+	const config = TIME_WINDOW_CONFIG[windowKey];
+	const params = { limit: TELEMETRY_HISTORY_LIMIT };
+	if (!config) return params;
+
+	const end = getCurrentChartTimestamp();
+	return {
+		...params,
+		from: end - config.duration,
+		to: Date.now(),
+	};
+};
+
+const sortTelemetryData = (series) => {
+	return series
+		.slice()
+		.sort((a, b) => (getRecordedTimestamp(a) ?? 0) - (getRecordedTimestamp(b) ?? 0));
+};
+
+const mergeTelemetryPoint = (series, point, limit = TELEMETRY_HISTORY_LIMIT) => {
+	const keyed = new Map();
+	for (const entry of [...series, point]) {
+		const key = getRecordedTimestamp(entry);
+		if (key == null) continue;
+		keyed.set(String(key), entry);
+	}
+
+	return sortTelemetryData(Array.from(keyed.values())).slice(-limit);
 };
 
 const getFixedTimeScale = (series, windowRange = null) => {
@@ -224,10 +254,10 @@ const buildFixedIntervalData = (series) => {
 const filterDataByWindow = (data, windowKey, windowRange) => {
 	if (!data.length) return [];
 
-	if (windowKey === "all") return data.slice(-DEFAULT_POINT_LIMIT);
+	if (windowKey === "all") return data;
 	if (windowKey === "last60") return data.slice(-EXTENDED_POINT_LIMIT);
 
-	if (!windowRange) return data.slice(-DEFAULT_POINT_LIMIT);
+	if (!windowRange) return data;
 
 	return data.filter((item) => {
 		const timestamp = getChartTimestamp(item);
@@ -235,7 +265,11 @@ const filterDataByWindow = (data, windowKey, windowRange) => {
 	});
 };
 
-const getTimeSpanLabel = (series) => {
+const getTimeSpanLabel = (series, windowRange = null) => {
+	if (windowRange) {
+		return `${formatAxisTime(windowRange.start)} - ${formatAxisTime(windowRange.end)}`;
+	}
+
 	if (!series.length) return "--";
 
 	const start = getChartTimestamp(series[0]);
@@ -400,40 +434,50 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 const Analytics = () => {
 	const [data, setData] = useState([]);
 	const [windowKey, setWindowKey] = useState("all");
+	const [currentChartTimestamp, setCurrentChartTimestamp] = useState(getCurrentChartTimestamp);
 
 	useEffect(() => {
-		const fetchTelemetry = async () => {
-            // Lấy thông tin User hiện tại từ LocalStorage
-            const storedUser = localStorage.getItem('hera_user');
-            if (!storedUser) return;
-            const user = JSON.parse(storedUser);
+		const interval = setInterval(() => {
+			setCurrentChartTimestamp((previous) => {
+				const next = getCurrentChartTimestamp();
+				return next === previous ? previous : next;
+			});
+		}, CHART_BUCKET_MS);
 
+		return () => clearInterval(interval);
+	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		const fetchTelemetry = async () => {
 			try {
-                // Truyền user_id vào URL để Backend chỉ trả về data của user này
-				const res = await fetch(
-					`${API_BASE_URL}/api/telemetry?device_id=device_0001&limit=500&user_id=${user.user_id}`
-				);
-				const json = await res.json();
-				setData(Array.isArray(json) ? json : []);
+				const json = await fetchTelemetrySeries(getTelemetryFetchParams(windowKey));
+				if (!cancelled) {
+					setData(sortTelemetryData(json).slice(-TELEMETRY_HISTORY_LIMIT));
+				}
 			} catch (error) {
-				console.error("Failed to fetch telemetry:", error);
+				if (!cancelled) {
+					console.error("Failed to fetch telemetry:", error);
+				}
 			}
 		};
 
 		fetchTelemetry();
+		const interval = setInterval(fetchTelemetry, TELEMETRY_REFRESH_MS);
+
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+		};
+	}, [windowKey]);
+
+	useEffect(() => {
 		let unsubscribe = null;
 		try {
 			unsubscribe = subscribeTelemetrySeries({
-				limit: 500,
+				limit: TELEMETRY_HISTORY_LIMIT,
 				onData: (point, limit) => {
-					setData((prev) => {
-						const next = [...prev, point];
-						const deduped = next.filter(
-							(item, index, arr) =>
-								arr.findIndex((candidate) => candidate.timestamp === item.timestamp) === index,
-						);
-						return deduped.slice(-limit);
-					});
+					setData((prev) => mergeTelemetryPoint(prev, point, limit));
 				},
 				onError: (error) => {
 					console.error("Telemetry stream error:", error);
@@ -442,17 +486,15 @@ const Analytics = () => {
 		} catch (error) {
 			console.error("Failed to open telemetry stream:", error);
 		}
-		const interval = setInterval(fetchTelemetry, 30000);
 
 		return () => {
 			unsubscribe?.();
-			clearInterval(interval);
 		};
 	}, []);
 
 	const windowRange = useMemo(() => {
-		return getWindowRange(data, windowKey);
-	}, [data, windowKey]);
+		return getWindowRange(windowKey, currentChartTimestamp);
+	}, [windowKey, currentChartTimestamp]);
 
 	const visibleData = useMemo(() => {
 		return filterDataByWindow(data, windowKey, windowRange);
@@ -480,7 +522,7 @@ const Analytics = () => {
 	const humiditySeries = humidityData.map((entry) => entry.humidity);
 	const lightSeries = lightData.map((entry) => entry.light);
 	const chartPointCount = Math.max(temperatureData.length, humidityData.length, lightData.length);
-	const timeSpanLabel = getTimeSpanLabel(visibleData);
+	const timeSpanLabel = getTimeSpanLabel(visibleData, windowRange);
 
 	const tempStats = getStats(tempSeries);
 	const humidityStats = getStats(humiditySeries);
