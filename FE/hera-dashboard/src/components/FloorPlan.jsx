@@ -30,36 +30,36 @@ const COMMAND_CONFIRM_TIMEOUT_MS = 8_000;
 const markerDefinitions = [
   {
     id: 'main_led',
-    name: 'Main LED',
+    name: 'LED toilet',
     type: 'light',
-    room: 'Balcony',
-    x: 15,
-    y: 50,
+    room: 'toilet',
+    x: 85,
+    y: 15,
     target: 'main_led',
     Icon: Lightbulb,
   },
   {
-    id: 'neo_led',
-    name: 'NeoPixel LED',
-    type: 'light',
-    room: 'Living Room',
-    x: 60,
-    y: 40,
-    target: 'neo_led',
-    Icon: Lightbulb,
-  },
-  {
     id: 'ws2812',
-    name: 'WS2812 LED',
+    name: 'LED bedroom',
     type: 'light',
     room: 'Bedroom',
-    x: 78,
+    x: 83,
     y: 47,
     target: 'ws2812',
     Icon: Lightbulb,
   },
   {
-    id: 'mini_fan',
+    id: 'neo_led',
+    name: 'LED living room',
+    type: 'light',
+    room: 'Living Room',
+    x: 46,
+    y: 26,
+    target: 'neo_led',
+    Icon: Lightbulb,
+  },
+  {
+    id: 'Fan living room',
     name: 'Mini Fan',
     type: 'fan',
     room: 'Living Room',
@@ -70,11 +70,11 @@ const markerDefinitions = [
   },
   {
     id: 'relay',
-    name: 'Relay',
+    name: 'TV',
     type: 'relay',
     room: 'Living Room',
-    x: 30,
-    y: 58,
+    x: 32,
+    y: 25,
     target: 'relay',
     Icon: Plug,
   },
@@ -86,7 +86,7 @@ const markerDefinitions = [
     unit: 'C',
     room: 'Living Room',
     x: 55,
-    y: 40,
+    y: 93,
     Icon: Thermometer,
   },
   {
@@ -97,30 +97,20 @@ const markerDefinitions = [
     unit: '%',
     room: 'Living Room',
     x: 50,
-    y: 48,
+    y: 93,
     Icon: Droplets,
   },
+// Cảm biến ánh sáng, correct later  
   {
-    id: 'light',
-    name: 'Light',
+    id: 'photon',
+    name: 'Photon',
     type: 'sensor',
-    sensor: 'light',
-    unit: 'lux',
+    sensor: 'photon',
+    unit: '%',
     room: 'Living Room',
-    x: 65,
-    y: 32,
+    x: 53,
+    y: 7,
     Icon: SunMedium,
-  },
-  {
-    id: 'gas_ppm',
-    name: 'Gas',
-    type: 'sensor',
-    sensor: 'gas_ppm',
-    unit: 'ppm',
-    room: 'Kitchen',
-    x: 43,
-    y: 68,
-    Icon: Gauge,
   },
 ];
 
@@ -180,16 +170,16 @@ function DeviceMarker({ marker, selected, stale, pending, onClick }) {
         top: `${marker.y}%`,
         width: selected ? 58 : 48,
         height: selected ? 58 : 48,
-        border: selected ? '3px solid #2563eb' : '2px solid white',
+        border: selected ? '3px solid #DF6D14' : '2px solid white',
         background: isSensor
-          ? 'rgba(14, 165, 233, 0.95)'
+          ? 'rgba(66, 122, 181, 0.95)'
           : isOn
-            ? 'rgba(250, 204, 21, 0.96)'
-            : 'rgba(30, 41, 59, 0.9)',
-        color: isSensor || isOn ? '#111827' : 'white',
+            ? 'rgba(58, 125, 68, 0.96)'
+            : 'rgba(107, 114, 128, 0.9)',
+        color: isSensor || isOn ? '#ffffff' : 'white',
         opacity: stale ? 0.65 : 1,
         boxShadow: isOn
-          ? '0 0 28px rgba(250, 204, 21, 0.85), 0 8px 20px rgba(0,0,0,0.35)'
+          ? '0 0 28px rgba(58, 125, 68, 0.96), 0 8px 20px rgba(0,0,0,0.35)'
           : '0 8px 20px rgba(0,0,0,0.35)',
       }}
     >
@@ -219,9 +209,9 @@ function Notice({ tone = 'info', children }) {
     <div
       style={{
         ...styles.notice,
-        borderColor: tone === 'error' ? '#fecaca' : '#bfdbfe',
-        background: tone === 'error' ? '#fef2f2' : '#eff6ff',
-        color: tone === 'error' ? '#991b1b' : '#1e3a8a',
+        borderColor: tone === 'error' ? '#DF6D14' : '#3A7D44',
+        background: tone === 'error' ? '#FED7AA' : '#E8F5E9',
+        color: tone === 'error' ? '#DF6D14' : '#3A7D44',
       }}
     >
       <AlertTriangle size={18} />
@@ -645,7 +635,7 @@ const styles = {
   page: {
     width: '100%',
     minHeight: '100vh',
-    background: '#f3f4f6',
+    background: '#F8F5E9',
     display: 'grid',
     gridTemplateColumns: 'minmax(640px, 1fr) 340px',
     gap: 20,
@@ -689,7 +679,7 @@ const styles = {
     width: 11,
     height: 11,
     borderRadius: '999px',
-    background: '#2563eb',
+    background: '#3A7D44',
     border: '2px solid white',
   },
   glow: {
@@ -699,7 +689,7 @@ const styles = {
     height: 220,
     borderRadius: '999px',
     background:
-      'radial-gradient(circle, rgba(255,230,100,0.55) 0%, rgba(255,230,100,0.22) 35%, rgba(255,230,100,0) 70%)',
+      'radial-gradient(circle, rgba(223,109,20,0.55) 0%, rgba(223,109,20,0.22) 35%, rgba(223,109,20,0) 70%)',
     pointerEvents: 'none',
     zIndex: 2,
   },
@@ -733,8 +723,8 @@ const styles = {
   modeBadge: {
     borderRadius: 999,
     padding: '5px 9px',
-    background: '#e0f2fe',
-    color: '#075985',
+    background: '#E8F5E9',
+    color: '#3A7D44',
     fontSize: 12,
     fontWeight: 800,
   },
@@ -744,7 +734,7 @@ const styles = {
     padding: '11px 12px',
     border: 'none',
     borderRadius: 8,
-    background: '#2563eb',
+    background: '#3A7D44',
     color: 'white',
     fontWeight: 700,
     cursor: 'pointer',
@@ -800,7 +790,7 @@ const styles = {
   iconButton: {
     border: 'none',
     borderRadius: 8,
-    background: '#2563eb',
+    background: '#3A7D44',
     color: 'white',
     display: 'flex',
     alignItems: 'center',

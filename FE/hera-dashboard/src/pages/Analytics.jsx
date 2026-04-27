@@ -247,23 +247,23 @@ const getTimeSpanLabel = (series) => {
 
 const getTemperatureStatus = (value) => {
 	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
-	if (value < 25) return { label: "Low temperature", className: "bg-blue-100 text-blue-700" };
-	if (value > 35) return { label: "High temperature", className: "bg-red-100 text-red-700" };
-	return { label: "Normal", className: "bg-green-100 text-green-700" };
+	if (value < 25) return { label: "Low temperature", className: "bg-[#DCE9F8] text-[#427AB5]" };
+	if (value > 35) return { label: "High temperature", className: "bg-[#FED7AA] text-[#DF6D14]" };
+	return { label: "Normal", className: "bg-[#E8F5E9] text-[#3A7D44]" };
 };
 
 const getHumidityStatus = (value) => {
 	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
-	if (value < 60) return { label: "Low humidity", className: "bg-yellow-100 text-yellow-700" };
-	if (value > 80) return { label: "High humidity", className: "bg-cyan-100 text-cyan-700" };
-	return { label: "Normal", className: "bg-green-100 text-green-700" };
+	if (value < 60) return { label: "Low humidity", className: "bg-[#DCE9F8] text-[#427AB5]" };
+	if (value > 80) return { label: "High humidity", className: "bg-[#FED7AA] text-[#DF6D14]" };
+	return { label: "Normal", className: "bg-[#E8F5E9] text-[#3A7D44]" };
 };
 
 const getLightStatus = (value) => {
 	if (value == null) return { label: "No data", className: "bg-gray-100 text-gray-600" };
-	if (value < 100) return { label: "Low light", className: "bg-indigo-100 text-indigo-700" };
-	if (value > 500) return { label: "High light", className: "bg-orange-100 text-orange-700" };
-	return { label: "Normal", className: "bg-green-100 text-green-700" };
+	if (value < 100) return { label: "Low light", className: "bg-[#DCE9F8] text-[#427AB5]" };
+	if (value > 500) return { label: "High light", className: "bg-[#FED7AA] text-[#DF6D14]" };
+	return { label: "Normal", className: "bg-[#E8F5E9] text-[#3A7D44]" };
 };
 
 const withNestedSensorMetrics = (entry) => ({
@@ -553,7 +553,7 @@ const Analytics = () => {
 					value={latestTemperature.temp == null ? "--" : formatMetric(latestTemperature.temp)}
 					unit="Celsius"
 					dataKey="temp"
-					color="#D6AFA6"
+					color="#DF6D14"
 					data={temperatureData}
 					Icon={Thermometer}
 					stats={tempStats}
@@ -566,7 +566,7 @@ const Analytics = () => {
 					value={latestHumidity.humidity == null ? "--" : formatMetric(latestHumidity.humidity)}
 					unit="Relative Humidity"
 					dataKey="humidity"
-					color="#8B9A84"
+					color="#3A7D44"
 					data={humidityData}
 					Icon={Droplets}
 					stats={humidityStats}

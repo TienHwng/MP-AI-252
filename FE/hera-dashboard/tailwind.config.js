@@ -4,10 +4,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#F7F5F0', // Màu nền tổng
-        primary: '#8B9A84',    // Màu xanh lá trầm (Sidebar active, nút bấm)
+        background: '#F8F5E9', // Beige nhạt - Màu nền tổng
+        primary: '#3A7D44',    // Green đậm - Màu chính (Sidebar active, nút bấm)
+        primaryLight: '#9DC08B', // Light Green - Màu phụ
+        accent: '#DF6D14',     // Orange - Màu nhấn
         card: '#FFFFFF',       // Nền card trắng
-        cardDark: '#D6AFA6',   // Màu hồng/đất cho nút Active
+        cardDark: '#3A7D44',   // Green đậm cho nút Active
         textMain: '#333333',
         textMuted: '#888888'
       }

@@ -638,6 +638,21 @@ if __name__ == "__main__":
 			)
 			print(
 				Color.CYAN
+				+ "║   "
+				+ Color.YELLOW
+				+ "15."
+				+ Color.RESET
+				+ " Set WS2812 Brightness      "
+				+ Color.YELLOW
+				+ "16."
+				+ Color.RESET
+				+ " Set Strip Brightness       "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
 				+ "╟─────────────────────────────────────────────────────────────────╢"
 				+ Color.RESET
 			)
@@ -663,6 +678,17 @@ if __name__ == "__main__":
 				+ "8."
 				+ Color.RESET
 				+ " Turn OFF mini fan           "
+				+ Color.CYAN
+				+ "║"
+				+ Color.RESET
+			)
+			print(
+				Color.CYAN
+				+ "║   "
+				+ Color.BLUE
+				+ "17."
+				+ Color.RESET
+				+ " Set Fan Speed (0-255)                                     "
 				+ Color.CYAN
 				+ "║"
 				+ Color.RESET
@@ -754,7 +780,7 @@ if __name__ == "__main__":
 
 			# Lấy lựa chọn từ người dùng
 			choice = input(
-				Color.BOLD + " [ INPUT ] Please choose an option (0-14): " + Color.RESET
+				Color.BOLD + " [ INPUT ] Please choose an option (0-17): " + Color.RESET
 			).strip()
 			if choice == "0":
 				print(
@@ -871,16 +897,16 @@ if __name__ == "__main__":
 						f"  - LED       : {format_status(devices.get('led', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))}"
+						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))} (Brightness: {devices.get('neo_led', {}).get('brightness', 'N/A')})"
 					)
 					print(
-						f"  - WS2812    : {format_status(devices.get('ws2812', {}).get('status', 'Unknown'))}"
+						f"  - WS2812    : {format_status(devices.get('ws2812', {}).get('status', 'Unknown'))} (Brightness: {devices.get('ws2812', {}).get('brightness', 'N/A')})"
 					)
 					print(
 						f"  - Relay     : {format_status(devices.get('relay', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - Mini fan  : {format_status(devices.get('mini_fan', {}).get('status', 'Unknown'))}"
+						f"  - Mini fan  : {format_status(devices.get('mini_fan', {}).get('status', 'Unknown'))} (Speed: {devices.get('mini_fan', {}).get('speed', 'N/A')})"
 					)
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
@@ -932,11 +958,32 @@ if __name__ == "__main__":
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
+			elif choice == "15":
+				try:
+					val = int(input(Color.YELLOW + "Enter WS2812 Brightness (0-255): " + Color.RESET).strip())
+					mqtt_system.send_rpc_command("setWS2812Brightness", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
+			elif choice == "16":
+				try:
+					val = int(input(Color.YELLOW + "Enter Strip Brightness (0-255): " + Color.RESET).strip())
+					mqtt_system.send_rpc_command("setStripBrightness", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
+			elif choice == "17":
+				try:
+					val = int(input(Color.BLUE + "Enter Fan Speed (0-255): " + Color.RESET).strip())
+					mqtt_system.send_rpc_command("setFanSpeed", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
 			else:
 				print(
 					Color.RED
 					+ Color.BOLD
-					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 14."
+					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 17."
 					+ Color.RESET
 				)
 

@@ -2,57 +2,31 @@ import React, { useEffect, useState } from 'react';
 import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
-import SafetyStatusCards from '../components/dashboard/SafetyStatusCards';
+import SceneCards from '../components/dashboard/SceneCards';
+// Giả sử em sẽ tạo component này sau, anh tạm để placeholder ở đây
+import ActivityLog from '../components/dashboard/ActivityLog'; 
+
 import {
   controlDeviceState,
   fetchLatestSensorData,
   getDeviceStatus,
-  getSensorValue,
   subscribeLatestSensorData,
   logoutUser,
+  sendRpcCommand 
 } from '../services/api';
 
 const getRelativeUpdatedLabel = (timestamp) => {
   const updated = new Date(timestamp).getTime();
-  if (Number.isNaN(updated)) {
-    return 'just now';
-  }
+  if (Number.isNaN(updated)) return 'just now';
 
   const diffSeconds = Math.max(0, Math.floor((Date.now() - updated) / 1000));
-  if (diffSeconds < 60) {
-    return 'just now';
-  }
+  if (diffSeconds < 60) return 'just now';
 
   const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
 
   const diffHours = Math.floor(diffMinutes / 60);
   return `${diffHours}h ago`;
-};
-
-const getAirQualityState = (aqi, temperature, humidity) => {
-  const hasAqi = Number.isFinite(aqi) && aqi > 0;
-  const hasEnvironment = Number.isFinite(temperature) && Number.isFinite(humidity);
-  if (!hasAqi && !hasEnvironment) return { level: 'unknown', progress: 0 };
-  const safeTemperature = Number.isFinite(temperature) ? temperature : 25;
-  const safeHumidity = Number.isFinite(humidity) ? humidity : 60;
-
-  const score = hasAqi
-    ? aqi
-    : Math.max(0, Math.min(100, (safeTemperature - 20) * 3 + (safeHumidity - 45) * 1.2));
-
-  if (score >= 70) return { level: 'danger', progress: 90 };
-  if (score >= 40) return { level: 'warning', progress: 60 };
-  return { level: 'good', progress: 30 };
-};
-
-const getGasState = (gasPpm, gasDetected) => {
-  if (!gasDetected && !Number.isFinite(gasPpm)) return { level: 'unknown', progress: 0 };
-  if (gasDetected || gasPpm >= 300) return { level: 'danger', progress: 95 };
-  if (gasPpm >= 120) return { level: 'warning', progress: 65 };
-  return { level: 'good', progress: 20 };
 };
 
 const Home = ({ user, onLogout }) => {
@@ -60,12 +34,14 @@ const Home = ({ user, onLogout }) => {
   const [sensorData, setSensorData] = useState(null);
   const [telemetryError, setTelemetryError] = useState('');
   const [isSubmittingControl, setIsSubmittingControl] = useState(false);
+  
+  // State mới để quản lý Tab ở cột phải
+  const [activeRightTab, setActiveRightTab] = useState('assistant');
 
   useEffect(() => {
     const timerId = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
-
     return () => clearInterval(timerId);
   }, []);
 
@@ -75,7 +51,6 @@ const Home = ({ user, onLogout }) => {
 
     const loadLatestData = async () => {
       try {
-        // Hàm này bên api.js đã được cấu hình tự lấy user_id của user đang login
         const latest = await fetchLatestSensorData();
         if (!cancelled) {
           setSensorData(latest);
@@ -132,37 +107,65 @@ const Home = ({ user, onLogout }) => {
     }
   };
 
+  const handleActivateScene = async (sceneId) => {
+    setIsSubmittingControl(true);
+    try {
+      if (sceneId === 'movie') {
+        await Promise.all([
+          controlDeviceState('main_led', false),
+          controlDeviceState('mini_fan', true),
+          controlDeviceState('relay', true) 
+        ]);
+      } 
+      else if (sceneId === 'sleep') {
+        await Promise.all([
+          controlDeviceState('main_led', false),
+          controlDeviceState('neo_led', false),
+          controlDeviceState('ws2812', false)
+        ]);
+      } 
+      else if (sceneId === 'away') {
+        await Promise.all([
+          controlDeviceState('main_led', false),
+          controlDeviceState('mini_fan', false),
+          controlDeviceState('relay', false)
+        ]);
+      }
+    } catch (error) {
+      console.error(`Failed to activate scene ${sceneId}:`, error);
+      setTelemetryError(error.message || `Failed to activate ${sceneId}`);
+    } finally {
+      setIsSubmittingControl(false);
+    }
+  };
+
+  const handleIntensityChange = async (deviceId, percentValue, pwmValue, rpcMethod) => {
+    if (!rpcMethod) return;
+    try {
+      await sendRpcCommand(rpcMethod, pwmValue);
+    } catch (error) {
+      console.error(`Lỗi khi điều chỉnh cường độ cho ${deviceId}:`, error);
+      setTelemetryError(error.message || `Không thể điều chỉnh cường độ cho ${deviceId}`);
+    }
+  };
+
   const handleLogout = () => {
     logoutUser();
     onLogout();
   };
 
-  const updatedLabel = sensorData ? getRelativeUpdatedLabel(sensorData.updatedAt) : 'unavailable';
-  const temperature = getSensorValue(sensorData, 'temperature');
-  const humidity = getSensorValue(sensorData, 'humidity');
-  const gasPpm = getSensorValue(sensorData, 'gas_ppm');
-  const gasDetected = getSensorValue(sensorData, 'gas_detected');
-  const airState = getAirQualityState(
-    getSensorValue(sensorData, 'air_quality'),
-    temperature,
-    humidity,
-  );
-  const gasState = getGasState(gasPpm, gasDetected);
-
   return (
-    <div className="p-6 lg:p-8 w-full h-full min-h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 lg:gap-8">
-      <div className="min-w-0 flex flex-col gap-8">
-        <header className="flex justify-between items-end">
+    <div className="p-4 lg:p-6 w-full h-screen grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_350px] gap-4 lg:gap-6 overflow-hidden bg-bgMain">
+      {/* CỘT TRÁI: Dashboard chính */}
+      <div className="min-w-0 flex flex-col gap-6 overflow-y-auto pr-1 custom-scrollbar">
+        <header className="flex flex-wrap justify-between items-end gap-3">
           <div>
             <h2 className="text-3xl font-semibold text-textMain">
               Welcome Home, {user?.full_name || 'User'} !
             </h2>
             <p className="text-textMuted mt-1">
               {currentTime.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
+                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
               })}
             </p>
           </div>
@@ -170,22 +173,15 @@ const Home = ({ user, onLogout }) => {
           <div className="text-right">
             <h3 className="text-2xl text-textMain">
               {currentTime.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true,
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
               })}
             </h3>
             <div className="mt-2 flex items-center justify-end gap-2">
-              <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${sensorData?.mqtt_connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              <span className={`text-xs px-3 py-1 rounded-full flex items-center gap-2 transition-colors ${sensorData?.mqtt_connected ? 'bg-[#E8F5E9] text-[#3A7D44]' : 'bg-[#FED7AA] text-[#DF6D14]'}`}>
+                <span className={`w-2 h-2 rounded-full ${sensorData?.mqtt_connected ? 'bg-[#3A7D44]' : 'bg-[#DF6D14]'}`}></span>
                 {sensorData?.mqtt_connected ? 'MQTT Live' : 'MQTT Offline'}
               </span>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="text-xs bg-cardDark text-white px-3 py-1 rounded-full"
-              >
+              <button onClick={handleLogout} className="text-xs bg-[#E8F5E9] text-[#3A7D44] px-3 py-1 rounded-full font-medium hover:bg-[#DF6D14] hover:text-white transition-colors">
                 Logout
               </button>
             </div>
@@ -194,42 +190,52 @@ const Home = ({ user, onLogout }) => {
 
         <section>
           <h4 className="font-medium mb-3">Environment & Safety</h4>
-          {telemetryError && (
-            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {telemetryError}
-            </div>
-          )}
+          {telemetryError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{telemetryError}</div>}
           <EnvironmentCards data={sensorData} />
-          <SafetyStatusCards
-            airQuality={{
-              value: getSensorValue(sensorData, 'air_quality') == null ? '--' : Number(getSensorValue(sensorData, 'air_quality')).toFixed(0),
-              unit: 'AQI',
-              level: airState.level,
-              progress: airState.progress,
-              updatedAt: updatedLabel,
-            }}
-            gasDetection={{
-              value: gasPpm == null ? '--' : Number(gasPpm).toFixed(0),
-              unit: 'ppm',
-              level: gasState.level,
-              progress: gasState.progress,
-              updatedAt: updatedLabel,
-            }}
-          />
+        </section>
+
+        <section>
+          <h4 className="font-medium mb-3">Smart Scenes</h4>
+          <SceneCards isSubmitting={isSubmittingControl} onActivateScene={handleActivateScene} />
         </section>
 
         <section>
           <h4 className="font-medium mb-3">Quick Controls</h4>
-          <ControlCard
-            data={sensorData}
-            isSubmitting={isSubmittingControl}
-            onToggleDevice={handleToggleDevice}
-          />
+          <ControlCard data={sensorData} isSubmitting={isSubmittingControl} onToggleDevice={handleToggleDevice} onChangeIntensity={handleIntensityChange} />
         </section>
       </div>
 
-      <div className="h-full min-h-[560px]">
-        <AiAssistant />
+      {/* CỘT PHẢI: AI Assistant & Activity Log */}
+      <div className="h-full min-h-[560px] flex flex-col bg-white/50 backdrop-blur-sm rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Tab Switcher */}
+        <div className="flex p-2 gap-2 bg-gray-50/50">
+          <button 
+            onClick={() => setActiveRightTab('assistant')}
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-2xl transition-all duration-200 ${activeRightTab === 'assistant' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            H.E.R.A Assistant
+          </button>
+          <button 
+            onClick={() => setActiveRightTab('logs')}
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-2xl transition-all duration-200 ${activeRightTab === 'logs' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Activity Log
+          </button>
+        </div>
+
+        {/* Nội dung Tab */}
+        <div className="flex-1 overflow-hidden relative">
+          {activeRightTab === 'assistant' ? (
+            <div className="h-full animate-fadeIn">
+              <AiAssistant />
+            </div>
+          ) : (
+            <div className="h-full animate-fadeIn">
+              {/* Truyền sensorData vào nếu bé Mận muốn log cập nhật realtime từ state */}
+              <ActivityLog data={sensorData} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

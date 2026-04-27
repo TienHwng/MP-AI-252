@@ -31,6 +31,7 @@ const App = () => {
   const [shouldResetOnOpen] = useState(() => !isPageReload());
   const [user, setUser] = useState(() => shouldResetOnOpen ? null : getStoredUser());
   const [activePage, setActivePage] = useState(() => shouldResetOnOpen ? 'home' : getSavedDashboardPage());
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   useEffect(() => {
     if (!shouldResetOnOpen) return;
@@ -71,9 +72,14 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} />
-      <main className="min-h-screen">
+    <div className={`min-h-screen bg-background transition-all duration-300 ${isSidebarExpanded ? 'pl-64' : 'pl-0'}`}>
+      <Sidebar 
+        activePage={activePage} 
+        setActivePage={setActivePage} 
+        isExpanded={isSidebarExpanded}
+        setIsExpanded={setIsSidebarExpanded}
+      />
+      <main className="min-h-screen w-full overflow-hidden">
         {renderPage()}
       </main>
     </div>

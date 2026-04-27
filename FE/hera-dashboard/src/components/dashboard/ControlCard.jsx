@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Fan, Lightbulb, Plug, Square } from 'lucide-react';
 import { getDeviceStatus } from '../../services/api';
 
 const controls = [
-	{ id: 'main_led', label: 'Main LED', Icon: Lightbulb },
-	{ id: 'neo_led', label: 'NeoPixel', Icon: Square },
-	{ id: 'ws2812', label: 'WS2812', Icon: Lightbulb },
-	{ id: 'mini_fan', label: 'Mini Fan', Icon: Fan },
-	{ id: 'relay', label: 'Relay', Icon: Plug },
+	{ id: 'main_led', label: 'LED living room', Icon: Lightbulb, hasSlider: true },
+	{ id: 'neo_led', label: 'LED bedroom', Icon: Square, hasSlider: true },
+	{ id: 'ws2812', label: 'LED toilet', Icon: Lightbulb, hasSlider: true },
+	{ id: 'mini_fan', label: 'Fan living room', Icon: Fan, hasSlider: true },
+	{ id: 'relay', label: 'TV', Icon: Plug, hasSlider: false },
 ];
 
 const stateLabel = (value) => {
@@ -16,41 +16,126 @@ const stateLabel = (value) => {
 	return 'Unknown';
 };
 
-const ControlCard = ({ data, isSubmitting, onToggleDevice }) => {
+const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onChangeIntensity }) => {
+	const Icon = control.Icon;
+	const status = getDeviceStatus(data, control.id);
+	const active = status === true;
+
+	const serverIntensity = data?.[control.id]?.intensity || 50;
+	const [localVal, setLocalVal] = useState(serverIntensity);
+
+	useEffect(() => {
+		setLocalVal(serverIntensity);
+	}, [serverIntensity]);
+
+	const cardClass = active
+		? 'bg-[#3A7D44] text-white hover:bg-[#9DC08B]'
+		: 'bg-white text-textMain hover:shadow-md';
+
+	const subTextClass = active ? 'text-white/90' : 'text-textMuted';
+	const iconClass = active ? 'text-white' : 'text-[#3A7D44]';
+
+	const handleSliderChange = (e) => {
+		setLocalVal(parseInt(e.target.value));
+	};
+
+	const handleSliderRelease = () => {
+		if (onChangeIntensity && localVal !== serverIntensity) {
+			// Quy đổi % (0-100) sang dải PWM (0-255) cho vi điều khiển ESP32
+			const pwmValue = Math.round((localVal / 100) * 255);
+			
+			// Map đúng tên method dựa trên mqtt_manager.py
+			let rpcMethod = "";
+			switch (control.id) {
+				case 'ws2812': rpcMethod = 'setWS2812Brightness'; break;
+				case 'neo_led': rpcMethod = 'setStripBrightness'; break;
+				case 'mini_fan': rpcMethod = 'setFanSpeed'; break;
+				case 'main_led': rpcMethod = 'setMainLedBrightness'; break; // Anh giả định tên hàm này
+				default: rpcMethod = '';
+			}
+
+			// Gửi dữ liệu lên component cha
+			onChangeIntensity(control.id, localVal, pwmValue, rpcMethod);
+		}
+	};
+
+	return (
+		<div
+			className={`p-5 rounded-lg relative shadow-sm transition-colors duration-200 flex flex-col ${cardClass} ${disabled ? 'opacity-60' : ''}`}
+		>
+			{active && (
+				<span className="absolute top-4 right-4 w-3 h-3 bg-[#faf2f2] rounded-full shadow-sm"></span>
+			)}
+
+			<button
+				type="button"
+				onClick={() => onToggleDevice(control.id)}
+				disabled={disabled}
+				className={`text-left outline-none w-full flex-grow ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+			>
+				<div className={`mb-4 ${iconClass}`}>
+					<Icon size={24} strokeWidth={1.9} className="shrink-0" />
+				</div>
+				<h5 className="font-medium leading-tight">{control.label}</h5>
+				<p className={`text-xs mt-1 ${subTextClass}`}>
+					{isSubmitting ? 'Sending...' : stateLabel(status)}
+				</p>
+			</button>
+
+			{/* Khu vực thanh cuộn */}
+			{control.hasSlider && (
+				<div className={`mt-1 transition-all duration-300 ease-in-out overflow-hidden flex flex-col justify-end ${active ? 'h-[3rem] opacity-100' : 'h-0 opacity-0'}`}>
+					
+					{/* Hiển thị % */}
+					<div className="flex justify-end mb-1 px-0.5">
+						<span className="text-[11px] font-bold text-[#faf2f2] drop-shadow-sm tracking-wide">
+							{localVal}%
+						</span>
+					</div>
+
+					{/* Bọc thanh cuộn trong div có padding dọc (py-1.5) để không bị cắt xén nút tròn */}
+					<div className="py-1.5 flex items-center">
+						<input
+							type="range"
+							min="0"
+							max="100"
+							value={localVal}
+							disabled={disabled || !active}
+							onChange={handleSliderChange}
+							onMouseUp={handleSliderRelease}
+							onTouchEnd={handleSliderRelease}
+							style={{
+								background: `linear-gradient(to right, #faf2f2 ${localVal}%, rgba(255, 255, 255, 0.25) ${localVal}%)`
+							}}
+							className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none 
+							[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:bg-[#faf2f2] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-sm
+							[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:bg-[#faf2f2] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-sm"
+						/>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+};
+
+const ControlCard = ({ data, isSubmitting, onToggleDevice, onChangeIntensity }) => {
 	return (
 		<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
 			{controls.map((control) => {
-				const Icon = control.Icon;
 				const status = getDeviceStatus(data, control.id);
-				const active = status === true;
 				const known = typeof status === 'boolean';
 				const disabled = isSubmitting || !known;
-				const cardClass = active
-					? 'bg-cardDark text-white'
-					: 'bg-white text-textMain';
-
-				const subTextClass = active ? 'text-white/80' : 'text-textMuted';
-				const iconClass = active ? '' : 'text-textMuted';
 
 				return (
-					<button
+					<DeviceItem
 						key={control.id}
-						type="button"
-						onClick={() => onToggleDevice(control.id)}
+						control={control}
+						data={data}
+						isSubmitting={isSubmitting}
 						disabled={disabled}
-						className={`p-5 rounded-lg relative shadow-sm text-left transition-colors duration-200 ${cardClass} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-					>
-						{active && (
-							<span className="absolute top-4 right-4 w-3 h-3 bg-white rounded-full"></span>
-						)}
-						<div className={`mb-4 ${iconClass}`}>
-							<Icon size={24} strokeWidth={1.9} className="shrink-0" />
-						</div>
-						<h5 className="font-medium leading-tight">{control.label}</h5>
-						<p className={`text-xs mt-1 ${subTextClass}`}>
-							{isSubmitting ? 'Sending...' : stateLabel(status)}
-						</p>
-					</button>
+						onToggleDevice={onToggleDevice}
+						onChangeIntensity={onChangeIntensity}
+					/>
 				);
 			})}
 		</div>

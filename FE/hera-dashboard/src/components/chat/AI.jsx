@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Send, X } from 'lucide-react';
 import { sendAssistantMessage } from '../../services/api';
 
@@ -13,6 +13,13 @@ const AiAssistant = () => {
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const handleStartVoiceCommand = () => {
     setIsRecording(true);
@@ -64,7 +71,10 @@ const AiAssistant = () => {
         <p className="text-sm text-textMuted">Runtime command channel</p>
       </div>
 
-      <div className="flex-1 p-6 overflow-y-auto space-y-4">
+      <div 
+        ref={scrollRef}
+        className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar"
+      >
         {messages.length === 0 && (
           <div className="rounded-lg border border-gray-100 bg-background p-4 text-sm text-textMuted">
             No assistant messages in this session.
@@ -86,7 +96,7 @@ const AiAssistant = () => {
         ))}
       </div>
 
-      <div className="p-6 bg-white border-t border-[#eae5dc] flex flex-col gap-4">
+      <div className="p-6 bg-white border-t border-[#e0ddd0] flex flex-col gap-4">
         <div className="flex gap-2">
           <input
             type="text"
@@ -96,13 +106,13 @@ const AiAssistant = () => {
               if (event.key === 'Enter') handleSend();
             }}
             placeholder={isRecording ? 'Recording voice command...' : 'Ask H.E.R.A. anything...'}
-            className="flex-1 bg-[#f7f5f0] border border-[#eae5dc] rounded-lg px-5 py-3 text-sm focus:outline-none focus:border-[#9bb096] text-[#4a3f35]"
+            className="flex-1 bg-[#f8f5e9] border border-[#e0ddd0] rounded-lg px-5 py-3 text-sm focus:outline-none focus:border-[#3A7D44] text-[#4a3f35]"
           />
           <button
             type="button"
             onClick={handleSend}
             disabled={isSending}
-            className="bg-[#8ba089] text-white p-3 rounded-lg hover:bg-[#7a8f78] transition-colors shadow-sm disabled:opacity-60"
+            className="bg-[#3A7D44] text-white p-3 rounded-lg hover:bg-[#9DC08B] transition-colors shadow-sm disabled:opacity-60"
           >
             <Send size={18} />
           </button>
@@ -112,7 +122,7 @@ const AiAssistant = () => {
             type="button"
             onClick={handleStartVoiceCommand}
             className={`flex-1 text-white py-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all shadow-sm ${
-              isRecording ? 'bg-[#d98080] hover:bg-[#c96e6e]' : 'bg-[#a3b19c] hover:bg-[#8ba089]'
+              isRecording ? 'bg-[#d98080] hover:bg-[#c96e6e]' : 'bg-[#9DC08B] hover:bg-[#3A7D44]'
             }`}
           >
             <Mic size={20} className={isRecording ? 'animate-pulse' : ''} />

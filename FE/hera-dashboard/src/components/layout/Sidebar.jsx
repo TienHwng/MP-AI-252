@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Home, BarChart3, House, Lightbulb, Settings } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
+const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
   const menuItems = [
     { id: 'home', Icon: Home, label: 'Home' },
     { id: 'analytics', Icon: BarChart3, label: 'Analytics' },

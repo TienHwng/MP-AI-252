@@ -432,3 +432,19 @@ export const updateModelSettings = async (settings) => {
 	}
 	return normalizeModelSettings(payload.settings || settings);
 };
+
+export const sendRpcCommand = async (method, params) => {
+	const user = getStoredUser();
+	return fetchJson(`${HERA_API_BASE_URL}/api/rpc`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({
+			method,
+			params,
+			user_id: user?.user_id || 'dashboard',
+			session_id: user?.user_id || 'dashboard',
+		}),
+	}, 'HERA dashboard API');
+};

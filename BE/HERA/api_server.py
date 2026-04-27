@@ -134,6 +134,29 @@ async def handle_set_device_state(request: web.Request) -> web.Response:
 	status = 200 if result.ok else 409
 	return web.json_response(jsonable(result.model_dump(mode="json")), status=status)
 
+async def handle_rpc_command(request: web.Request) -> web.Response:
+	try:
+		payload = await request.json()
+	except json.JSONDecodeError:
+		return web.json_response({"ok": False, "error": "invalid_json"}, status=400)
+
+	method = payload.get("method")
+	params = payload.get("params")
+
+	if not method or params is None:
+		return web.json_response({"ok": False, "error": "method and params are required"}, status=400)
+
+	request.app["mqtt"].publish_rpc(method, params)
+	
+	return web.json_response(
+		{
+			"ok": True,
+			"message": f"Command '{method}' sent successfully",
+			"method": method,
+			"params": params
+		}
+	)
+
 
 async def handle_write_sensor_value(request: web.Request) -> web.Response:
 	if MODE != "sim":
@@ -261,6 +284,7 @@ def create_app() -> web.Application:
 	app.router.add_get("/api/devices/status", handle_device_status)
 	app.router.add_post("/api/devices/{target}/state", handle_set_device_state)
 	app.router.add_post("/api/sensors/{sensor}/value", handle_write_sensor_value)
+	app.router.add_post("/api/rpc", handle_rpc_command)
 	app.router.add_post("/api/assistant/message", handle_assistant_message)
 	app.router.add_options("/{tail:.*}", lambda request: web.Response(status=204))
 	app.on_cleanup.append(cleanup)
