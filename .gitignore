@@ -110,3 +110,5 @@ docs/**
 # Repository-specific
 docs/report/
 .ruff_cache/
+
+todo.md
