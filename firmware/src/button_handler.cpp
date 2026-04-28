@@ -37,7 +37,7 @@ void button_handler(void *pvParameters) {
                     // Chuyển sang trang tiếp theo, nếu vượt quá số trang thì vòng lại 0
                     current_lcd_screen = (LcdScreen)((current_lcd_screen + 1) % SCREEN_COUNT);
                     
-                    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+                    if (IS_DEBUG_MODE || IS_SHOW_BUTTON_STATUS) {
                         Serial.printf("[BUTTON] BOOT pressed -> LCD Screen %d\n", current_lcd_screen);
                     }
                 }

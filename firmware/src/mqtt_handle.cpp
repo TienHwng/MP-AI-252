@@ -60,6 +60,7 @@ String method_led_blinky		= "setValueLedBlinky";
 String method_neo_led			= "setValueNeoLed";
 String method_ws2812			= "setValueWS2812";
 String method_ws2812_brightness	= "setWS2812Brightness";
+String method_ws2812_color		= "setWS2812Color";
 String method_strip_brightness	= "setStripBrightness";
 String method_relay				= "setValueRelay";
 String method_mini_fan			= "setValueMiniFan";
@@ -80,6 +81,60 @@ static bool setActuatorState(SemaphoreHandle_t mutex, boolean &stateRef, bool st
 	pinMode(pin, OUTPUT);
 	digitalWrite(pin, state ? HIGH : LOW);
 	return true;
+}
+
+static String formatWs2812Color(uint8_t red, uint8_t green, uint8_t blue) {
+	char buffer[8];
+	snprintf(buffer, sizeof(buffer), "#%02X%02X%02X", red, green, blue);
+	return String(buffer);
+}
+
+static bool parseWs2812ColorHex(String value, uint8_t &red, uint8_t &green, uint8_t &blue) {
+	value.trim();
+	if (value.startsWith("#")) {
+		value.remove(0, 1);
+	}
+	if (value.startsWith("0x") || value.startsWith("0X")) {
+		value.remove(0, 2);
+	}
+	if (value.length() != 6) {
+		return false;
+	}
+
+	char *endPtr = nullptr;
+	unsigned long raw = strtoul(value.c_str(), &endPtr, 16);
+	if (endPtr == value.c_str() || *endPtr != '\0') {
+		return false;
+	}
+
+	red   = (raw >> 16) & 0xFF;
+	green = (raw >> 8) & 0xFF;
+	blue  = raw & 0xFF;
+	return true;
+}
+
+static bool parseWs2812ColorParams(JsonVariantConst params, uint8_t &red, uint8_t &green, uint8_t &blue) {
+	if (params.is<JsonObjectConst>()) {
+		JsonObjectConst color = params.as<JsonObjectConst>();
+		if (!color["r"].is<int>() || !color["g"].is<int>() || !color["b"].is<int>()) {
+			return false;
+		}
+
+		red   = constrain(color["r"].as<int>(), 0, 255);
+		green = constrain(color["g"].as<int>(), 0, 255);
+		blue  = constrain(color["b"].as<int>(), 0, 255);
+		return true;
+	}
+
+	if (params.is<const char*>()) {
+		return parseWs2812ColorHex(String(params.as<const char*>()), red, green, blue);
+	}
+
+	if (params.is<String>()) {
+		return parseWs2812ColorHex(params.as<String>(), red, green, blue);
+	}
+
+	return false;
 }
 
 void callback(char *topic, byte *payload, unsigned int length) {
@@ -157,8 +212,8 @@ void callback(char *topic, byte *payload, unsigned int length) {
 				}
 			}
 			else if (method == method_mini_fan.c_str()) {
-				// Bật/tắt quạt qua bool: true -> 255, false -> 0
-				uint8_t spd = params ? 4095 : 0;
+				// Bật/tắt quạt qua bool: true -> 1023, false -> 0
+				uint16_t spd = params ? 1023 : 0;
 				if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
 					fan_speed      = spd;
 					is_mini_fan_on = params;
@@ -197,26 +252,47 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
+	// Nhóm 3b: Lệnh chỉnh màu WS2812 (hex #RRGGBB hoặc object {r,g,b})
+	// ========================================
+	else if (method == method_ws2812_color.c_str()) {
+		JsonVariantConst params = doc["params"];
+		uint8_t red   = 0;
+		uint8_t green = 0;
+		uint8_t blue  = 0;
+
+		if (!parseWs2812ColorParams(params, red, green, blue)) {
+			Serial.println("[MQTT] params is not a valid color!");
+			responseDoc["error"] = "params must be #RRGGBB or {r,g,b}";
+		}
+		else {
+			String colorHex = formatWs2812Color(red, green, blue);
+			ws2812_set_color(red, green, blue);
+			responseDoc["WS2812_Color"] = colorHex;
+			Serial.println("[ACTION] WS2812 color -> " + colorHex);
+		}
+	}
+
+	// ========================================
 	// Nhóm 3: Lệnh chỉnh tốc độ quạt (int 0..255)
 	// ========================================
 	else if (method == method_fan_speed.c_str()) {
 		if (!doc["params"].is<int>()) {
 			Serial.println("[MQTT] params is not int!");
-			responseDoc["error"] = "params must be int (0..255)";
+			responseDoc["error"] = "params must be int (0..1023)";
 		}
 		else {
-			int val = doc["params"].as<int>();
+			int16_t val = doc["params"].as<int>();
 			if (val < 0)   val = 0;
-			if (val > 255) val = 255;
+			if (val > 1023) val = 1023;
 
 			if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
-				fan_speed      = (uint8_t)val;
+				fan_speed      = (uint16_t)val;
 				is_mini_fan_on = (val > 0);
 				xSemaphoreGive(xFanStateSemaphore);
 			}
 			responseDoc["Fan_Speed"]  = val;
 			responseDoc["Fan_Status"] = (val > 0);
-			Serial.printf("[ACTION] Fan speed -> %d\n", val);
+			Serial.printf("[ACTION] Fan speed -> %d (0-1023)\n", val);
 		}
 	}
 
@@ -237,7 +313,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 				strip_brightness = (uint8_t)val;
 				xSemaphoreGive(xNeoLedStateSemaphore);
 			}
-			strip_set_brightness((uint8_t)val);
+			neoLED_set_brightness((uint8_t)val);
 			responseDoc["Strip_Brightness"] = val;
 			Serial.printf("[ACTION] Strip brightness -> %d\n", val);
 		}
@@ -350,43 +426,43 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	JsonObject devices = doc.createNestedObject("devices");
 	JsonObject led = devices.createNestedObject("led");
 	led["status"] = led_state;
-	led["brightness"] = 255; // LED thường chỉ có on/off
-	led["voltage"] = 3.3;
+	led["brightness"] = led_state ? 255 : 0;
+	led["voltage"] = led_state ? V_REF : 0.0;
 
 	JsonObject neo_led = devices.createNestedObject("neo_led");
 	neo_led["status"] = neo_state;
 	neo_led["brightness"] = strip_brightness;
-	neo_led["color"] = "#FF0000"; // Giá trị màu hiện tại đang giả lập
-	neo_led["voltage"] = 5.0;
-
+	neo_led["color"] = getNeoLedColorFromHumidity(hum);
+	neo_led["voltage"] = neo_state ? (V_REF * strip_brightness / 255.0) : 0.0;
+	
 	JsonObject ws2812 = devices.createNestedObject("ws2812");
 	ws2812["status"] = is_ws2812_on;
 	ws2812["brightness"] = ws2812_brightness;
-	ws2812["color"] = "#00FF00"; // Giá trị màu hiện tại đang giả lập
-	ws2812["voltage"] = 5.0;
+	ws2812["color"] = ws2812_get_color_hex();
+	ws2812["voltage"] = is_ws2812_on ? (V_REF * ws2812_brightness / 255.0) : 0.0;
 
 	JsonObject relay = devices.createNestedObject("relay");
 	relay["status"] = is_relay_on;
-	relay["voltage"] = 5.0;
+	relay["voltage"] = is_relay_on ? V_REF : 0.0;
 
 	JsonObject mini_fan = devices.createNestedObject("mini_fan");
 	mini_fan["status"] = is_mini_fan_on;
 	mini_fan["speed"] = fan_speed;
-	mini_fan["voltage"] = 5.0;
+	mini_fan["voltage"] = is_mini_fan_on ? (V_REF * fan_speed / 1023.0) : 0.0;
 	
 	JsonObject sensors = doc.createNestedObject("sensors");
 	JsonObject dht20 = sensors.createNestedObject("dht20");
 	dht20["temperature"] = temp;
 	dht20["humidity"] = hum;
-	dht20["voltage"] = 3.3;
+	dht20["voltage"] = V_REF;
 
 	JsonObject light_sensor = sensors.createNestedObject("light");
 	light_sensor["value"] = light;
-	light_sensor["voltage"] = 3.3;
+	light_sensor["voltage"] = V_REF;
 
 	JsonObject gas_sensor = sensors.createNestedObject("gas");
 	gas_sensor["value"] = gas;
-	gas_sensor["voltage"] = 3.3;
+	gas_sensor["voltage"] = V_REF;
 	
 	// doc["lcd_screen"] = static_cast<int>(current_lcd_screen);
 	// doc["anomaly"] = anomaly;

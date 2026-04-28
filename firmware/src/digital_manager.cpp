@@ -56,7 +56,7 @@ void fan_set_speed(int16_t speed) {
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
         analogWrite(MINI_FAN_PIN, pwm);
 
-        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+        if (IS_DEBUG_MODE || IS_SHOW_DIGITAL_STATUS) {
             Serial.printf("[FAN] Forward | Speed = %d | PWM = %u / 1023\n", speed, pwm);
         }
     }
@@ -65,7 +65,7 @@ void fan_set_speed(int16_t speed) {
         analogWrite(MINI_FAN_PIN, 0);
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, pwm);
 
-        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+        if (IS_DEBUG_MODE || IS_SHOW_DIGITAL_STATUS) {
             Serial.printf("[FAN] Reverse | Speed = %d | PWM = %u / 1023\n", speed, pwm);
         }
     }
@@ -74,7 +74,7 @@ void fan_set_speed(int16_t speed) {
         analogWrite(MINI_FAN_PIN, 0);
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
 
-        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+        if (IS_DEBUG_MODE || IS_SHOW_DIGITAL_STATUS) {
             Serial.println("[FAN] Stop");
         }
     }

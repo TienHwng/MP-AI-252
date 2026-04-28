@@ -13,6 +13,9 @@
 #define IS_MONITOR_MODE             false
 #define IS_SHOW_DHT20_STATUS        false
 #define IS_SHOW_LED_STATUS          false
+#define IS_SHOW_DIGITAL_STATUS      false
+#define IS_SHOW_ANALOG_STATUS       false
+#define IS_SHOW_BUTTON_STATUS       false
 #define IS_SHOW_NEO_STATUS          false
 #define IS_SHOW_LCD_STATUS          false
 #define IS_SHOW_PAYLOAD             false
@@ -113,6 +116,9 @@
 #define ANALOG_LEVEL_2_MAX          3000
 // ----- END Thresholds & Constants -----
 
+
+
+#define V_REF                      3.3f
 
 
 typedef enum {

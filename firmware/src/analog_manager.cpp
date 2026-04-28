@@ -10,7 +10,7 @@ void setup_analog_manager() {
 
     const uint16_t bootRead = analogRead(LIGHT_SENSOR_PIN);
 
-    if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+    if (IS_DEBUG_MODE || IS_SHOW_ANALOG_STATUS) {
         Serial.printf("[ANALOG] GPIO %d init raw=%u\n", LIGHT_SENSOR_PIN, bootRead);
     }
 }
@@ -28,7 +28,7 @@ void analog_manager(void *pvParameters) {
             xSemaphoreGive(xLightSemaphore);
         }
 
-        if (IS_DEBUG_MODE || IS_MONITOR_MODE) {
+        if (IS_DEBUG_MODE || IS_SHOW_ANALOG_STATUS) {
             const float voltage = (3.3f * (float)rawValue) / 4095.0f;
             Serial.printf("[ANALOG] GPIO %d raw=%u voltage=%.2fV light=%.2f%%\n",
                           LIGHT_SENSOR_PIN,

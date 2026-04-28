@@ -11,6 +11,7 @@ import copy
 import json
 import os
 import random
+import re
 import threading
 import time
 from datetime import UTC, datetime
@@ -109,6 +110,84 @@ def floor_datetime_to_bucket(value: datetime) -> datetime:
 	timestamp = int(value.timestamp())
 	bucket_timestamp = timestamp - (timestamp % TELEMETRY_BUCKET_SECONDS)
 	return datetime.fromtimestamp(bucket_timestamp, tz=UTC)
+
+
+# Helper function to parse color input for WS2812 - supports both hex (#RRGGBB) and RGB (r,g,b) formats
+def parse_ws2812_color_input(color_input):
+	color_input = color_input.strip()
+
+	# Cho phép nhập hex như: #FF00AA, FF00AA, 0xFF00AA
+	if color_input.startswith("#") or color_input.startswith("0x") or color_input.startswith("0X"):
+		return color_input
+
+	# Cho phép nhập RGB như: 255,111,222
+	parts = color_input.split(",")
+
+	if len(parts) != 3:
+		raise ValueError("RGB must be in format: 255,111,222")
+
+	r = int(parts[0].strip())
+	g = int(parts[1].strip())
+	b = int(parts[2].strip())
+
+	if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
+		raise ValueError("RGB values must be from 0 to 255")
+
+	return {
+		"r": r,
+		"g": g,
+		"b": b
+	}
+
+
+# === Terminal menu helpers ===
+ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+menu_inner_width = 70
+
+def visible_len(text: str) -> int:
+	"""Return text length without ANSI color escape codes."""
+	return len(ansi_escape.sub("", text))
+
+
+def pad_visible(text: str, width: int) -> str:
+	"""Pad text based on visible length, ignoring ANSI color codes."""
+	return text + " " * max(width - visible_len(text), 0)
+
+
+def menu_border(left: str, fill: str, right: str) -> str:
+	return f"{Color.CYAN}{left}{fill * menu_inner_width}{right}"
+
+
+def menu_line(content: str = "") -> str:
+	return (
+		f"{Color.CYAN}║"
+		f"{pad_visible(content, menu_inner_width)}"
+		f"{Color.CYAN}║"
+	)
+
+
+def menu_section(title: str, color: str) -> str:
+	return menu_line(f" {color}[ {title} ]{Color.CYAN}")
+
+
+def menu_option(number: int, label: str, color: str) -> str:
+	return f"{color}{number:>2}.{Color.RESET} {label}"
+
+
+def menu_row(left: str, right: str = "") -> str:
+	left_column_width = 32
+
+	if right:
+		content = (
+			"   "
+			+ pad_visible(left, left_column_width)
+			+ " "
+			+ right
+		)
+	else:
+		content = "   " + left
+
+	return menu_line(content)
 
 
 class MQTTManager:
@@ -559,229 +638,77 @@ if __name__ == "__main__":
 
 	try:
 		while True:
-			print(
-				"\n"
-				+ Color.CYAN
-				+ "╔═════════════════════════════════════════════════════════════════╗"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║                     "
-				+ Color.BOLD
-				+ "H.E.R.A. CONTROL CENTER"
-				+ Color.RESET
-				+ Color.CYAN
-				+ "                     ║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "╠═════════════════════════════════════════════════════════════════╣"
-				+ Color.RESET
-			)
+			# === Render main terminal menu ===
+			menu_lines = [
+				# === Header ===
+				menu_border("╔", "═", "╗"),
+				menu_line(
+					f"                     {Color.BOLD}H.E.R.A. CONTROL CENTER{Color.RESET}"
+				),
+				menu_border("╠", "═", "╣"),
 
-			# Nhóm 1: Điều khiển đèn
-			print(
-				Color.CYAN
-				+ "║ "
-				+ Color.YELLOW
-				+ "[ LIGHTING CONTROLS ]                                           "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.YELLOW
-				+ "1."
-				+ Color.RESET
-				+ " Turn ON living room light   "
-				+ Color.YELLOW
-				+ "2."
-				+ Color.RESET
-				+ " Turn OFF living room light  "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.YELLOW
-				+ "3."
-				+ Color.RESET
-				+ " Turn ON NeoPixel light      "
-				+ Color.YELLOW
-				+ "4."
-				+ Color.RESET
-				+ " Turn OFF NeoPixel light     "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.YELLOW
-				+ "5."
-				+ Color.RESET
-				+ " Turn ON WS2812 light        "
-				+ Color.YELLOW
-				+ "6."
-				+ Color.RESET
-				+ " Turn OFF WS2812 light       "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.YELLOW
-				+ "15."
-				+ Color.RESET
-				+ " Set WS2812 Brightness      "
-				+ Color.YELLOW
-				+ "16."
-				+ Color.RESET
-				+ " Set Strip Brightness       "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "╟─────────────────────────────────────────────────────────────────╢"
-				+ Color.RESET
-			)
+				# === Section 1: Lighting controls ===
+				menu_section("LIGHTING CONTROLS", Color.YELLOW),
+				menu_row(
+					menu_option(1, "Turn ON living room light", Color.YELLOW),
+					menu_option(2, "Turn OFF living room light", Color.YELLOW),
+				),
+				menu_row(
+					menu_option(3, "Turn ON NeoPixel light", Color.YELLOW),
+					menu_option(4, "Turn OFF NeoPixel light", Color.YELLOW),
+				),
+				menu_row(
+					menu_option(5, "Set NeoPixel Brightness", Color.YELLOW),
+				),
+				menu_row(
+					menu_option(6, "Turn ON WS2812 light", Color.YELLOW),
+					menu_option(7, "Turn OFF WS2812 light", Color.YELLOW),
+				),
+				menu_row(
+					menu_option(8, "Set WS2812 Brightness", Color.YELLOW),
+					menu_option(9, "Set WS2812 Color", Color.MAGENTA),
+				),
+				menu_border("╟", "─", "╢"),
 
-			# Nhóm 2: Điều khiển thiết bị khác
-			print(
-				Color.CYAN
-				+ "║ "
-				+ Color.BLUE
-				+ "[ DEVICE CONTROLS ]                                             "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.BLUE
-				+ "7."
-				+ Color.RESET
-				+ " Turn ON mini fan            "
-				+ Color.BLUE
-				+ "8."
-				+ Color.RESET
-				+ " Turn OFF mini fan           "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.BLUE
-				+ "17."
-				+ Color.RESET
-				+ " Set Fan Speed (0-255)                                     "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.BLUE
-				+ "9."
-				+ Color.RESET
-				+ " Turn ON relay               "
-				+ Color.BLUE
-				+ "10."
-				+ Color.RESET
-				+ " Turn OFF relay             "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "╟─────────────────────────────────────────────────────────────────╢"
-				+ Color.RESET
-			)
+				# === Section 2: Device controls ===
+				menu_section("DEVICE CONTROLS", Color.BLUE),
+				menu_row(
+					menu_option(10, "Turn ON mini fan", Color.BLUE),
+					menu_option(11, "Turn OFF mini fan", Color.BLUE),
+				),
+				menu_row(
+					menu_option(12, f"Set Fan Speed (0-{2**10 - 1})", Color.BLUE),
+				),
+				menu_row(
+					menu_option(13, "Turn ON relay", Color.BLUE),
+					menu_option(14, "Turn OFF relay", Color.BLUE),
+				),
+				menu_border("╟", "─", "╢"),
 
-			# Nhóm 3: Giám sát hệ thống
-			print(
-				Color.CYAN
-				+ "║ "
-				+ Color.MAGENTA
-				+ "[ SYSTEM MONITORING ]                                           "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.MAGENTA
-				+ "11."
-				+ Color.RESET
-				+ " View sensors status       "
-				+ Color.MAGENTA
-				+ "12."
-				+ Color.RESET
-				+ " View devices status         "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.MAGENTA
-				+ "13."
-				+ Color.RESET
-				+ " View network status       "
-				+ Color.MAGENTA
-				+ "14."
-				+ Color.RESET
-				+ " View full telemetry data    "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "╟─────────────────────────────────────────────────────────────────╢"
-				+ Color.RESET
-			)
+				# === Section 3: System monitoring ===
+				menu_section("SYSTEM MONITORING", Color.MAGENTA),
+				menu_row(
+					menu_option(15, "View sensors status", Color.MAGENTA),
+					menu_option(16, "View devices status", Color.MAGENTA),
+				),
+				menu_row(
+					menu_option(17, "View network status", Color.MAGENTA),
+					menu_option(18, "View full telemetry data", Color.MAGENTA),
+				),
+				menu_border("╟", "─", "╢"),
 
-			# Thoát
-			print(
-				Color.CYAN
-				+ "║   "
-				+ Color.RED
-				+ "0."
-				+ Color.RESET
-				+ " Exit program                                               "
-				+ Color.CYAN
-				+ "║"
-				+ Color.RESET
-			)
-			print(
-				Color.CYAN
-				+ "╚═════════════════════════════════════════════════════════════════╝"
-				+ Color.RESET
-			)
+				# === Exit option ===
+				menu_row(menu_option(0, "Exit program", Color.RED)),
+				menu_border("╚", "═", "╝"),
+			]
+
+			print("\n" + "\n".join(menu_lines) + Color.RESET)
 
 			# Lấy lựa chọn từ người dùng
 			choice = input(
-				Color.BOLD + " [ INPUT ] Please choose an option (0-17): " + Color.RESET
+				f"{Color.BOLD} [ INPUT ] Please choose an option (0-18): {Color.RESET}"
 			).strip()
+
 			if choice == "0":
 				print(
 					Color.RED
@@ -824,37 +751,90 @@ if __name__ == "__main__":
 
 			elif choice == "5":
 				print(
-					Color.GREEN + "\n>>> HERA: Turning on WS2812 light..." + Color.RESET
-				)
-				mqtt_system.send_rpc_command("setValueWS2812", True)
-
-			elif choice == "6":
-				print(
-					Color.YELLOW
-					+ "\n>>> HERA: Turning off WS2812 light..."
+					Color.GREEN
+					+ "\n>>> HERA: Setting NeoPixel brightness..."
 					+ Color.RESET
 				)
-				mqtt_system.send_rpc_command("setValueWS2812", False)
+				try:
+					val = int(
+						input(
+							Color.YELLOW
+							+ "Enter NeoPixel Brightness (0-255): "
+							+ Color.RESET
+						).strip()
+					)
+					mqtt_system.send_rpc_command("setStripBrightness", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
+			elif choice == "6":
+				print(Color.GREEN + "\n>>> HERA: Turning on WS2812 light..." + Color.RESET)
+				mqtt_system.send_rpc_command("setValueWS2812", True)
 
 			elif choice == "7":
+				print(Color.YELLOW + "\n>>> HERA: Turning off WS2812 light..." + Color.RESET)
+				mqtt_system.send_rpc_command("setValueWS2812", False)
+
+			elif choice == "8":
+				print(Color.GREEN + "\n>>> HERA: Setting WS2812 brightness..." + Color.RESET)
+				try:
+					val = int(
+						input(
+							Color.YELLOW
+							+ "Enter WS2812 Brightness (0-255): "
+							+ Color.RESET
+						).strip()
+					)
+					mqtt_system.send_rpc_command("setWS2812Brightness", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
+			elif choice == "9":
+				print(Color.YELLOW + "\n>>> HERA: Setting WS2812 color..." + Color.RESET)
+				try:
+					color_input = input(
+						Color.MAGENTA
+						+ "Enter WS2812 color (#RRGGBB or r,g,b): "
+						+ Color.RESET
+					).strip()
+
+					color_data = parse_ws2812_color_input(color_input)
+					mqtt_system.send_rpc_command("setWS2812Color", color_data)
+
+				except Exception as e:
+					print(Color.RED + f"Invalid color input: {e}" + Color.RESET)
+
+			elif choice == "10":
 				print(Color.GREEN + "\n>>> HERA: Turning on mini fan..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueMiniFan", True)
 
-			elif choice == "8":
-				print(
-					Color.YELLOW + "\n>>> HERA: Turning off mini fan..." + Color.RESET
-				)
+			elif choice == "11":
+				print(Color.YELLOW + "\n>>> HERA: Turning off mini fan..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueMiniFan", False)
 
-			elif choice == "9":
+			elif choice == "12":
+				print(Color.BLUE + "\n>>> HERA: Setting fan speed..." + Color.RESET)
+				try:
+					val = int(
+						input(
+							Color.BLUE
+							+ "Enter Fan Speed (0-1023): "
+							+ Color.RESET
+						).strip()
+					)
+					mqtt_system.send_rpc_command("setFanSpeed", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
+
+			elif choice == "13":
 				print(Color.GREEN + "\n>>> HERA: Turning on relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", True)
 
-			elif choice == "10":
+			elif choice == "14":
 				print(Color.YELLOW + "\n>>> HERA: Turning off relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", False)
 
-			elif choice == "11":
+			elif choice == "15":
 				print(Color.CYAN + "\n[ FETCHING SENSOR DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -877,7 +857,7 @@ if __name__ == "__main__":
 						+ Color.RESET
 					)
 
-			elif choice == "12":
+			elif choice == "16":
 				print(Color.CYAN + "\n[ FETCHING DEVICE STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -885,7 +865,6 @@ if __name__ == "__main__":
 				):
 					devices = mqtt_system.latest_sensor_data.get("devices", {})
 
-					# Hàm hỗ trợ tô màu trạng thái True/False hoặc ON/OFF
 					def format_status(status):
 						if str(status).lower() in ["true", "on", "1"]:
 							return f"{Color.GREEN}ON{Color.RESET}"
@@ -897,21 +876,24 @@ if __name__ == "__main__":
 						f"  - LED       : {format_status(devices.get('led', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))} (Brightness: {devices.get('neo_led', {}).get('brightness', 'N/A')})"
+						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))} "
+						f"(Brightness: {devices.get('neo_led', {}).get('brightness', 'N/A')})"
 					)
 					print(
-						f"  - WS2812    : {format_status(devices.get('ws2812', {}).get('status', 'Unknown'))} (Brightness: {devices.get('ws2812', {}).get('brightness', 'N/A')})"
+						f"  - WS2812    : {format_status(devices.get('ws2812', {}).get('status', 'Unknown'))} "
+						f"(Brightness: {devices.get('ws2812', {}).get('brightness', 'N/A')})"
 					)
 					print(
 						f"  - Relay     : {format_status(devices.get('relay', {}).get('status', 'Unknown'))}"
 					)
 					print(
-						f"  - Mini fan  : {format_status(devices.get('mini_fan', {}).get('status', 'Unknown'))} (Speed: {devices.get('mini_fan', {}).get('speed', 'N/A')})"
+						f"  - Mini fan  : {format_status(devices.get('mini_fan', {}).get('status', 'Unknown'))} "
+						f"(Speed: {devices.get('mini_fan', {}).get('speed', 'N/A')})"
 					)
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
-			elif choice == "13":
+			elif choice == "17":
 				print(Color.CYAN + "\n[ FETCHING NETWORK STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -938,52 +920,30 @@ if __name__ == "__main__":
 						f"  - WiFi IP      : {Color.BLUE}{network.get('wifi_ip', 'Unknown')}{Color.RESET}"
 					)
 					print(f"  - MQTT Status  : {mqtt_conn}")
-					print(
-						f"  - Uptime       : {network.get('uptime_ms', 'Unknown')} ms"
-					)
+					print(f"  - Uptime       : {network.get('uptime_ms', 'Unknown')} ms")
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
-			elif choice == "14":
+			elif choice == "18":
 				print(Color.CYAN + "\n[ FULL TELEMETRY DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
 					and mqtt_system.latest_sensor_data
 				):
-					# Tô màu cho chuỗi JSON xuất ra
 					json_str = json.dumps(
-						mqtt_system.latest_sensor_data, indent=2, ensure_ascii=False
+						mqtt_system.latest_sensor_data,
+						indent=2,
+						ensure_ascii=False,
 					)
 					print(Color.YELLOW + json_str + Color.RESET)
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
-			elif choice == "15":
-				try:
-					val = int(input(Color.YELLOW + "Enter WS2812 Brightness (0-255): " + Color.RESET).strip())
-					mqtt_system.send_rpc_command("setWS2812Brightness", val)
-				except ValueError:
-					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
-
-			elif choice == "16":
-				try:
-					val = int(input(Color.YELLOW + "Enter Strip Brightness (0-255): " + Color.RESET).strip())
-					mqtt_system.send_rpc_command("setStripBrightness", val)
-				except ValueError:
-					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
-
-			elif choice == "17":
-				try:
-					val = int(input(Color.BLUE + "Enter Fan Speed (0-255): " + Color.RESET).strip())
-					mqtt_system.send_rpc_command("setFanSpeed", val)
-				except ValueError:
-					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
-
 			else:
 				print(
 					Color.RED
 					+ Color.BOLD
-					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 17."
+					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 18."
 					+ Color.RESET
 				)
 
