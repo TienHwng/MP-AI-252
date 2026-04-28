@@ -8,6 +8,7 @@ Returns a normalised response dict regardless of backend.
 from __future__ import annotations
 
 import json
+import re
 from itertools import count
 from typing import Any
 
@@ -19,7 +20,7 @@ from config import (
 )
 from litellm import completion as litellm_completion
 
-from core.logger import log_llm
+from core.logger import log_error, log_llm
 from core.runtime_settings import runtime_settings
 
 # ── Normalised result dict ────────────────────────────────────
@@ -103,7 +104,29 @@ class LLMService:
 			kwargs["api_base"] = OPENROUTER_BASE_URL
 			kwargs["custom_llm_provider"] = "openrouter"
 			kwargs["think"] = False  # Disable thinking chain for OpenRouter too
-		resp = litellm_completion(**kwargs)
+		try:
+			resp = litellm_completion(**kwargs)
+		except Exception as exc:
+			error_info = self.describe_exception(exc)
+			error_info.update(
+				{
+					"call": call_id,
+					"provider": active_provider,
+					"model": model,
+				}
+			)
+			log_error(
+				"LLM request failed",
+				data={
+					"call": call_id,
+					"provider": active_provider,
+					"model": model,
+					"status": error_info.get("status") or "unknown",
+					"type": error_info["type"],
+				},
+				detail=self.render_error_detail(error_info),
+			)
+			raise
 		msg = resp.choices[0].message
 
 		tool_calls = getattr(msg, "tool_calls", None)
@@ -149,6 +172,75 @@ class LLMService:
 		if provider == "ollama":
 			return f"ollama/{model_name}"
 		return f"openrouter/{model_name}"
+
+	@staticmethod
+	def describe_exception(exc: Exception) -> dict[str, Any]:
+		text = str(exc)
+		payload = LLMService.extract_json_payload(text)
+		error = payload.get("error", {}) if isinstance(payload, dict) else {}
+		metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+		raw = metadata.get("raw") if isinstance(metadata, dict) else None
+		raw_message = LLMService.extract_raw_message(raw)
+		message = raw_message or error.get("message") or text
+
+		return {
+			"type": exc.__class__.__name__,
+			"status": error.get("code") or getattr(exc, "status_code", None),
+			"message": LLMService.compact_text(str(message)),
+			"provider_name": metadata.get("provider_name") if isinstance(metadata, dict) else None,
+			"is_byok": metadata.get("is_byok") if isinstance(metadata, dict) else None,
+			"raw": LLMService.compact_text(str(raw)) if raw else None,
+		}
+
+	@staticmethod
+	def extract_json_payload(text: str) -> dict[str, Any]:
+		for match in re.finditer(r"\{", text):
+			candidate = text[match.start() :].strip()
+			try:
+				payload = json.loads(candidate)
+			except json.JSONDecodeError:
+				continue
+			if isinstance(payload, dict):
+				return payload
+		return {}
+
+	@staticmethod
+	def extract_raw_message(raw: Any) -> str | None:
+		if not raw:
+			return None
+		if isinstance(raw, str):
+			try:
+				parsed = json.loads(raw)
+			except json.JSONDecodeError:
+				return raw
+		else:
+			parsed = raw
+		if not isinstance(parsed, dict):
+			return str(parsed)
+		error = parsed.get("error")
+		if isinstance(error, dict) and error.get("message"):
+			return str(error["message"])
+		return None
+
+	@staticmethod
+	def compact_text(text: str, limit: int = 360) -> str:
+		compact = " ".join(text.split())
+		if len(compact) <= limit:
+			return compact
+		return f"{compact[: limit - 3]}..."
+
+	@staticmethod
+	def render_error_detail(error_info: dict[str, Any]) -> str:
+		lines = [
+			f"reason: {error_info['message']}",
+		]
+		if error_info.get("provider_name"):
+			lines.append(f"upstream: {error_info['provider_name']}")
+		if error_info.get("is_byok") is not None:
+			lines.append(f"byok: {error_info['is_byok']}")
+		if error_info.get("raw") and error_info["raw"] != error_info["message"]:
+			lines.append(f"raw: {error_info['raw']}")
+		return "\n  | ".join(lines)
 
 	# ── Message builders (OpenAI-format, works across LiteLLM backends) ──
 

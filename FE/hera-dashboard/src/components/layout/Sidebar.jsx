@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Home, BarChart3, House, Lightbulb, Settings } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
@@ -13,7 +13,7 @@ const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
   return (
     <>
       <div
-        className="fixed left-0 top-0 h-screen w-4 z-30"
+        className="fixed left-0 top-0 z-30 hidden h-screen w-4 md:block"
         onMouseEnter={() => setIsExpanded(true)}
       />
 
@@ -22,14 +22,14 @@ const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
           type="button"
           aria-label="Close sidebar"
           onClick={() => setIsExpanded(false)}
-          className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-40"
+          className="fixed inset-0 z-40 hidden bg-black/20 backdrop-blur-[1px] md:block"
         />
       )}
 
       <aside
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
-        className={`fixed left-0 top-0 h-screen w-64 bg-white flex flex-col pt-8 shadow-md z-50 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-50 hidden h-screen w-64 transform flex-col bg-white pt-8 shadow-md transition-transform duration-300 md:flex ${
           isExpanded ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -48,6 +48,7 @@ const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => setActivePage(item.id)}
                 className={`w-[90%] mx-auto flex items-center px-4 py-3 mb-2 rounded-r-full transition-colors ${
                   activePage === item.id
@@ -62,6 +63,30 @@ const Sidebar = ({ activePage, setActivePage, isExpanded, setIsExpanded }) => {
           })}
         </nav>
       </aside>
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
+          {menuItems.map((item) => {
+            const Icon = item.Icon;
+            const active = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActivePage(item.id)}
+                className={`flex min-h-[54px] flex-col items-center justify-center rounded-xl px-1 text-[11px] font-medium transition-colors ${
+                  active
+                    ? 'bg-[#E8F5E9] text-primary'
+                    : 'text-textMuted hover:bg-gray-50 hover:text-textMain'
+                }`}
+              >
+                <Icon size={20} strokeWidth={2} className="mb-1 shrink-0" />
+                <span className="max-w-full truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </>
   );
 };

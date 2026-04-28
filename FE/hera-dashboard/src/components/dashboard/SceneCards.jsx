@@ -30,7 +30,7 @@ const scenes = [
 
 const SceneCards = ({ isSubmitting, onActivateScene }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
       {scenes.map((scene) => {
         const { Icon } = scene;
         return (
@@ -39,12 +39,12 @@ const SceneCards = ({ isSubmitting, onActivateScene }) => {
             type="button"
             disabled={isSubmitting}
             onClick={() => onActivateScene(scene.id)}
-            className={`flex items-center gap-4 p-4 rounded-xl shadow-sm text-left transition-all duration-200 hover:shadow-md border border-gray-50 bg-white ${isSubmitting ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
+            className={`flex min-h-[84px] items-center gap-3 rounded-xl border border-gray-50 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:shadow-md sm:flex-col sm:items-start lg:flex-row lg:items-center lg:gap-4 ${isSubmitting ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
           >
             <div className={`p-3 rounded-full ${scene.bgColor}`}>
               <Icon size={22} strokeWidth={2} className={scene.iconColor} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h5 className="font-semibold text-textMain">{scene.label}</h5>
               <p className="text-xs text-textMuted mt-0.5">{scene.desc}</p>
             </div>

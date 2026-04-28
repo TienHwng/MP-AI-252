@@ -155,13 +155,13 @@ const Home = ({ user, onLogout }) => {
   };
 
   return (
-    <div className="p-4 lg:p-6 w-full h-screen grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_350px] gap-4 lg:gap-6 overflow-hidden bg-bgMain">
+    <div className="grid min-h-screen w-full grid-cols-1 gap-4 bg-background p-3 sm:p-4 lg:p-6 xl:h-screen xl:grid-cols-[minmax(0,1fr)_350px] xl:gap-6 xl:overflow-hidden">
       {/* CỘT TRÁI: Dashboard chính */}
-      <div className="min-w-0 flex flex-col gap-6 overflow-y-auto pr-1 custom-scrollbar">
-        <header className="flex flex-wrap justify-between items-end gap-3">
-          <div>
-            <h2 className="text-3xl font-semibold text-textMain">
-              Welcome Home, {user?.full_name || 'User'} !
+      <div className="min-w-0 flex flex-col gap-5 xl:overflow-y-auto xl:pr-1 custom-scrollbar">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="break-words text-2xl font-semibold leading-tight text-textMain sm:text-3xl">
+              Welcome Home, {user?.full_name || 'User'}!
             </h2>
             <p className="text-textMuted mt-1">
               {currentTime.toLocaleDateString('en-US', {
@@ -170,14 +170,14 @@ const Home = ({ user, onLogout }) => {
             </p>
           </div>
 
-          <div className="text-right">
-            <h3 className="text-2xl text-textMain">
+          <div className="shrink-0 text-left sm:text-right">
+            <h3 className="text-xl text-textMain sm:text-2xl">
               {currentTime.toLocaleTimeString('en-US', {
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
               })}
             </h3>
-            <div className="mt-2 flex items-center justify-end gap-2">
-              <button onClick={handleLogout} className="text-xs bg-[#E8F5E9] text-[#3A7D44] px-3 py-1 rounded-full font-medium hover:bg-[#DF6D14] hover:text-white transition-colors">
+            <div className="mt-2 flex items-center gap-2 sm:justify-end">
+              <button onClick={handleLogout} className="rounded-full bg-[#E8F5E9] px-3 py-1.5 text-xs font-medium text-[#3A7D44] transition-colors hover:bg-[#DF6D14] hover:text-white">
                 Logout
               </button>
             </div>
@@ -202,18 +202,18 @@ const Home = ({ user, onLogout }) => {
       </div>
 
       {/* CỘT PHẢI: AI Assistant & Activity Log */}
-      <div className="h-full min-h-[560px] flex flex-col bg-white/50 backdrop-blur-sm rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex min-h-[70svh] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white/70 shadow-sm backdrop-blur-sm sm:min-h-[560px] xl:h-full xl:min-h-0">
         {/* Tab Switcher */}
-        <div className="flex p-2 gap-2 bg-gray-50/50">
+        <div className="flex gap-2 bg-gray-50/50 p-2">
           <button 
             onClick={() => setActiveRightTab('assistant')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-2xl transition-all duration-200 ${activeRightTab === 'assistant' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'assistant' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
           >
             H.E.R.A Assistant
           </button>
           <button 
             onClick={() => setActiveRightTab('logs')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-2xl transition-all duration-200 ${activeRightTab === 'logs' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'logs' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
           >
             Activity Log
           </button>

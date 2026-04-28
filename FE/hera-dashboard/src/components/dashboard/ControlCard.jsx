@@ -61,10 +61,10 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 	return (
 		<div
-			className={`p-5 rounded-lg relative shadow-sm transition-colors duration-200 flex flex-col ${cardClass} ${disabled ? 'opacity-60' : ''}`}
+			className={`relative flex min-h-[132px] flex-col rounded-lg p-4 shadow-sm transition-colors duration-200 sm:p-5 ${cardClass} ${disabled ? 'opacity-60' : ''}`}
 		>
 			{active && (
-				<span className="absolute top-4 right-4 w-3 h-3 bg-[#faf2f2] rounded-full shadow-sm"></span>
+				<span className="absolute right-4 top-4 h-3 w-3 rounded-full bg-[#faf2f2] shadow-sm"></span>
 			)}
 
 			<button
@@ -76,7 +76,7 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 				<div className={`mb-4 ${iconClass}`}>
 					<Icon size={24} strokeWidth={1.9} className="shrink-0" />
 				</div>
-				<h5 className="font-medium leading-tight">{control.label}</h5>
+				<h5 className="break-words font-medium leading-tight">{control.label}</h5>
 				<p className={`text-xs mt-1 ${subTextClass}`}>
 					{isSubmitting ? 'Sending...' : stateLabel(status)}
 				</p>
@@ -120,7 +120,7 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 const ControlCard = ({ data, isSubmitting, onToggleDevice, onChangeIntensity }) => {
 	return (
-		<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+		<div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 lg:gap-4">
 			{controls.map((control) => {
 				const status = getDeviceStatus(data, control.id);
 				const known = typeof status === 'boolean';

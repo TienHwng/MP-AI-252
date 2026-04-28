@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  Bot,
   Droplets,
   Fan,
-  Gauge,
   Lightbulb,
   Plug,
   RefreshCw,
-  Send,
   SunMedium,
   Thermometer,
   WifiOff,
@@ -19,7 +16,6 @@ import {
   fetchLatestSensorData,
   getDeviceStatus,
   getSensorValue,
-  sendAssistantMessage,
   subscribeLatestSensorData,
   writeSensorValue,
 } from '../services/api';
@@ -168,8 +164,8 @@ function DeviceMarker({ marker, selected, stale, pending, onClick }) {
         ...styles.marker,
         left: `${marker.x}%`,
         top: `${marker.y}%`,
-        width: selected ? 58 : 48,
-        height: selected ? 58 : 48,
+        width: selected ? 'clamp(40px, 8vw, 58px)' : 'clamp(34px, 7vw, 48px)',
+        height: selected ? 'clamp(40px, 8vw, 58px)' : 'clamp(34px, 7vw, 48px)',
         border: selected ? '3px solid #DF6D14' : '2px solid white',
         background: isSensor
           ? 'rgba(66, 122, 181, 0.95)'
@@ -198,6 +194,8 @@ function LightGlow({ marker, stale }) {
         ...styles.glow,
         left: `${marker.x}%`,
         top: `${marker.y}%`,
+        width: 'clamp(120px, 34vw, 220px)',
+        height: 'clamp(120px, 34vw, 220px)',
       }}
     />
   );
@@ -263,10 +261,7 @@ function DevicePanel({
   pendingCommand,
   onToggle,
   onWriteSensor,
-  onAskAssistant,
 }) {
-  const [assistantText, setAssistantText] = useState('');
-
   if (!telemetry) {
     return (
       <div style={styles.panel}>
@@ -291,13 +286,6 @@ function DevicePanel({
   const controlDisabled = stale || !runtimeAvailable;
   const writeDisabled = marker.type !== 'sensor' || !isSimMode || controlDisabled;
   const pendingThisMarker = pendingCommand?.id === marker.id;
-
-  const submitAssistant = () => {
-    const text = assistantText.trim();
-    if (!text) return;
-    onAskAssistant(text);
-    setAssistantText('');
-  };
 
   return (
     <div style={styles.panel}>
@@ -336,7 +324,7 @@ function DevicePanel({
           {pendingThisMarker ? (
             <RefreshCw size={16} style={styles.spinIcon} />
           ) : (
-            <Send size={16} />
+            null
           )}
           Set {marker.status === true ? 'OFF' : 'ON'}
         </button>
@@ -350,35 +338,6 @@ function DevicePanel({
           onWriteSensor={onWriteSensor}
         />
       )}
-
-      <div style={styles.assistantBox}>
-        <div style={styles.assistantInputWrap}>
-          <Bot size={17} />
-          <input
-            type="text"
-            value={assistantText}
-            onChange={(event) => setAssistantText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submitAssistant();
-            }}
-            placeholder="Ask HERA..."
-            style={styles.assistantInput}
-          />
-        </div>
-        <button
-          type="button"
-          style={{
-            ...styles.iconButton,
-            opacity: runtimeAvailable ? 1 : 0.55,
-          }}
-          onClick={submitAssistant}
-          disabled={!runtimeAvailable}
-        >
-          <Send size={16} />
-        </button>
-      </div>
-
-      <pre style={styles.payload}>{JSON.stringify(marker, null, 2)}</pre>
     </div>
   );
 }
@@ -541,46 +500,17 @@ export default function FloorPlan() {
     }
   };
 
-  const askAssistant = async (text) => {
-    if (runtimeError) {
-      setNotice(runtimeError);
-      setNoticeTone('error');
-      return;
-    }
-
-    setNotice('Sending command to HERA runtime...');
-    setNoticeTone('info');
-    try {
-      const response = await sendAssistantMessage(text);
-      setNotice(response.text || 'HERA completed the request.');
-      setNoticeTone('info');
-    } catch (error) {
-      setNotice(error.message || 'HERA assistant request failed.');
-      setNoticeTone('error');
-    }
-  };
-
   const visibleNotice = stale
     ? 'Telemetry is stale or unavailable. Controls are disabled until MQTT data resumes.'
     : runtimeError || notice;
   const visibleNoticeTone = stale || runtimeError ? 'error' : noticeTone;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.mainColumn}>
+    <div className="grid min-h-screen w-full grid-cols-1 gap-4 bg-background p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-5 lg:p-6">
+      <div className="min-w-0">
         <Notice tone={visibleNoticeTone}>{visibleNotice}</Notice>
 
-        <div style={styles.statusBar}>
-          <span style={styles.statusItem}>
-            {stale ? <WifiOff size={16} /> : <RefreshCw size={16} />}
-            {stale ? 'MQTT unavailable' : 'MQTT live'}
-          </span>
-          <span style={styles.statusItem}>Mode: {(telemetry?.mode || 'unknown').toUpperCase()}</span>
-          <span style={styles.statusItem}>Source: {telemetry?.source || 'unknown'}</span>
-          <span style={styles.statusItem}>HERA API: {runtimeError ? 'offline' : 'online'}</span>
-        </div>
-
-        <div style={styles.floorWrapper}>
+        <div className="relative mx-auto w-full max-w-[1100px] overflow-hidden rounded-lg bg-white shadow-[0_14px_44px_rgba(15,23,42,0.16)] lg:shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
           <img
             src="/floor plan.png"
             alt="Smart home floor plan"
@@ -625,7 +555,6 @@ export default function FloorPlan() {
         pendingCommand={pendingCommand}
         onToggle={toggleDevice}
         onWriteSensor={writeSensor}
-        onAskAssistant={askAssistant}
       />
     </div>
   );
@@ -765,46 +694,6 @@ const styles = {
     borderRadius: 8,
     padding: '10px 12px',
     boxSizing: 'border-box',
-  },
-  assistantBox: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 40px',
-    gap: 8,
-    marginTop: 14,
-  },
-  assistantInputWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    border: '1px solid #cbd5e1',
-    borderRadius: 8,
-    padding: '0 10px',
-  },
-  assistantInput: {
-    width: '100%',
-    minWidth: 0,
-    border: 'none',
-    outline: 'none',
-    padding: '10px 0',
-  },
-  iconButton: {
-    border: 'none',
-    borderRadius: 8,
-    background: '#3A7D44',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  payload: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 8,
-    background: '#0f172a',
-    color: '#dbeafe',
-    fontSize: 12,
-    overflowX: 'auto',
   },
   notice: {
     display: 'flex',

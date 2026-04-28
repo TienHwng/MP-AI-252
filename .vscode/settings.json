@@ -1,4 +1,8 @@
 {
   "task.allowAutomaticTasks": "on",
-  "postman.settings.dotenv-detection-notification-visibility": false
+  "postman.settings.dotenv-detection-notification-visibility": false,
+  "platformio-ide.showHomeOnStartup": false,
+  "platformio-ide.showPIOHomeOnStartup": false,
+  "platformio-ide.autoPreviewSerialMonitor": false,
+  "platformio-ide.showOnStartup": false
 }

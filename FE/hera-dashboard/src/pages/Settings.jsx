@@ -138,22 +138,22 @@ const Settings = () => {
 	};
 
 	return (
-		<div className="p-6 lg:p-8 w-full h-full min-h-full">
+		<div className="min-h-full w-full p-3 sm:p-4 lg:p-8">
 			<div className="mb-6">
-				<h2 className="text-3xl font-semibold text-textMain">Settings</h2>
+				<h2 className="text-2xl font-semibold text-textMain sm:text-3xl">Settings</h2>
 				<p className="text-textMuted mt-1">
 					Configure project runtime options from dashboard.
 				</p>
 			</div>
 
-			<div className="mb-5 flex items-center gap-2">
+			<div className="mb-5 flex max-w-full items-center gap-2 overflow-x-auto pb-1">
 				<TabButton active={activeTab === 'model'} onClick={() => setActiveTab('model')}>
 					Model Setting
 				</TabButton>
 			</div>
 
 			{activeTab === 'model' && (
-				<div className="bg-white rounded-2xl shadow-sm p-5 lg:p-6 space-y-6">
+				<div className="space-y-6 rounded-2xl bg-white p-4 shadow-sm sm:p-5 lg:p-6">
 					<div>
 						<h3 className="text-lg font-semibold text-textMain">Model Setting</h3>
 						<p className="text-sm text-textMuted mt-1">
@@ -226,7 +226,7 @@ const Settings = () => {
 								})}
 							</div>
 
-							<div className="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-textMuted">
+							<div className="break-words rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-textMuted">
 								Current active provider: <span className="font-semibold text-textMain">{activeProviderLabel}</span>
 								<br />
 								Last updated:{' '}
@@ -243,7 +243,7 @@ const Settings = () => {
 									type="button"
 									onClick={handleSave}
 									disabled={isSaving}
-									className="rounded-xl bg-black text-white px-5 py-2.5 text-sm font-medium disabled:opacity-60"
+									className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white disabled:opacity-60 sm:w-auto"
 								>
 									{isSaving ? 'Saving...' : 'Save Model Settings'}
 								</button>

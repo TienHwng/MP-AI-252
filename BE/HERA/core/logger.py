@@ -46,6 +46,7 @@ LAYER_COLORS: dict[str, str] = {
 	"TELEGRAM": "blue",
 	"TELEMETRY": "dim",
 	"ALERT": "red",
+	"ERROR": "red",
 	"HERA": "bold",
 }
 
@@ -205,6 +206,10 @@ def log_telemetry(msg: str, **kw):
 
 def log_alert(msg: str, **kw):
 	hera_log("ALERT", msg, **kw)
+
+
+def log_error(msg: str, **kw):
+	hera_log("ERROR", msg, **kw)
 
 
 def log_hera(msg: str, **kw):

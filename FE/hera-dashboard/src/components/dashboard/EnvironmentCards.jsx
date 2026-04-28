@@ -21,7 +21,7 @@ const getHumidInfo = (val) => {
 	const num = Number(val);
 	if (!Number.isFinite(num)) return { status: 'Unknown', desc: 'Updating...', color: 'text-gray-500', bg: 'bg-gray-100' };
 	if (num < 40) return { status: 'Dry', desc: 'Too dry: May cause irritation', color: 'text-[#427AB5]', bg: 'bg-[#DCE9F8]' };
-	if (num > 60) return { status: 'Humid', desc: 'Too humid: Risk of mold growth', color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
+	if (num > 60) return { status: 'Humid', desc: 'Too humid', color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
 	return { status: 'Optimal', desc: 'Ideal humidity levels', color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
 };
 
@@ -45,9 +45,9 @@ const EnvironmentCards = ({ data }) => {
   const lightInfo = getLightInfo(currentEnv.light);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
       {/* Temperature Card */}
-      <div className="bg-white p-5 rounded-xl shadow-sm w-full flex flex-col justify-between border border-gray-50 hover:shadow-md transition-shadow">
+      <div className="flex w-full flex-col justify-between rounded-xl border border-gray-50 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2 text-textMuted">
             <Thermometer size={18} />
@@ -66,7 +66,7 @@ const EnvironmentCards = ({ data }) => {
       </div>
 
       {/* Humidity Card */}
-      <div className="bg-white p-5 rounded-xl shadow-sm w-full flex flex-col justify-between border border-gray-50 hover:shadow-md transition-shadow">
+      <div className="flex w-full flex-col justify-between rounded-xl border border-gray-50 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2 text-textMuted">
             <Droplets size={18} />
@@ -85,7 +85,7 @@ const EnvironmentCards = ({ data }) => {
       </div>
 
       {/* Light Card */}
-      <div className="bg-white p-5 rounded-xl shadow-sm w-full flex flex-col justify-between border border-gray-0 hover:shadow-md transition-shadow">
+      <div className="flex w-full flex-col justify-between rounded-xl border border-gray-50 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2 text-textMuted">
             <Sun size={18} />

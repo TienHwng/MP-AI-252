@@ -332,7 +332,7 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 	const resolvedTimeScale = useMemo(() => timeScale || getFixedTimeScale(data), [data, timeScale]);
 
 	return (
-		<div className="bg-white p-6 rounded-2xl shadow-sm">
+		<div className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
 			<div className="flex flex-col gap-4 mb-6 md:flex-row md:items-start md:justify-between">
 				<div className="flex items-center gap-3">
 					<div className="w-10 h-10 rounded-full bg-background flex items-center justify-center text-textMain">
@@ -349,15 +349,15 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 					</div>
 				</div>
 
-				<div className="text-right">
-					<h2 className="text-3xl font-normal text-textMain">{value}</h2>
+				<div className="text-left md:text-right">
+					<h2 className="text-2xl font-normal text-textMain sm:text-3xl">{value}</h2>
 					<p className="text-sm text-textMuted">{unit}</p>
 				</div>
 			</div>
 
-			<div className="h-[280px] w-full">
+			<div className="h-[230px] w-full sm:h-[280px]">
 				<ResponsiveContainer width="100%" height="100%">
-					<AreaChart data={data} margin={{ top: 10, right: 0, left: -12, bottom: 18 }}>
+					<AreaChart data={data} margin={{ top: 10, right: 4, left: -18, bottom: 18 }}>
 						<defs>
 							<linearGradient id={`color${dataKey}`} x1="0" y1="0" x2="0" y2="1">
 								<stop offset="5%" stopColor={color} stopOpacity={0.3} />
@@ -379,14 +379,14 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 							interval="preserveStartEnd"
 							axisLine={false}
 							tickLine={false}
-							tick={{ fill: "#888", fontSize: 12 }}
-							minTickGap={24}
+							tick={{ fill: "#888", fontSize: 11 }}
+							minTickGap={18}
 						/>
 
 						<YAxis
 							axisLine={false}
 							tickLine={false}
-							tick={{ fill: "#888", fontSize: 12 }}
+							tick={{ fill: "#888", fontSize: 11 }}
 							domain={["auto", "auto"]}
 						/>
 
@@ -407,7 +407,7 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 				</ResponsiveContainer>
 			</div>
 
-			<div className="mt-4 grid grid-cols-3 gap-3 text-xs">
+			<div className="mt-4 grid grid-cols-3 gap-2 text-xs sm:gap-3">
 				<div className="rounded-lg bg-gray-50 px-3 py-2">
 					<p className="text-textMuted">Min</p>
 					<p className="text-sm font-semibold text-textMain">
@@ -538,10 +538,10 @@ const Analytics = () => {
 	const lightStatus = getLightStatus(latestLight.light);
 
 	return (
-		<div className="p-6 lg:p-8 w-full h-full min-h-full">
+		<div className="min-h-full w-full p-3 sm:p-4 lg:p-8">
 			<div className="mb-6 lg:mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-				<div>
-					<h2 className="text-3xl font-semibold text-textMain">
+				<div className="min-w-0">
+					<h2 className="text-2xl font-semibold text-textMain sm:text-3xl">
 						Environmental Trends
 					</h2>
 					<p className="text-textMuted mt-1">
@@ -549,13 +549,13 @@ const Analytics = () => {
 					</p>
 				</div>
 
-				<div className="flex flex-wrap gap-2">
+				<div className="flex max-w-full gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
 					{WINDOW_OPTIONS.map((item) => (
 						<button
 							key={item.key}
 							type="button"
 							onClick={() => setWindowKey(item.key)}
-							className={`rounded-xl px-3 py-2 text-sm border ${
+							className={`shrink-0 rounded-xl border px-3 py-2 text-sm ${
 								windowKey === item.key
 									? "bg-black text-white border-black"
 									: "bg-white text-textMain border-gray-200"

@@ -65,15 +65,15 @@ const AiAssistant = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm h-full min-h-[560px] flex flex-col">
-      <div className="p-6 border-b border-gray-100">
+    <div className="flex h-full min-h-0 flex-col rounded-lg bg-white shadow-sm">
+      <div className="border-b border-gray-100 p-4 sm:p-6">
         <h3 className="text-lg font-semibold">H.E.R.A. Assistant</h3>
         <p className="text-sm text-textMuted">Runtime command channel</p>
       </div>
 
       <div 
         ref={scrollRef}
-        className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar"
+        className="custom-scrollbar flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
       >
         {messages.length === 0 && (
           <div className="rounded-lg border border-gray-100 bg-background p-4 text-sm text-textMuted">
@@ -82,7 +82,7 @@ const AiAssistant = () => {
         )}
         {messages.map((msg, idx) => (
           <div key={`${msg.time}-${idx}`} className={`flex flex-col ${msg.isBot ? 'items-start' : 'items-end'}`}>
-            <div className={`p-4 max-w-[80%] rounded-lg ${
+            <div className={`max-w-[88%] rounded-lg p-3 sm:max-w-[80%] sm:p-4 ${
               msg.isBot
                 ? msg.isError
                   ? 'bg-red-50 text-red-700'
@@ -96,7 +96,7 @@ const AiAssistant = () => {
         ))}
       </div>
 
-      <div className="p-6 bg-white border-t border-[#e0ddd0] flex flex-col gap-4">
+      <div className="flex flex-col gap-3 border-t border-[#e0ddd0] bg-white p-4 sm:gap-4 sm:p-6">
         <div className="flex gap-2">
           <input
             type="text"
@@ -106,22 +106,22 @@ const AiAssistant = () => {
               if (event.key === 'Enter') handleSend();
             }}
             placeholder={isRecording ? 'Recording voice command...' : 'Ask H.E.R.A. anything...'}
-            className="flex-1 bg-[#f8f5e9] border border-[#e0ddd0] rounded-lg px-5 py-3 text-sm focus:outline-none focus:border-[#3A7D44] text-[#4a3f35]"
+            className="min-w-0 flex-1 rounded-lg border border-[#e0ddd0] bg-[#f8f5e9] px-4 py-3 text-sm text-[#4a3f35] focus:border-[#3A7D44] focus:outline-none sm:px-5"
           />
           <button
             type="button"
             onClick={handleSend}
             disabled={isSending}
-            className="bg-[#3A7D44] text-white p-3 rounded-lg hover:bg-[#9DC08B] transition-colors shadow-sm disabled:opacity-60"
+            className="grid min-h-11 min-w-11 place-items-center rounded-lg bg-[#3A7D44] p-3 text-white shadow-sm transition-colors hover:bg-[#9DC08B] disabled:opacity-60"
           >
             <Send size={18} />
           </button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 min-[380px]:flex-row">
           <button
             type="button"
             onClick={handleStartVoiceCommand}
-            className={`flex-1 text-white py-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all shadow-sm ${
+            className={`flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-3 font-medium text-white shadow-sm transition-all sm:py-4 ${
               isRecording ? 'bg-[#d98080] hover:bg-[#c96e6e]' : 'bg-[#9DC08B] hover:bg-[#3A7D44]'
             }`}
           >
@@ -133,7 +133,7 @@ const AiAssistant = () => {
             <button
               type="button"
               onClick={handleCancelVoiceCommand}
-              className="bg-white border border-[#e2d7cb] text-[#7b6655] px-4 py-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#f8f4ee] transition-colors"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#e2d7cb] bg-white px-4 py-3 text-[#7b6655] transition-colors hover:bg-[#f8f4ee] sm:py-4"
             >
               <X size={18} /> Cancel
             </button>

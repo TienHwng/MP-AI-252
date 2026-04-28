@@ -72,14 +72,14 @@ const App = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-background transition-all duration-300 ${isSidebarExpanded ? 'pl-64' : 'pl-0'}`}>
+    <div className={`min-h-screen bg-background pb-20 transition-all duration-300 md:pb-0 ${isSidebarExpanded ? 'md:pl-64' : 'pl-0'}`}>
       <Sidebar 
         activePage={activePage} 
         setActivePage={setActivePage} 
         isExpanded={isSidebarExpanded}
         setIsExpanded={setIsSidebarExpanded}
       />
-      <main className="min-h-screen w-full overflow-hidden">
+      <main className="min-h-screen w-full overflow-x-hidden">
         {renderPage()}
       </main>
     </div>

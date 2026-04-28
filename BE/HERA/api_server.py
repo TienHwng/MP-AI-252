@@ -14,6 +14,7 @@ from aiohttp import web
 from agents.orchestrator import Orchestrator
 from config import MODE, MQTT_BROKER, MQTT_PORT
 from core.message import MessageSource, UserMessage
+from core.logger import log_error
 from domain.devices import DEVICE_TARGETS, normalize_device_target
 from main import (
 	build_agents,
@@ -233,7 +234,36 @@ async def handle_assistant_message(request: web.Request) -> web.Response:
 			"mode": MODE,
 		},
 	)
-	response = await request.app["orchestrator"].handle(message)
+	try:
+		response = await request.app["orchestrator"].handle(message)
+	except Exception as exc:
+		error_info = LLMService.describe_exception(exc)
+		log_error(
+			"Assistant request failed",
+			data={
+				"user": user_id,
+				"session": message.chat_id,
+				"status": error_info.get("status") or "unknown",
+				"type": error_info["type"],
+			},
+			detail=LLMService.render_error_detail(error_info),
+		)
+		return web.json_response(
+			jsonable(
+				{
+					"ok": False,
+					"error": "assistant_runtime_error",
+					"message": error_info["message"],
+					"details": {
+						"type": error_info["type"],
+						"status": error_info.get("status"),
+						"upstream": error_info.get("provider_name"),
+						"is_byok": error_info.get("is_byok"),
+					},
+				}
+			),
+			status=502,
+		)
 	return web.json_response(
 		jsonable(
 			{

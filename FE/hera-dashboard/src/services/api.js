@@ -147,7 +147,7 @@ const fetchJson = async (url, options = {}, serviceName = 'API service') => {
 
 	const payload = await response.json().catch(() => ({}));
 	if (!response.ok) {
-		throw new Error(payload.error || payload.reason || `${serviceName} request failed: ${response.status}`);
+		throw new Error(payload.message || payload.error || payload.reason || `${serviceName} request failed: ${response.status}`);
 	}
 	return payload;
 };
