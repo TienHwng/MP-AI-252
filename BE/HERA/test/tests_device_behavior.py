@@ -13,7 +13,7 @@ from typing import Any
 import agents.device_agent as device_agent_module
 import runtime.tool_runner as tool_runner_module
 from agents.anomaly_agent import classify_anomaly
-from agents.device_agent import DeviceControlAgent, build_tool_proposal
+from agents.device_agent import DeviceControlAgent, build_tool_call, build_tool_proposal
 from agents.orchestrator import Orchestrator
 from agents.web_research_agent import WebResearchAgent
 from core.message import AgentResponse, MessageSource, UserMessage
@@ -29,7 +29,7 @@ from prompts import (
 from runtime.capability_registry import CapabilityRegistry
 from runtime.policy_engine import PolicyEngine
 from runtime.tool_runner import ToolRunner
-from schemas import MemoryContext
+from schemas import MemoryContext, ToolProposal
 from web_search import DuckDuckGoSearchService, SearchIntentClassifier
 
 
@@ -1244,6 +1244,77 @@ def test_all_devices_confirmation_policy() -> None:
 	assert decision.decision == "allow", decision
 
 
+async def test_adjustable_value_commands_emit_tool_calls() -> None:
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	agent = DeviceControlAgent(FakeLLM(), FakeToolRunner())
+
+	brightness = await parse(agent, "set ws2812 brightness to 128")
+	assert brightness["action"] == "set_device_value", brightness
+	assert brightness["target"] == "ws2812", brightness
+	assert brightness["property"] == "brightness", brightness
+	assert brightness["value"] == 128, brightness
+	tool_call = build_tool_call(brightness)
+	assert tool_call == {
+		"name": "set_device_value",
+		"args": {
+			"device_target": "ws2812",
+			"property": "brightness",
+			"value": 128,
+		},
+		"confidence": 0.92,
+		"source": "device_planner",
+	}
+
+	sensor_write = await parse(agent, "set temperature to 31.5")
+	assert sensor_write["action"] == "set_sensor_value", sensor_write
+	assert sensor_write["sensor"] == "temperature", sensor_write
+	assert sensor_write["value"] == 31.5, sensor_write
+
+
+def test_tool_runner_executes_custom_value_tool_calls() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	mqtt = FakeMQTT()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(mqtt),
+		policy_engine=PolicyEngine(),
+	)
+
+	device_result = runner.run(
+		ToolProposal(
+			capability_name="set_device_value",
+			arguments={
+				"device_target": "ws2812",
+				"property": "brightness",
+				"value": 128,
+			},
+			rationale="test",
+			expected_outcome="brightness changes",
+			confidence=1.0,
+		)
+	)
+	assert mqtt.published == [("setWS2812Brightness", 128)], mqtt.published
+	assert device_result.status == "value_changed", device_result
+	assert device_result.changed_entities == ["WS2812 LED brightness"], device_result
+
+	sensor_result = runner.run(
+		ToolProposal(
+			capability_name="set_sensor_value",
+			arguments={"sensor": "temperature", "value": 31.5},
+			rationale="test",
+			expected_outcome="sensor value changes",
+			confidence=1.0,
+		)
+	)
+	assert mqtt.published[-1] == (
+		"setSensorValue",
+		{"sensor": "temperature", "value": 31.5},
+	), mqtt.published
+	assert sensor_result.status == "value_changed", sensor_result
+	assert sensor_result.changed_entities == ["temperature"], sensor_result
+
+
 def test_command_is_not_verified_without_readback() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
@@ -1308,6 +1379,8 @@ async def main() -> None:
 	await test_web_research_falls_back_when_specialized_unavailable()
 	test_duckduckgo_web_search_service_disabled_without_network()
 	test_all_devices_confirmation_policy()
+	await test_adjustable_value_commands_emit_tool_calls()
+	test_tool_runner_executes_custom_value_tool_calls()
 	test_command_is_not_verified_without_readback()
 	test_static_thresholds_are_reported_even_with_low_ml_score()
 	print("device behavior checks passed")

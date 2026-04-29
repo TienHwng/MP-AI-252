@@ -17,7 +17,7 @@ from core.llm_service import LLMService
 from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.runtime_settings import runtime_settings
-from domain.devices import DEVICE_TARGETS
+from domain.devices import DEVICE_TARGETS, DEVICE_VALUE_SPECS, SENSOR_VALUE_SPECS
 from prompts import (
 	DEVICE_COMMAND_INTERPRETER_PROMPT,
 	DEVICE_TARGET_CLARIFICATION_PROMPT,
@@ -28,6 +28,8 @@ from runtime import (
 	get_device_status_call,
 	get_telemetry_window_call,
 	set_device_state_call,
+	set_device_value_call,
+	set_sensor_value_call,
 )
 from schemas import SpecialistReport, ToolProposal
 from telemetry import sensor_value
@@ -316,6 +318,67 @@ TELEMETRY_SUMMARY_FIELDS = {
 	"anomaly": "anomaly_score",
 }
 
+VALUE_SET_MARKERS = (
+	"set",
+	"adjust",
+	"change",
+	"make",
+	"dat",
+	"chinh",
+	"dieu chinh",
+	"cap nhat",
+	"update",
+)
+
+DEVICE_VALUE_PROPERTY_MARKERS = {
+	"brightness": (
+		"brightness",
+		"bright",
+		"intensity",
+		"level",
+		"do sang",
+	),
+	"speed": (
+		"speed",
+		"fan speed",
+		"toc do",
+	),
+	"color": (
+		"color",
+		"colour",
+		"rgb",
+		"mau",
+	),
+}
+
+SENSOR_WRITE_ALIASES = {
+	"gas_detected": (
+		"gas detected",
+		"gas_detected",
+		"gasdetected",
+	),
+	"temperature": (
+		"temperature",
+		"temp",
+		"nhiet do",
+	),
+	"humidity": (
+		"humidity",
+		"humi",
+		"do am",
+	),
+	"light": (
+		"light sensor",
+		"lux",
+		"anh sang",
+	),
+	"gas": (
+		"gas ppm",
+		"gas_ppm",
+		"gas",
+	),
+}
+
 WINDOW_CONDITION_TYPES = {
 	"sensor_window_threshold",
 	"temporal_sensor_threshold",
@@ -385,11 +448,25 @@ def should_use_local_fast_path(text: str) -> bool:
 
 def looks_like_standalone_device_request(text: str) -> bool:
 	"""True when a pending clarification should give way to a full new request."""
-	parsed = fast_parse_local_command(text)
+	parsed = fast_parse_value_command(text)
+	if parsed is None:
+		parsed = fast_parse_local_command(text)
 	return (
 		isinstance(parsed, dict)
-		and parsed.get("action") in {"turn_on", "turn_off", "status"}
-		and parsed.get("target") is not None
+		and (
+			(
+				parsed.get("action") in {"turn_on", "turn_off", "status"}
+				and parsed.get("target") is not None
+			)
+			or (
+				parsed.get("action") == "set_device_value"
+				and parsed.get("target") is not None
+			)
+			or (
+				parsed.get("action") == "set_sensor_value"
+				and parsed.get("sensor") is not None
+			)
+		)
 		and not has_conditional_language(text)
 	)
 
@@ -412,6 +489,153 @@ def looks_like_conditional_device_request(
 	if not isinstance(parsed, dict):
 		return False
 	return parsed.get("action") in {"turn_on", "turn_off", "status"}
+
+
+def fast_parse_value_command(text: str) -> dict[str, Any] | None:
+	normalized = normalize_text(text)
+	if not normalized or not any(marker in normalized for marker in VALUE_SET_MARKERS):
+		return None
+
+	sensor = detect_sensor_write_target(normalized)
+	if sensor is not None:
+		value = extract_sensor_write_value(normalized, sensor)
+		if value is None:
+			return None
+		return {
+			"action": "set_sensor_value",
+			"target": None,
+			"sensor": sensor,
+			"value": value,
+			"reference": "none",
+			"confidence": 0.9,
+		}
+
+	target = explicit_target_from_text(text)
+	prop = detect_device_value_property(normalized, target)
+	if prop is None:
+		return None
+	if target is None:
+		if prop == "speed" and any(
+			marker in normalized for marker in ("fan", "qu?t", "quat")
+		):
+			target = "mini_fan"
+		elif prop == "brightness" and "neo" in normalized:
+			target = "neo_led"
+		elif prop in {"brightness", "color"} and "ws2812" in normalized:
+			target = "ws2812"
+	if target not in DEVICE_VALUE_SPECS:
+		return None
+	if prop not in DEVICE_VALUE_SPECS.get(str(target), {}):
+		return None
+
+	if prop == "color":
+		value = extract_color_setting(normalized)
+	else:
+		value = extract_numeric_setting(normalized, prop)
+		if isinstance(value, tuple):
+			number, is_percent = value
+			max_value = DEVICE_VALUE_SPECS[str(target)][prop].get("maximum")
+			value = scale_percent_value(number, int(max_value)) if is_percent else number
+	if value is None:
+		return None
+
+	return {
+		"action": "set_device_value",
+		"target": target,
+		"property": prop,
+		"value": value,
+		"reference": "none",
+		"confidence": 0.92,
+	}
+
+
+def detect_device_value_property(
+	normalized: str,
+	target: str | None,
+) -> str | None:
+	for prop, markers in DEVICE_VALUE_PROPERTY_MARKERS.items():
+		if any(marker in normalized for marker in markers):
+			return prop
+	if target == "mini_fan" and any(marker in normalized for marker in ("speed", "toc")):
+		return "speed"
+	return None
+
+
+def detect_sensor_write_target(normalized: str) -> str | None:
+	for sensor, aliases in SENSOR_WRITE_ALIASES.items():
+		if any(alias in normalized for alias in aliases):
+			if sensor == "light" and "sensor" not in normalized and "lux" not in normalized:
+				continue
+			return sensor
+	return None
+
+
+def extract_sensor_write_value(normalized: str, sensor: str) -> Any:
+	if sensor == "gas_detected":
+		if any(marker in normalized for marker in ("true", "yes", "on", "detected")):
+			return True
+		if any(marker in normalized for marker in ("false", "no", "off", "clear")):
+			return False
+		return None
+	value = extract_numeric_setting(normalized, sensor)
+	if isinstance(value, tuple):
+		number, _ = value
+		return number
+	return value
+
+
+def extract_color_setting(normalized: str) -> str | None:
+	match = re.search(r"(?:#|0x)?[0-9a-f]{6}\b", normalized, flags=re.IGNORECASE)
+	if not match:
+		return None
+	value = match.group(0)
+	if value.lower().startswith("0x"):
+		value = value[2:]
+	if not value.startswith("#"):
+		value = f"#{value}"
+	return value.upper()
+
+
+def extract_numeric_setting(
+	normalized: str,
+	property_name: str,
+) -> tuple[int, bool] | float | int | None:
+	markers = DEVICE_VALUE_PROPERTY_MARKERS.get(property_name, (property_name,))
+	markers = (*markers, property_name, "to", "at", "=")
+	for marker in markers:
+		index = normalized.find(marker)
+		if index == -1:
+			continue
+		tail = normalized[index + len(marker) :]
+		match = re.search(
+			r"(-?\d+(?:[\.,]\d+)?)\s*(%|percent|phan tram)?",
+			tail,
+			flags=re.IGNORECASE,
+		)
+		if match:
+			return parse_numeric_match(match)
+
+	search_text = normalized.replace("ws2812", " ")
+	match = re.search(
+		r"(-?\d+(?:[\.,]\d+)?)\s*(%|percent|phan tram)?",
+		search_text,
+		flags=re.IGNORECASE,
+	)
+	return parse_numeric_match(match) if match else None
+
+
+def parse_numeric_match(match: re.Match[str]) -> tuple[int, bool] | float | int:
+	raw_number = match.group(1).replace(",", ".")
+	number = float(raw_number)
+	is_percent = bool(match.group(2))
+	if is_percent:
+		return int(round(number)), True
+	return int(number) if number.is_integer() else number
+
+
+def scale_percent_value(percent: int, maximum: int) -> int:
+	clamped = max(0, min(int(percent), 100))
+	return int(round(maximum * clamped / 100))
 
 
 def detect_action(normalized: str) -> str | None:
@@ -1096,19 +1320,54 @@ def normalise_command(
 	requested_action = parsed.get("requested_action")
 	requested_target = parsed.get("requested_target")
 	condition = parsed.get("condition")
-	if action not in {"turn_on", "turn_off", "status", "unknown"}:
+	if action not in {
+		"turn_on",
+		"turn_off",
+		"status",
+		"set_device_value",
+		"set_sensor_value",
+		"unknown",
+	}:
 		action = "unknown"
 	if reference not in {"none", "recent_changed_devices"}:
 		reference = "none"
 	if reference == "recent_changed_devices":
 		target = target_from_recent_changed_devices(recent_actions or [])
-	if target not in DEVICE_TARGETS:
+	if action == "set_device_value":
+		if target not in DEVICE_VALUE_SPECS:
+			target = None
+		prop = parsed.get("property")
+		if not isinstance(prop, str) or prop not in DEVICE_VALUE_SPECS.get(
+			str(target),
+			{},
+		):
+			prop = None
+	else:
+		prop = None
+	if action != "set_sensor_value" and target not in DEVICE_TARGETS:
 		target = None
+	sensor = parsed.get("sensor")
+	if action == "set_sensor_value":
+		if sensor not in SENSOR_VALUE_SPECS:
+			sensor = None
+		target = None
+	else:
+		sensor = None
 	if action == "unknown":
 		target = None
-	if requested_action not in {"turn_on", "turn_off", "status"}:
+		sensor = None
+	if requested_action not in {
+		"turn_on",
+		"turn_off",
+		"status",
+		"set_device_value",
+		"set_sensor_value",
+	}:
 		requested_action = (
-			action if action in {"turn_on", "turn_off", "status"} else None
+			action
+			if action
+			in {"turn_on", "turn_off", "status", "set_device_value", "set_sensor_value"}
+			else None
 		)
 	if requested_target not in DEVICE_TARGETS:
 		requested_target = target
@@ -1120,6 +1379,12 @@ def normalise_command(
 		"requested_action": requested_action,
 		"requested_target": requested_target,
 	}
+	if action == "set_device_value":
+		command["property"] = prop
+		command["value"] = parsed.get("value")
+	if action == "set_sensor_value":
+		command["sensor"] = sensor
+		command["value"] = parsed.get("value")
 	if isinstance(condition, dict):
 		command["condition"] = condition
 	raw_commands = parsed.get("commands")
@@ -1177,6 +1442,9 @@ def deduplicate_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any]]
 		key = (
 			command.get("action"),
 			command.get("target"),
+			command.get("sensor"),
+			command.get("property"),
+			command.get("value"),
 			command.get("reference"),
 			condition_key,
 		)
@@ -1208,7 +1476,9 @@ def parse_additional_action_segments(
 	for segment in segments[1:]:
 		if not segment:
 			continue
-		parsed = fast_parse_local_command(segment)
+		parsed = fast_parse_value_command(segment)
+		if parsed is None:
+			parsed = fast_parse_local_command(segment)
 		if parsed is None:
 			parsed = fast_parse_contextual_command(segment, focus_target)
 		if parsed is None:
@@ -1274,6 +1544,8 @@ def capability_from_action(action: str) -> str | None:
 		"turn_on": "turn_on_device",
 		"turn_off": "turn_off_device",
 		"status": "get_device_status",
+		"set_device_value": "set_device_value",
+		"set_sensor_value": "set_sensor_value",
 	}.get(action)
 
 
@@ -1285,6 +1557,20 @@ def build_tool_call(command: dict[str, Any]) -> dict[str, Any] | None:
 	capability_name = capability_from_action(command["action"])
 	if capability_name is None:
 		return None
+
+	if capability_name == "set_sensor_value":
+		sensor = command.get("sensor")
+		if sensor not in SENSOR_VALUE_SPECS or "value" not in command:
+			return None
+		confidence = command.get("confidence")
+		if not isinstance(confidence, int | float):
+			confidence = 0.6
+		return set_sensor_value_call(
+			str(sensor),
+			command.get("value"),
+			confidence=max(0.0, min(float(confidence), 1.0)),
+			source="device_planner",
+		)
 
 	target = command.get("target")
 	if target is None:
@@ -1300,6 +1586,22 @@ def build_tool_call(command: dict[str, Any]) -> dict[str, Any] | None:
 	if capability_name == "get_device_status":
 		return get_device_status_call(
 			str(target),
+			confidence=confidence,
+			source="device_planner",
+		)
+	if capability_name == "set_device_value":
+		prop = command.get("property")
+		if (
+			target not in DEVICE_VALUE_SPECS
+			or not isinstance(prop, str)
+			or prop not in DEVICE_VALUE_SPECS.get(str(target), {})
+			or "value" not in command
+		):
+			return None
+		return set_device_value_call(
+			str(target),
+			prop,
+			command.get("value"),
 			confidence=confidence,
 			source="device_planner",
 		)
@@ -1330,7 +1632,13 @@ def tool_call_to_proposal(tool_call: dict[str, Any]) -> ToolProposal | None:
 			name = "turn_off_device"
 		else:
 			return None
-	if name not in {"turn_on_device", "turn_off_device", "get_device_status"}:
+	if name not in {
+		"turn_on_device",
+		"turn_off_device",
+		"get_device_status",
+		"set_device_value",
+		"set_sensor_value",
+	}:
 		return None
 	if not isinstance(args, dict):
 		args = {}
@@ -1346,6 +1654,9 @@ def tool_call_to_proposal(tool_call: dict[str, Any]) -> ToolProposal | None:
 			"Execution must go through the graph runtime tool node."
 		),
 		expected_outcome=(
+			"Requested value changes if it differs from current telemetry."
+			if name in {"set_device_value", "set_sensor_value"}
+			else
 			"Device state changes if requested state differs from current state."
 			if name != "get_device_status"
 			else "Current device state is reported without changing hardware."
@@ -1428,10 +1739,12 @@ class DeviceControlAgent:
 		}
 		focus_target = context.get("conversation_focus_target")
 		fast_parsed = (
-			fast_parse_local_command(message.text)
+			fast_parse_value_command(message.text)
 			if should_use_local_fast_path(message.text)
 			else None
 		)
+		if fast_parsed is None and should_use_local_fast_path(message.text):
+			fast_parsed = fast_parse_local_command(message.text)
 		if fast_parsed is None:
 			fast_parsed = fast_parse_contextual_command(message.text, focus_target)
 		if fast_parsed is not None:
@@ -1610,8 +1923,22 @@ class DeviceControlAgent:
 		commands = command_list_from(command)
 		clarification_question = None
 		needs_clarification = any(
-			item.get("action") in {"turn_on", "turn_off", "status"}
-			and item.get("target") is None
+			(
+				item.get("action") in {"turn_on", "turn_off", "status"}
+				and item.get("target") is None
+			)
+			or (
+				item.get("action") == "set_device_value"
+				and (
+					item.get("target") is None
+					or item.get("property") is None
+					or "value" not in item
+				)
+			)
+			or (
+				item.get("action") == "set_sensor_value"
+				and (item.get("sensor") is None or "value" not in item)
+			)
 			for item in commands
 		)
 		summary = "unknown_or_ambiguous_command"

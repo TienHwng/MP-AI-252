@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from config import DEVICE_VERIFICATION_POLL_SECONDS, DEVICE_VERIFICATION_TIMEOUT_SECONDS
+from domain.devices.device_catalog import normalize_color_value
 from domain.devices.device_executor import DeviceExecutor
 from schemas import (
 	PolicyDecision,
@@ -88,6 +89,17 @@ class ToolRunner:
 			result = self._run_device_state(executable_proposal, True)
 		elif executable_proposal.capability_name == "turn_off_device":
 			result = self._run_device_state(executable_proposal, False)
+		elif executable_proposal.capability_name == "set_device_value":
+			result = self.device_executor.control_device_value(
+				executable_proposal.arguments.get("device_target"),
+				executable_proposal.arguments.get("property"),
+				executable_proposal.arguments.get("value"),
+			)
+		elif executable_proposal.capability_name == "set_sensor_value":
+			result = self.device_executor.set_sensor_value(
+				executable_proposal.arguments.get("sensor"),
+				executable_proposal.arguments.get("value"),
+			)
 		else:
 			return self._rejected_result(
 				executable_proposal,
@@ -121,18 +133,12 @@ class ToolRunner:
 		if not commands_sent:
 			return
 
-		expected = {
-			command.get("device_key"): command.get("params")
-			for command in commands_sent
-			if command.get("device_key") is not None
-		}
-		if not expected:
-			return
+		expected = [command for command in commands_sent if isinstance(command, dict)]
 
 		timeout = max(float(DEVICE_VERIFICATION_TIMEOUT_SECONDS), 0.0)
 		poll_interval = max(float(DEVICE_VERIFICATION_POLL_SECONDS), 0.0)
 		deadline = time.monotonic() + timeout
-		status = self.device_executor.get_device_status_report()
+		status = self._readback_for_commands(expected)
 		matched = self._status_matches_expected(status, expected)
 		while not matched and timeout > 0 and time.monotonic() < deadline:
 			remaining = deadline - time.monotonic()
@@ -141,7 +147,7 @@ class ToolRunner:
 			if poll_interval <= 0:
 				break
 			time.sleep(min(poll_interval, remaining))
-			status = self.device_executor.get_device_status_report()
+			status = self._readback_for_commands(expected)
 			matched = self._status_matches_expected(status, expected)
 
 		execution_result.after_state = status
@@ -150,8 +156,13 @@ class ToolRunner:
 		execution_result.raw_metadata["double_check_matched"] = matched
 		execution_result.raw_metadata["double_check_timed_out"] = not matched
 
+	def _readback_for_commands(self, commands: list[dict]) -> dict:
+		if any(command.get("entity_type") for command in commands):
+			return self.device_executor.get_value_readback_report()
+		return self.device_executor.get_device_status_report()
+
 	@staticmethod
-	def _status_matches_expected(status: dict, expected: dict) -> bool:
+	def _status_matches_expected(status: dict, expected: list[dict]) -> bool:
 		status_key_by_name = {
 			"main_led": "led",
 			"neo_led": "neo_led",
@@ -162,11 +173,73 @@ class ToolRunner:
 		name_by_status_key = {
 			status_key: name for name, status_key in status_key_by_name.items()
 		}
-		for device_key, expected_value in expected.items():
+		for command in expected:
+			entity_type = command.get("entity_type")
+			if entity_type == "device_value":
+				devices = status.get("devices", {})
+				if not isinstance(devices, dict):
+					return False
+				target = command.get("target")
+				device_key = command.get("device_key")
+				field = command.get("field")
+				device = devices.get(target) or devices.get(device_key)
+				if not isinstance(device, dict):
+					return False
+				if not ToolRunner._same_value(
+					device.get(field),
+					command.get("expected_value"),
+				):
+					return False
+				continue
+			if entity_type == "sensor_value":
+				sensors = status.get("sensors", {})
+				if not isinstance(sensors, dict):
+					return False
+				observed = ToolRunner._sensor_value_from_snapshot(
+					sensors,
+					str(command.get("sensor") or ""),
+				)
+				if not ToolRunner._same_value(
+					observed,
+					command.get("expected_value"),
+				):
+					return False
+				continue
+
+			device_key = command.get("device_key")
+			expected_value = command.get("params")
 			device_name = name_by_status_key.get(device_key)
 			if device_name is None or status.get(device_name) is not expected_value:
 				return False
 		return True
+
+	@staticmethod
+	def _sensor_value_from_snapshot(sensors: dict, sensor: str) -> Any:
+		if sensor in {"temperature", "humidity"}:
+			dht20 = sensors.get("dht20")
+			if isinstance(dht20, dict) and sensor in dht20:
+				return dht20.get(sensor)
+			return sensors.get(sensor)
+		if sensor == "light":
+			light = sensors.get("light")
+			return light.get("value") if isinstance(light, dict) else light
+		if sensor == "gas":
+			gas = sensors.get("gas")
+			return gas.get("value") if isinstance(gas, dict) else gas
+		if sensor == "gas_detected":
+			gas = sensors.get("gas")
+			if isinstance(gas, dict) and "detected" in gas:
+				return gas.get("detected")
+			return sensors.get("gas_detected")
+		return sensors.get(sensor)
+
+	@staticmethod
+	def _same_value(left: Any, right: Any) -> bool:
+		left_color = normalize_color_value(left)
+		right_color = normalize_color_value(right)
+		if left_color is not None or right_color is not None:
+			return left_color == right_color
+		return left == right
 
 	def _run_device_state(self, proposal: ToolProposal, requested_state: bool) -> dict:
 		target = proposal.arguments.get("device_target")

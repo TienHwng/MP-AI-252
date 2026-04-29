@@ -10,6 +10,8 @@ from runtime.tool_contracts import (
 	get_telemetry_window_call,
 	make_tool_call,
 	set_device_state_call,
+	set_device_value_call,
+	set_sensor_value_call,
 )
 from runtime.tool_node import RuntimeToolNode, RuntimeToolNodeResult
 from runtime.tool_runner import ToolRunner
@@ -29,4 +31,6 @@ __all__ = [
 	"get_telemetry_window_call",
 	"make_tool_call",
 	"set_device_state_call",
+	"set_device_value_call",
+	"set_sensor_value_call",
 ]

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from domain.devices import DEVICE_TOOL_PARAMS
+from domain.devices import (
+	DEVICE_TOOL_PARAMS,
+	DEVICE_VALUE_TOOL_PARAMS,
+	SENSOR_VALUE_TOOL_PARAMS,
+)
 from schemas import CapabilitySpec
 
 EMPTY_PARAMS = {
@@ -68,6 +72,35 @@ class CapabilityRegistry:
 					risk_level="low",
 					supports_idempotency=True,
 					requires_confirmation=False,
+				),
+				CapabilitySpec(
+					name="set_device_value",
+					description=(
+						"Set an adjustable device value through MQTT RPC. "
+						"Supported pairs are neo_led brightness (0..255), "
+						"ws2812 brightness (0..255), ws2812 color (#RRGGBB), "
+						"and mini_fan speed (0..1023)."
+					),
+					parameters=DEVICE_VALUE_TOOL_PARAMS,
+					effect_type="write",
+					risk_level="medium",
+					supports_idempotency=True,
+					requires_confirmation=False,
+					verifier_name="device_value_readback",
+				),
+				CapabilitySpec(
+					name="set_sensor_value",
+					description=(
+						"Override a simulator sensor value through MQTT RPC. "
+						"Use only in simulation mode for temperature, humidity, "
+						"light, gas, or gas_detected."
+					),
+					parameters=SENSOR_VALUE_TOOL_PARAMS,
+					effect_type="write",
+					risk_level="medium",
+					supports_idempotency=True,
+					requires_confirmation=False,
+					verifier_name="sensor_value_readback",
 				),
 			)
 		}

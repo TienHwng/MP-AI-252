@@ -17,6 +17,8 @@ Canonical actions:
 - turn_on
 - turn_off
 - status
+- set_device_value
+- set_sensor_value
 - unknown
 
 Canonical references:
@@ -44,6 +46,13 @@ Rules:
   or "chắc chưa", use Current discourse focus when it is provided. Do not
   invent a default target.
 - If the user asks whether a device is on/off, use action=status.
+- If the user asks to set an adjustable actuator value, use
+  action=set_device_value and include property/value:
+  neo_led brightness 0..255, ws2812 brightness 0..255, ws2812 color #RRGGBB,
+  or mini_fan speed 0..1023.
+- If the user asks to override a simulator sensor reading, use
+  action=set_sensor_value with sensor/value. Supported sensors are
+  temperature, humidity, light, gas, and gas_detected.
 - If the user asks for a conditional action, such as "if temperature is above
   30 then turn on the fan", still parse the requested actuator action and
   target. Include the condition object when you can identify the sensor,
@@ -73,8 +82,11 @@ Examples:
 
 Output schema:
 {
-  "action": "turn_on" | "turn_off" | "status" | "unknown",
+  "action": "turn_on" | "turn_off" | "status" | "set_device_value" | "set_sensor_value" | "unknown",
   "target": "main_led" | "neo_led" | "ws2812" | "relay" | "mini_fan" | "all_lights" | "all_devices" | null,
+  "property": "brightness" | "speed" | "color" | null,
+  "value": number | boolean | string | object | null,
+  "sensor": "temperature" | "humidity" | "light" | "gas" | "gas_detected" | null,
   "reference": "none" | "recent_changed_devices",
   "confidence": 0.0-1.0,
   "condition": {
@@ -86,8 +98,11 @@ Output schema:
   } | null,
   "commands": [
     {
-      "action": "turn_on" | "turn_off" | "status" | "unknown",
+      "action": "turn_on" | "turn_off" | "status" | "set_device_value" | "set_sensor_value" | "unknown",
       "target": "main_led" | "neo_led" | "ws2812" | "relay" | "mini_fan" | "all_lights" | "all_devices" | null,
+      "property": "brightness" | "speed" | "color" | null,
+      "value": number | boolean | string | object | null,
+      "sensor": "temperature" | "humidity" | "light" | "gas" | "gas_detected" | null,
       "reference": "none" | "recent_changed_devices",
       "confidence": 0.0-1.0,
       "condition": object | null

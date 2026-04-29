@@ -7,6 +7,8 @@ from typing import Any
 DEVICE_TOOL_NAMES = {
 	"get_device_status",
 	"set_device_state",
+	"set_device_value",
+	"set_sensor_value",
 }
 
 TELEMETRY_TOOL_NAMES = {
@@ -69,6 +71,41 @@ def set_device_state_call(
 	return make_tool_call(
 		"set_device_state",
 		{"device_target": device_target, "state": bool(state)},
+		confidence=confidence,
+		source=source,
+	)
+
+
+def set_device_value_call(
+	device_target: str,
+	property_name: str,
+	value: Any,
+	*,
+	confidence: float = 0.6,
+	source: str = "planner",
+) -> dict[str, Any]:
+	return make_tool_call(
+		"set_device_value",
+		{
+			"device_target": device_target,
+			"property": property_name,
+			"value": value,
+		},
+		confidence=confidence,
+		source=source,
+	)
+
+
+def set_sensor_value_call(
+	sensor: str,
+	value: Any,
+	*,
+	confidence: float = 0.6,
+	source: str = "planner",
+) -> dict[str, Any]:
+	return make_tool_call(
+		"set_sensor_value",
+		{"sensor": sensor, "value": value},
 		confidence=confidence,
 		source=source,
 	)

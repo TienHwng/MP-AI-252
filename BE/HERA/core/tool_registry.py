@@ -77,6 +77,21 @@ class ToolRegistry:
 	def control_device_state(self, raw_target: Any, state: bool) -> dict:
 		return self.device_executor.control_device_state(raw_target, state)
 
+	def control_device_value(
+		self,
+		raw_target: Any,
+		raw_property: Any,
+		raw_value: Any,
+	) -> dict:
+		return self.device_executor.control_device_value(
+			raw_target,
+			raw_property,
+			raw_value,
+		)
+
+	def set_sensor_value(self, raw_sensor: Any, raw_value: Any) -> dict:
+		return self.device_executor.set_sensor_value(raw_sensor, raw_value)
+
 	@staticmethod
 	def format_device_control_result(result: dict) -> str:
 		if not result.get("ok"):
@@ -105,6 +120,21 @@ class ToolRegistry:
 			result = self.control_device_state(args.get("device_target"), state)
 			return self.format_device_control_result(result)
 
+		def set_device_value(args: dict) -> str:
+			result = self.control_device_value(
+				args.get("device_target"),
+				args.get("property"),
+				args.get("value"),
+			)
+			return json.dumps(result, ensure_ascii=False)
+
+		def set_sensor_value(args: dict) -> str:
+			result = self.set_sensor_value(
+				args.get("sensor"),
+				args.get("value"),
+			)
+			return json.dumps(result, ensure_ascii=False)
+
 		self.register_capability(
 			"get_device_status",
 			lambda args: device_status_report(),
@@ -116,6 +146,14 @@ class ToolRegistry:
 		self.register_capability(
 			"turn_off_device",
 			lambda args: set_device_state(args, False),
+		)
+		self.register_capability(
+			"set_device_value",
+			set_device_value,
+		)
+		self.register_capability(
+			"set_sensor_value",
+			set_sensor_value,
 		)
 
 		def get_status(args: dict) -> str:

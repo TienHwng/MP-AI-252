@@ -78,7 +78,13 @@ class RuntimeToolNode:
 			"store_memory",
 		}:
 			return None
-		if name not in {"turn_on_device", "turn_off_device", "get_device_status"}:
+		if name not in {
+			"turn_on_device",
+			"turn_off_device",
+			"get_device_status",
+			"set_device_value",
+			"set_sensor_value",
+		}:
 			return None
 		confidence = tool_call.get("confidence")
 		if not isinstance(confidence, int | float):
@@ -88,6 +94,9 @@ class RuntimeToolNode:
 			arguments=args,
 			rationale="Graph runtime converted native tool call into domain execution.",
 			expected_outcome=(
+				"Requested value changes if it differs from current telemetry."
+				if name in {"set_device_value", "set_sensor_value"}
+				else
 				"Device state changes if requested state differs from current state."
 				if name != "get_device_status"
 				else "Current device state is reported without changing hardware."

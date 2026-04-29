@@ -42,6 +42,8 @@ class RouteDecision(BaseModel):
 					"get_device_status",
 					"turn_on_device",
 					"turn_off_device",
+					"set_device_value",
+					"set_sensor_value",
 				],
 				max_tool_steps=max_tool_steps,
 			)

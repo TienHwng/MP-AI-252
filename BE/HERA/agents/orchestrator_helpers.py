@@ -82,6 +82,8 @@ def format_entity_list(items: list[str], prefer_vietnamese: bool) -> str:
 
 def action_label(capability_name: str, prefer_vietnamese: bool) -> str:
 	labels = {
+		"set_device_value": ("cai", "set"),
+		"set_sensor_value": ("cai", "set"),
 		"turn_on_device": ("bật", "turn on"),
 		"turn_off_device": ("tắt", "turn off"),
 		"get_device_status": ("kiểm tra trạng thái", "check the status of"),
@@ -154,9 +156,15 @@ def render_device_control_text(user_text: str, payload: dict) -> str:
 			if prefer_vietnamese
 			else "I cannot complete that request right now."
 		)
-	if status == "noop" or reason == "already_in_requested_state":
+	if status == "noop" or reason in {"already_in_requested_state", "already_in_requested_value"}:
 		if user_visible_message and not prefer_vietnamese:
 			return str(user_visible_message)
+		if reason == "already_in_requested_value":
+			return (
+				"Gia tri da o muc ban yeu cau."
+				if prefer_vietnamese
+				else "The value is already set as requested."
+			)
 		return (
 			"Thiết bị đã ở trạng thái bạn yêu cầu."
 			if prefer_vietnamese
@@ -199,6 +207,19 @@ def render_device_control_text(user_text: str, payload: dict) -> str:
 		)
 	label = action_label(capability_name, prefer_vietnamese)
 	target_list = format_entity_list(changed_entities, prefer_vietnamese)
+	if capability_name in {"set_device_value", "set_sensor_value"}:
+		if changed_entities and verification_status == "verified":
+			return (
+				f"Da cai {target_list}."
+				if prefer_vietnamese
+				else f"I set {target_list}."
+			)
+		if changed_entities:
+			return (
+				f"Toi da gui lenh cai {target_list}, nhung chua xac minh duoc gia tri cuoi cung."
+				if prefer_vietnamese
+				else f"I sent the command to set {target_list}, but I could not verify the final value yet."
+			)
 	if changed_entities and verification_status == "verified":
 		return (
 			f"Đã {label} {target_list}."

@@ -13,7 +13,8 @@ Use them when planning web queries involving relative dates, weather, local
 events, schedules, or location-dependent facts.
 
 Intent labels:
-- device_control: user wants to command an actuator, or asks about a specific
+- device_control: user wants to command an actuator, set an adjustable device
+  value, override a simulator sensor value, or asks about a specific
   actuator's on/off state.
 - sensor_query: user asks for current sensor/environment readings.
 - anomaly_query: user asks about abnormality, warnings, recent trends, or safety.

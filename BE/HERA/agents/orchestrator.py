@@ -71,7 +71,7 @@ from agents.orchestrator_helpers import (
 # ── Intent taxonomy ───────────────────────────────────────────
 
 INTENTS = (
-	"device_control",  # turn on/off LED, actuator commands
+	"device_control",  # on/off commands, adjustable values, simulator writes
 	"sensor_query",  # what is the temperature / humidity / status
 	"anomaly_query",  # is there an anomaly, why is the score high
 	"web_search",  # external/current public web information
