@@ -450,7 +450,7 @@ def fast_parse_local_command(text: str) -> dict[str, Any] | None:
 
 	# ── Status-question detection (must come BEFORE action detection) ──
 	# Patterns like "bật chưa", "đã bật", "tắt chưa", "đang tắt" are
-	# inquiries about state, not commands to change state.
+	# inquiries about device state, not commands to change state.
 	status_question_patterns = (
 		r"(?:đã|da)\s+(?:được\s+)?(?:bật|bat|tắt|tat|mở|mo|đóng|dong)",
 		r"(?:được|duoc)\s+(?:bật|bat|tắt|tat|mở|mo|đóng|dong)",

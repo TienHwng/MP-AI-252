@@ -192,10 +192,10 @@ def on_update(e):
 		update_all_main_leds(main_led_on)
 		update_all_neo_leds(neo_led_on)
 
-	# Auto-reconnect với exponential backoff
+	# Auto-reconnect with exponential backoff
 	if mqtt_client and not is_connected:
 		reconnect_timer += 1
-		# Backoff: 5s, 10s, 15s (tối đa) — đơn vị frame ≈ 60fps
+		# Backoff: 5s, 10s, 15s (maximum) — frame unit ≈ 60fps
 		delay = min(connection_attempts * 300, 900)
 		if reconnect_timer >= delay:
 			reconnect_timer = 0

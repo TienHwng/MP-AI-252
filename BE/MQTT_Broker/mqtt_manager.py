@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-# Phải setup sys.path TRƯỚC khi import từ BE
+# Must setup sys.path BEFORE importing from BE
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
 	sys.path.append(str(PROJECT_ROOT))
@@ -20,12 +20,12 @@ from datetime import UTC, datetime
 import paho.mqtt.client as mqtt
 from amqtt.broker import Broker
 
-# Kích hoạt hỗ trợ ANSI color trên Windows PowerShell/CMD
+# Enable ANSI color support on Windows PowerShell/CMD
 if os.name == "nt":
 	os.system("color")
 
 
-# Lớp định nghĩa màu sắc cơ bản
+# Color class for basic terminal colors
 class Color:
 	CYAN = "\033[96m"
 	GREEN = "\033[92m"
@@ -83,21 +83,21 @@ except ImportError:
 def connect_mongo_collections():
 	if MongoClient is None:
 		print(
-			"[ WARNING ] Thiếu package 'pymongo'. "
-			"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
+			"[ WARNING ] Missing 'pymongo' package. "
+			"MQTT will continue to run, only telemetry persistence to MongoDB is disabled."
 		)
 		return None, None
 
 	try:
 		mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=1500)
-		# Ping để fail-fast khi contributor không chạy MongoDB local
+		# Ping to fail-fast if MongoDB is not running locally
 		mongo_client.admin.command("ping")
 		db = mongo_client[MONGODB_DB]
 		return db[MONGODB_COLLECTION], db["devices"]
 	except Exception as e:
 		print(
-			f"[ WARNING ] Không thể kết nối MongoDB ({e}). "
-			"MQTT vẫn chạy, chỉ tắt lưu telemetry vào MongoDB."
+			f"[ WARNING ] Cannot connect to MongoDB ({e}). "
+			"MQTT will continue to run, only telemetry persistence to MongoDB is disabled."
 		)
 		return None, None
 
@@ -116,11 +116,11 @@ def floor_datetime_to_bucket(value: datetime) -> datetime:
 def parse_ws2812_color_input(color_input):
 	color_input = color_input.strip()
 
-	# Cho phép nhập hex như: #FF00AA, FF00AA, 0xFF00AA
+	# Allow hex input formats: #FF00AA, FF00AA, 0xFF00AA
 	if color_input.startswith("#") or color_input.startswith("0x") or color_input.startswith("0X"):
 		return color_input
 
-	# Cho phép nhập RGB như: 255,111,222
+	# Allow RGB input format: 255,111,222
 	parts = color_input.split(",")
 
 	if len(parts) != 3:
@@ -215,10 +215,10 @@ class MQTTManager:
 		if self.persist_telemetry and self.collection is None:
 			print(
 				"[ INFO ] Telemetry persistence disabled. "
-				"Ứng dụng vẫn nhận dữ liệu MQTT bình thường."
+				"Application still receives MQTT data normally."
 			)
 
-		# === Cấu hình Broker ===
+		# Broker configuration
 		self.broker_config = {
 			"listeners": {
 				"default": {
@@ -233,7 +233,7 @@ class MQTTManager:
 			},
 		}
 
-		# === Cấu hình Broker ===
+		# Broker configuration
 		self.broker_config = {
 			"listeners": {
 				"default": {
@@ -248,9 +248,9 @@ class MQTTManager:
 			},
 		}
 
-		# === Khởi tạo Client ===
+		# Initialize Client
 		self.client = mqtt.Client()
-		# Gắn các hàm callback
+		# Attach callback functions
 		self.client.on_connect = self.on_connect
 		self.client.on_message = self.on_message
 		self.client.on_subscribe = self.on_subscribe
@@ -456,23 +456,23 @@ class MQTTManager:
 		"""Compatibility property - returns latest_sensor_data"""
 		return self.latest_sensor_data
 
-	# --- Các hàm của Broker ---
+	# --- Broker functions ---
 	def _start_broker_thread(self):
 		async def broker_coro():
 			broker = Broker(self.broker_config)
 			await broker.start()
 			print("[ OK ] MQTT Broker started...")
 
-		# Mỗi thread cần một event loop riêng cho asyncio
+		# Each thread needs its own event loop for asyncio
 		loop = asyncio.new_event_loop()
 		asyncio.set_event_loop(loop)
 		loop.run_until_complete(broker_coro())
 		loop.run_forever()
 
-	# --- Các hàm Callback của Client ---
+	# --- Client callback functions ---
 	def on_connect(self, client, userdata, flags, rc):
 		client.subscribe(MQTT_SUBSCRIBE_TOPIC, qos=0)
-		# Vừa kết nối xong là đăng ký nhận (subscribe) tất cả các topic (#)
+		# Upon connection, subscribe to all topics (#)
 		# print("[ OK ] Client Connected.")
 
 	def on_subscribe(self, client, userdata, mid, granted_qos):
@@ -485,7 +485,7 @@ class MQTTManager:
 		payload = msg.payload.decode("utf-8")
 
 		if "telemetry" in topic:
-			# Log dữ liệu cảm biến nhận được từ ESP32 (để debug)
+			# Log sensor data received from ESP32 (for debugging)
 			# print(f"[ INFO ] [Sensor data] {payload}")
 			try:
 				parsed = json.loads(payload)
@@ -545,7 +545,7 @@ class MQTTManager:
 					except Exception as e:
 						print(
 							f"[ WARNING ] MongoDB write failed ({e}). "
-							"MQTT vẫn tiếp tục chạy, tạm tắt telemetry persistence."
+							"MQTT will continue running, telemetry persistence is temporarily disabled."
 						)
 						self.persist_telemetry = False
 
@@ -560,20 +560,20 @@ class MQTTManager:
 	def on_publish(self, client, userdata, mid):
 		print(f"[ INFO ] Message ID {mid} published successfully")
 
-	# --- Các hàm điều khiển (API cho các file khác gọi) ---
+	# --- Control functions (API for other files to call) ---
 	def start(self):
-		"""Khởi động Broker trong luồng ẩn và kết nối Client"""
-		# Chạy Broker trong một luồng (thread) riêng để không block chương trình chính
+		"""Start Broker in hidden thread and connect Client"""
+		# Run Broker in separate thread to avoid blocking main program
 		broker_thread = threading.Thread(target=self._start_broker_thread, daemon=True)
 		broker_thread.start()
 
-		# Đợi một chút để Broker khởi động xong
+		# Wait briefly for Broker to start
 		time.sleep(2)
 
-		# Kết nối Client vào Broker
+		# Connect Client to Broker
 		self.client.connect(self.broker_address, self.port)
 
-		# Dùng loop_start() chạy ngầm thay vì loop_forever() để không khóa luồng chính
+		# Use loop_start() to run in background instead of loop_forever() to avoid blocking main thread
 		self.client.loop_start()
 
 	def connect_client_only(self):
@@ -594,16 +594,15 @@ class MQTTManager:
 			print("[ INFO ] MQTT Client disconnected")
 
 	def send_rpc_command(self, method_name, params):
-		"""Hàm dùng để AI gọi khi cần gửi text/lệnh xuống ESP32
-		đóng gói data theo dạng JSON"""
-		request_id = random.randint(1, 10000)  # Tạo ID ngẫu nhiên cho mỗi request
+		"""Send commands to ESP32 via MQTT with JSON encoding"""
+		request_id = random.randint(1, 10000)  # Generate random ID for each request
 		topic = f"{MQTT_RPC_REQUEST_TOPIC_PREFIX}/{request_id}"
 
-		# Đóng gói dữ liệu thành JSON
+		# Encode data as JSON
 		payload = {"method": method_name, "params": params}
 		json_payload = json.dumps(payload)
 
-		# Gửi đi
+		# Publish to MQTT
 		self.client.publish(topic, json_payload)
 		print(f"[ INFO ] [Backend Send] Topic: {topic} | Data: {json_payload}")
 
@@ -629,7 +628,7 @@ class MQTTManager:
 		return copy.deepcopy(self.latest_sensor_data.get("sensors", {}))
 
 
-# === Cách chạy thử file này ===
+# === How to run this file for testing ===
 if __name__ == "__main__":
 	mqtt_system = MQTTManager()
 	mqtt_system.start()
@@ -704,7 +703,7 @@ if __name__ == "__main__":
 
 			print("\n" + "\n".join(menu_lines) + Color.RESET)
 
-			# Lấy lựa chọn từ người dùng
+			# Get user's choice
 			choice = input(
 				f"{Color.BOLD} [ INPUT ] Please choose an option (0-18): {Color.RESET}"
 			).strip()
@@ -715,7 +714,7 @@ if __name__ == "__main__":
 					+ "\nExiting H.E.R.A. Control Center. Goodbye!\n"
 					+ Color.RESET
 				)
-				break  # Giữ nguyên logic break của bạn
+				break # Keep your break logic
 
 			elif choice == "1":
 				print(

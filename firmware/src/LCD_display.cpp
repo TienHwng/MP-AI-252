@@ -8,10 +8,10 @@ static LiquidCrystal_I2C lcd(0x21, 16, 2);
 
 // clang-format off
 
-// Hằng số định thời cho việc cập nhật LCD
-static const TickType_t LCD_REFRESH_TICKS    = pdMS_TO_TICKS(200);  // Làm mới thông số 0.2s/lần
-static const TickType_t AUTO_ROTATE_TICKS    = pdMS_TO_TICKS(3000); // Tự lật trang mỗi 3 giây
-static const TickType_t MANUAL_TIMEOUT_TICKS = pdMS_TO_TICKS(5000); // 5s sau khi bấm nút sẽ tự động lật trang lại
+// Timing constants for LCD update
+static const TickType_t LCD_REFRESH_TICKS    = pdMS_TO_TICKS(200);  // Refresh parameters 0.2s/cycle
+static const TickType_t AUTO_ROTATE_TICKS    = pdMS_TO_TICKS(3000); // Auto-rotate page every 3 seconds
+static const TickType_t MANUAL_TIMEOUT_TICKS = pdMS_TO_TICKS(5000); // 5s after button press will auto-rotate page again
 
 enum EnvStatus {
     ENV_COLD = 0,
@@ -53,7 +53,7 @@ static void lcd_print2(const char *l0, const char *l1) {
 	lcd.print(line1);
 }
 
-// Hàm kết xuất đồ họa (Gom dữ liệu cảm biến và in ra chuỗi)
+// Graphics rendering function (Gather sensor data and output as string)
 static void render_screen(LcdScreen screen, bool manualMode) {
 	float t = NAN, h = NAN;
 	if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -118,12 +118,12 @@ void setup_LCD_display() {
 	}
 }
 
-// LUỒNG CHÍNH CỦA LCD - ĐÃ ĐƯỢC LÀM SẠCH HOÀN TOÀN
+// LCD MAIN THREAD - COMPLETELY CLEANED UP
 void LCD_display(void *pvParameters) {
 	(void)pvParameters;
 	setup_LCD_display();
 
-	LcdScreen rendered_screen = SCREEN_ENV; // Biến lưu trang "hiện tại đang được vẽ"
+	LcdScreen rendered_screen = SCREEN_ENV; // Variable storing the "currently being rendered" page
 	bool	  manualMode	  = false;
 
 	TickType_t lastRotate		= xTaskGetTickCount();
@@ -133,37 +133,37 @@ void LCD_display(void *pvParameters) {
 	while (1) {
 		TickType_t now = xTaskGetTickCount();
 
-		// 1. Nếu digital_manager đổi trang (bấm nút), LCD phát hiện sự khác biệt và vẽ lại ngay
+		// 1. If digital_manager changes page (button press), LCD detects difference and re-renders immediately
 		if (current_lcd_screen != rendered_screen) {
 			rendered_screen	 = current_lcd_screen;
-			manualMode		 = true; // Bật chế độ tay (M)
-			lastUserInteract = now;	 // Đánh dấu mốc thời gian người dùng vừa thao tác
-			lastRotate		 = now;	 // Reset bộ đếm lật tự động
+			manualMode		 = true; // Enable manual mode (M)
+			lastUserInteract = now;	 // Mark the timestamp of last user interaction
+			lastRotate		 = now;	 // Reset auto-rotate counter
 			render_screen(rendered_screen, manualMode);
 		}
 
-		// 2. Timeout: Bấm tay xong mà 5s (MANUAL_TIMEOUT_TICKS) không ai đụng nữa -> Về chế độ tự
-		// lật (A)
+		// 2. Timeout: After manual interaction, if no touch for 5s (MANUAL_TIMEOUT_TICKS) -> Switch to auto
+		// rotate (A)
 		if (manualMode && (now - lastUserInteract) > MANUAL_TIMEOUT_TICKS) {
 			manualMode = false;
 			lastRotate = now;
 			render_screen(rendered_screen, manualMode);
 		}
 
-		// 3. Tự động lật trang (chỉ chạy khi ở chế độ Auto)
+		// 3. Auto-rotate page (only runs in Auto mode)
 		if (!manualMode && (now - lastRotate) > AUTO_ROTATE_TICKS) {
 			lastRotate = now;
-			// Thay đổi biến toàn cục, vòng lặp tiếp theo (mục 1) sẽ phát hiện và cập nhật
+			// Change global variable, next loop iteration (item 1) will detect and update
 			current_lcd_screen = (LcdScreen)((current_lcd_screen + 1) % SCREEN_COUNT);
 		}
 
-		// 4. Cập nhật thông số (Nhiệt/Ẩm) mỗi 200ms mà không cần lật trang
+		// 4. Update parameters (Temperature/Humidity) every 200ms without rotating page
 		if ((now - lastRefresh) > LCD_REFRESH_TICKS) {
 			lastRefresh = now;
 			render_screen(rendered_screen, manualMode);
 		}
 
-		// LCD không phải check nút nữa, có thể ngủ thảnh thơi 50ms (tiết kiệm CPU)
+		// LCD no longer needs to check button, can sleep peacefully 50ms (save CPU)
 		vTaskDelay(pdMS_TO_TICKS(50));
 	}
 }

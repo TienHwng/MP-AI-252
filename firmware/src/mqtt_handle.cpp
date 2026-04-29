@@ -4,8 +4,8 @@
 
 void forceConnectWiFi() {
     WiFi.mode(WIFI_STA);
-    WiFi.setSleep(false);          // giữ WiFi ổn định hơn
-    WiFi.disconnect(true, true);   // xóa kết nối cũ
+    WiFi.setSleep(false);          // Keep WiFi connection more stable
+    WiFi.disconnect(true, true);   // Clear old connections
     delay(1000);
 
 	Serial.println("[WIFI] Starting connection...");
@@ -17,7 +17,7 @@ void forceConnectWiFi() {
         Serial.print(".");
         retry++;
 
-        // cứ 20 lần (~10s) chưa vào được thì connect lại từ đầu
+        // After 20 attempts (~10s) without connection, restart connection from the beginning
         if (retry >= 20) {
 			Serial.println("\n[WIFI] Retrying...");
             WiFi.disconnect(true, true);
@@ -48,7 +48,7 @@ const char *TOPIC_RPC_REQUEST  = "v1/devices/me/rpc/request/+";
 const char *TOPIC_RPC_RESPONSE = "v1/devices/me/rpc/response/";
 const char *TOPIC_ATTRIBUTES   = "v1/devices/me/attributes";
 
-// extern WiFiClient espClient; // Lấy kết nối WiFi từ main.cpp
+// extern WiFiClient espClient; // Get WiFi connection from main.cpp
 WiFiClient	 espClient;
 PubSubClient client(espClient);
 
@@ -135,7 +135,7 @@ static bool parseWs2812ColorParams(JsonVariantConst params, uint8_t &red, uint8_
 
 void callback(char *topic, byte *payload, unsigned int length) {
 
-	// Chuyển payload thành chuỗi String để dễ xử lý
+	// Convert payload to String for easier processing
 	String message = "";
 	for (unsigned int i = 0; i < length; i++) {
 		message += (char)payload[i];
@@ -143,7 +143,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 	Serial.println("[MQTT] Received message from topic: " + String(topic));
 
-	// Dùng ArduinoJson để đọc hiểu lệnh từ HERA Bot
+	// Use ArduinoJson to parse commands from HERA Bot
 	StaticJsonDocument<512> doc;
 	DeserializationError	error = deserializeJson(doc, message);
 
@@ -164,7 +164,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	StaticJsonDocument<512> responseDoc;
 
 	// ========================================
-	// Nhóm 1: Các lệnh dùng params kiểu bool
+	// Group 1: Commands with boolean parameters
 	// ========================================
 	if (method == method_led_blinky.c_str() ||
 		method == method_neo_led.c_str()    ||
@@ -208,8 +208,8 @@ void callback(char *topic, byte *payload, unsigned int length) {
 				}
 			}
 			else if (method == method_mini_fan.c_str()) {
-				// Bật/tắt quạt qua bool: true -> 1023, false -> 0
-				uint16_t spd = params ? 1023 : 0;
+				// Turn fan on/off via boolean: true -> 1023, false -> 0
+				uint16_t spd = params ? fan_speed : 0;
 				if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
 					fan_speed      = spd;
 					is_mini_fan_on = params;
@@ -225,7 +225,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Nhóm 2: Lệnh chỉnh độ sáng WS2812 (int 0..255)
+	// Group 2: WS2812 brightness adjustment commands (int 0..255)
 	// ========================================
 	else if (method == method_ws2812_brightness.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -248,7 +248,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Nhóm 3b: Lệnh chỉnh màu WS2812 (hex #RRGGBB hoặc object {r,g,b})
+	// Group 3b: WS2812 color adjustment commands (hex #RRGGBB or {r,g,b} object)
 	// ========================================
 	else if (method == method_ws2812_color.c_str()) {
 		JsonVariantConst params = doc["params"];
@@ -269,7 +269,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Nhóm 3: Lệnh chỉnh tốc độ quạt (int 0..255)
+	// Group 3: Fan speed adjustment commands (int 0..1023)
 	// ========================================
 	else if (method == method_fan_speed.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -293,7 +293,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Nhóm 4: Lệnh chỉnh độ sáng Strip (int 0..255)
+	// Group 4: Strip brightness adjustment commands (int 0..255)
 	// ========================================
 	else if (method == method_strip_brightness.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -343,7 +343,7 @@ void reconnect() {
 		if (client.connect(clientId.c_str())) {
 			Serial.println(" Success !");
 
-			// Đăng ký nhận lệnh RPC
+			// Subscribe to RPC commands
 			client.subscribe(TOPIC_RPC_REQUEST);
 		}
 		else {
@@ -498,7 +498,7 @@ void mqtt_task(void *pvParameters) {
 			float hum	  = 0.0;
 			float light   = 0.0;
 			float gas     = 0.0;
-			float anomaly = 0.12; // Giả sử model TinyML trả về
+			float anomaly = 0.12; // Assuming TinyML model returns this value
 
 			if (xSemaphoreTake(xDHT20Semaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
 				temp = sensorData.temperature;
@@ -519,7 +519,7 @@ void mqtt_task(void *pvParameters) {
 			publish_telemetry(temp, hum, light, gas, anomaly, is_LED_on, is_NeoLED_on);
 		}
 
-		// 3. NHƯỜNG CPU
+		// 3. Yield CPU to other tasks
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }

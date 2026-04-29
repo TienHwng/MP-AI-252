@@ -27,10 +27,10 @@ void setup() {
 	// xTaskCreatePinnedToCore(Task_Toogle_BOOT,    "BOOT",    4096, NULL, PRIO_INPUT,  NULL, 1);
 	// xTaskCreatePinnedToCore(tiny_ml_task,        "TinyML",  8192, NULL, PRIO_ML,     NULL, 1);
 
-	// // LCD_display: chỉ nên làm "consumer" (đọc snapshot + lcd + ws push)
+	// // LCD_display: should only be a "consumer" (read snapshot + lcd + ws push)
 	// xTaskCreatePinnedToCore(LCD_display,   "Monitor", 4096, NULL, PRIO_APP,    NULL, 1);
 
-	// // UI nên gộp lại nếu được
+	// // UI should be merged if possible
 	// xTaskCreatePinnedToCore(ui_task,             "UI",      4096, NULL, PRIO_UI,     NULL, 1);
 
 	// // --- Core 0: network tasks ---
@@ -50,15 +50,15 @@ void loop() {
 }
 
 void semaphore_init() {
-	// Mutex cho LCD I2C
+	// Mutex for LCD I2C
 	xLCDSemaphore		  = xSemaphoreCreateMutex();
 	
-	// Mutex riêng cho từng loại sensor data
+	// Individual Mutex for each type of sensor data
 	xDHT20Semaphore   = xSemaphoreCreateMutex();
 	xLightSemaphore  = xSemaphoreCreateMutex();
 	xMQ2Semaphore    = xSemaphoreCreateMutex();
 
-	// Mutex cho state variables (đang dùng như lock)
+	// Mutex for state variables (currently used as lock)
 	xLedStateSemaphore		  = xSemaphoreCreateMutex();
 	xNeoLedStateSemaphore	  = xSemaphoreCreateMutex();
 	xWS2812StateSemaphore	  = xSemaphoreCreateMutex();
@@ -67,7 +67,7 @@ void semaphore_init() {
 
 	xInferenceResultSemaphore = xSemaphoreCreateMutex();
 
-	// Internet “ready signal”: giữ binary cũng OK
+	// Internet "ready signal": keeping binary is also OK
 	xBinarySemaphoreInternet = xSemaphoreCreateBinary();
 }
 

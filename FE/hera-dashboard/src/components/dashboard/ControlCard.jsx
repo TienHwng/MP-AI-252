@@ -41,8 +41,18 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 	const handleSliderRelease = () => {
 		if (onChangeIntensity && localVal !== serverIntensity) {
-			// Quy đổi % (0-100) sang dải PWM (0-255) cho vi điều khiển ESP32
-			const pwmValue = Math.round((localVal / 100) * 255);
+			// 1023 === 2^10 - 1 for mini_fan
+			// 255 === 2^8 - 1 for others
+			let bitRef = 2**8 - 1;
+
+			if (control.id === "mini_fan") {
+				bitRef = 2**10 - 1;
+			}
+
+			// Quy đổi % (0-100) sang dải PWM tương ứng
+			// mini_fan: 0-1023
+			// các thiết bị khác: 0-255
+			const pwmValue = Math.round((localVal / 100) * bitRef);
 			
 			// Map đúng tên method dựa trên mqtt_manager.py
 			let rpcMethod = "";

@@ -1,6 +1,6 @@
 #include "button_handler.h"
 
-// --- Biến cho nút lật trang LCD (Nút BOOT) ---
+// --- Variables for LCD page flip button (BOOT button) ---
 static bool bootLastStableRead   = HIGH;
 static bool bootLastInstantRead  = HIGH;
 static TickType_t bootLastChange = 0;
@@ -8,10 +8,10 @@ static TickType_t bootLastChange = 0;
 void setup_button_handler() {
     Serial.println("[INIT] Button handler task created successfully");
 
-    // Khởi tạo nút BOOT (Nút lật LCD)
+    // Initialize BOOT button (LCD page flip button)
     pinMode(BOOT_PIN, INPUT_PULLUP);
 
-    // Chốt trạng thái ban đầu cho nút BOOT
+    // Lock initial state for BOOT button
     bootLastStableRead  = digitalRead(BOOT_PIN);
     bootLastInstantRead = bootLastStableRead;
     bootLastChange      = xTaskGetTickCount();
@@ -33,8 +33,8 @@ void button_handler(void *pvParameters) {
             if (bootReading != bootLastStableRead) {
                 bootLastStableRead = bootReading;
 
-                if (bootReading == LOW) { // Nhấn nút BOOT
-                    // Chuyển sang trang tiếp theo, nếu vượt quá số trang thì vòng lại 0
+                if (bootReading == LOW) { // BOOT button pressed
+                    // Switch to next page, if exceeds total pages wrap back to 0
                     current_lcd_screen = (LcdScreen)((current_lcd_screen + 1) % SCREEN_COUNT);
                     
                     if (IS_DEBUG_MODE || IS_SHOW_BUTTON_STATUS) {
@@ -44,6 +44,6 @@ void button_handler(void *pvParameters) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20)); // Polling nút mỗi 20ms
+        vTaskDelay(pdMS_TO_TICKS(20)); // Poll button every 20ms
     }
 }

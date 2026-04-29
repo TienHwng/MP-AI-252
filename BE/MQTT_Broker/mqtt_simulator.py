@@ -137,6 +137,7 @@ device_state = {
 	"neo_led_status": False,
 	"ws2812_status": False,
 	"ws2812_brightness": SIM_DEFAULT_WS2812_BRIGHTNESS,
+	"ws2812_color": {"r": 0, "g": 255, "b": 0},  # Track actual WS2812 color state
 	"strip_brightness": SIM_DEFAULT_STRIP_BRIGHTNESS,
 	"relay_status": False,
 	"mini_fan_status": False,
@@ -293,6 +294,77 @@ def persist_telemetry_payload(payload: dict):
 
 
 # =========================
+# HELPERS - COLORS & VOLTAGE
+# =========================
+def get_neo_led_color_from_humidity(humidity: float) -> str:
+	"""
+	Calculate NeoLED color based on humidity level.
+	Similar to firmware's getNeoLedColorFromHumidity().
+	
+	Low humidity (dry): Blue #0000FF
+	Mid humidity (good): Green #00FF00
+	High humidity (wet): Red #FF0000
+	"""
+	if humidity < 40:
+		return "#0000FF"  # Blue - too dry
+	elif humidity < 70:
+		return "#00FF00"  # Green - good range
+	else:
+		return "#FF0000"  # Red - too humid
+
+
+def format_ws2812_color(r: int, g: int, b: int) -> str:
+	"""Format RGB values as hex color string."""
+	return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def get_ws2812_color_hex(color_dict: dict) -> str:
+	"""Convert color dict to hex string."""
+	r = max(0, min(255, color_dict.get("r", 0)))
+	g = max(0, min(255, color_dict.get("g", 0)))
+	b = max(0, min(255, color_dict.get("b", 0)))
+	return format_ws2812_color(r, g, b)
+
+
+def calculate_voltage(device_name: str, device_info: dict) -> float:
+	"""
+	Calculate voltage based on device state, matching firmware logic.
+	V_REF is 3.3V for sensors, but varies for devices.
+	"""
+	if device_name == "led":
+		# LED uses 3.3V when on
+		return 3.3 if device_info.get("status", False) else 0.0
+
+	elif device_name == "neo_led":
+		# Neo LED voltage scales with brightness
+		if device_info.get("status", False):
+			brightness = device_info.get("brightness", 0)
+			return round(3.3 * brightness / 255.0, 2)
+		return 0.0
+
+	elif device_name == "ws2812":
+		# WS2812 voltage scales with brightness
+		if device_info.get("status", False):
+			brightness = device_info.get("brightness", 0)
+			return round(3.3 * brightness / 255.0, 2)
+		return 0.0
+
+	elif device_name == "relay":
+		# Relay uses 3.3V when on
+		return 3.3 if device_info.get("status", False) else 0.0
+
+	elif device_name == "mini_fan":
+		# Fan voltage scales with speed (0..1023)
+		if device_info.get("status", False):
+			speed = device_info.get("speed", 0)
+			return round(3.3 * speed / 1023.0, 2)
+		return 0.0
+
+	# Default sensor voltage
+	return 3.3
+
+
+# =========================
 # MQTT CALLBACKS
 # =========================
 def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties=None):
@@ -408,6 +480,49 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
 				response["WS2812_Brightness"] = value
 				response["WS2812State"] = device_state["ws2812_status"]
 
+		elif method == "setWS2812Color":
+			# Parse color from hex string (#RRGGBB) or object {r, g, b}
+			color_hex = None
+			if isinstance(params, str):
+				color_hex = params.strip()
+				if color_hex.startswith("#"):
+					color_hex = color_hex[1:]
+				if color_hex.startswith("0x") or color_hex.startswith("0X"):
+					color_hex = color_hex[2:]
+				if len(color_hex) == 6:
+					try:
+						rgb = int(color_hex, 16)
+						device_state["ws2812_color"] = {
+							"r": (rgb >> 16) & 0xFF,
+							"g": (rgb >> 8) & 0xFF,
+							"b": rgb & 0xFF,
+						}
+						color_display = f"#{color_hex.upper()}"
+						print(f"[ACTION] WS2812 color -> {color_display}")
+						response["WS2812_Color"] = color_display
+					except ValueError:
+						response["error"] = "Invalid hex color"
+				else:
+					response["error"] = "params must be #RRGGBB format"
+			elif isinstance(params, dict):
+				# Support {r, g, b} object format
+				if "r" in params and "g" in params and "b" in params:
+					try:
+						device_state["ws2812_color"] = {
+							"r": max(0, min(255, int(params["r"]))),
+							"g": max(0, min(255, int(params["g"]))),
+							"b": max(0, min(255, int(params["b"]))),
+						}
+						color_display = get_ws2812_color_hex(device_state["ws2812_color"])
+						print(f"[ACTION] WS2812 color -> {color_display}")
+						response["WS2812_Color"] = color_display
+					except (ValueError, TypeError):
+						response["error"] = "r, g, b values must be integers"
+				else:
+					response["error"] = "params must have r, g, b fields"
+			else:
+				response["error"] = "params must be #RRGGBB string or {r,g,b} object"
+
 		elif method == "setStripBrightness":
 			value = clamp_int(params, 0, 255)
 			if value is None:
@@ -418,9 +533,9 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
 				response["Strip_Brightness"] = value
 
 		elif method == "setFanSpeed":
-			value = clamp_int(params, 0, 4095)
+			value = clamp_int(params, 0, 1023)
 			if value is None:
-				response["error"] = "params must be int (0..4095)"
+				response["error"] = "params must be int (0..1023)"
 			else:
 				device_state["fan_speed"] = value
 				device_state["mini_fan_status"] = value > 0
@@ -493,6 +608,27 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
 # =========================
 def build_telemetry_payload():
 	with state_lock:
+		# Calculate device info for voltage calculations
+		led_info = {
+			"status": device_state["led_status"],
+		}
+		neo_led_info = {
+			"status": device_state["neo_led_status"],
+			"brightness": device_state["strip_brightness"],
+		}
+		ws2812_info = {
+			"status": device_state["ws2812_status"],
+			"brightness": device_state["ws2812_brightness"],
+		}
+		relay_info = {
+			"status": device_state["relay_status"],
+		}
+		mini_fan_info = {
+			"status": device_state["mini_fan_status"],
+			"speed": device_state["fan_speed"],
+		}
+
+		# Build payload with dynamic values matching firmware logic
 		payload = {
 			"network": {
 				"wifi_connected": network_state["wifi_connected"],
@@ -504,44 +640,52 @@ def build_telemetry_payload():
 			"devices": {
 				"led": {
 					"status": device_state["led_status"],
-					"brightness": 255,
-					"voltage": 3.3,
+					# LED brightness: 255 if on, 0 if off (matching firmware logic)
+					"brightness": 255 if device_state["led_status"] else 0,
+					# LED voltage: 3.3V if on, 0V if off
+					"voltage": calculate_voltage("led", led_info),
 				},
 				"neo_led": {
 					"status": device_state["neo_led_status"],
 					"brightness": device_state["strip_brightness"],
-					"color": "#FF0000",
-					"voltage": 5.0,
+					# NeoLED color based on humidity (matching firmware's getNeoLedColorFromHumidity)
+					"color": get_neo_led_color_from_humidity(sensor_state["humidity"]),
+					# NeoLED voltage scales with brightness
+					"voltage": calculate_voltage("neo_led", neo_led_info),
 				},
 				"ws2812": {
 					"status": device_state["ws2812_status"],
 					"brightness": device_state["ws2812_brightness"],
-					"color": "#00FF00",
-					"voltage": 5.0,
+					# WS2812 color from tracked state (matching firmware's ws2812_get_color_hex)
+					"color": get_ws2812_color_hex(device_state["ws2812_color"]),
+					# WS2812 voltage scales with brightness
+					"voltage": calculate_voltage("ws2812", ws2812_info),
 				},
 				"relay": {
 					"status": device_state["relay_status"],
-					"voltage": 5.0,
+					# Relay voltage: 5.0V if on, 0V if off
+					"voltage": calculate_voltage("relay", relay_info),
 				},
 				"mini_fan": {
 					"status": device_state["mini_fan_status"],
 					"speed": device_state["fan_speed"],
-					"voltage": 5.0,
+					# Fan voltage scales with speed
+					"voltage": calculate_voltage("mini_fan", mini_fan_info),
 				},
 			},
 			"sensors": {
 				"dht20": {
 					"temperature": sensor_state["temperature"],
 					"humidity": sensor_state["humidity"],
-					"voltage": 3.3,
+					"voltage": 3.3,  # Always 3.3V when powered
 				},
 				"light": {
 					"value": sensor_state["light"],
-					"voltage": 3.3,
+					"voltage": 3.3,  # Always 3.3V when powered
 				},
 				"gas": {
 					"value": sensor_state["gas"],
-					"voltage": 3.3,
+					"voltage": 3.3,  # Always 3.3V when powered
 				},
 			},
 		}

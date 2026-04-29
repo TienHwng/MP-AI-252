@@ -19,7 +19,7 @@ uint8_t ws2812_brightness	= 10;   // default brightness (0..255)
 
 boolean is_relay_on		= true;
 
-boolean is_mini_fan_on	= true;
+boolean is_mini_fan_on	= false;
 int16_t fan_speed		= 500;     // default fan speed (0..4095, PWM duty)
 
 LcdScreen current_lcd_screen = SCREEN_ENV;

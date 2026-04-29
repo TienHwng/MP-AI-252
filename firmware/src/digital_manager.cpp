@@ -7,7 +7,7 @@ typedef enum {
     FAN_DIR_REVERSE
 } FanDirection_t;
 
-// Lưu giá trị trước đó để chỉ ghi khi thay đổi
+// Save previous values to only write when changed
 static int16_t lastFanSpeed        = 0;
 static FanDirection_t lastFanDirection   = FAN_DIR_STOP;
 static uint8_t lastWs2812Brightness = 0;
@@ -25,7 +25,7 @@ static inline uint16_t clamp_pwm_10bit_abs(int16_t speed) {
 void setup_digital_manager() {
     Serial.println("[INIT] Digital manager task created successfully");
 
-    // Khởi tạo các chân Output theo cấu hình cổng số
+    // Initialize output pins according to digital port configuration
     pinMode(WS2812_PIN, OUTPUT);
     pinMode(IR_RECEIVE_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
@@ -37,7 +37,7 @@ void setup_digital_manager() {
     pinMode(MINI_FAN_PIN, OUTPUT);
     pinMode(DIGITAL_PORT_3_SUB_PIN, OUTPUT);
 
-    // PWM global cho toàn bộ analogWrite
+    // Global PWM configuration for all analogWrite operations
     analogWriteResolution(10);     // 0..1023
     analogWriteFrequency(20000);   // 20 kHz
 
@@ -52,7 +52,7 @@ void fan_set_speed(int16_t speed) {
     is_mini_fan_on = (speed != 0);
 
     if (speed > 0) {
-        // Quay xuôi
+        // Forward rotation
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
         analogWrite(MINI_FAN_PIN, pwm);
 
@@ -61,7 +61,7 @@ void fan_set_speed(int16_t speed) {
         }
     }
     else if (speed < 0) {
-        // Quay ngược
+        // Reverse rotation
         analogWrite(MINI_FAN_PIN, 0);
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, pwm);
 
@@ -70,7 +70,7 @@ void fan_set_speed(int16_t speed) {
         }
     }
     else {
-        // Dừng
+        // Stop
         analogWrite(MINI_FAN_PIN, 0);
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
 
@@ -85,11 +85,11 @@ void digital_manager(void *pvParameters) {
 
     while (1) {
         // ==========================================
-        // ĐIỀU KHIỂN THIẾT BỊ THEO BIẾN GLOBAL
-        //    (Được set từ MQTT hoặc các task khác)
+        // CONTROL DEVICES BASED ON GLOBAL VARIABLES
+        //    (Set from MQTT or other tasks)
         // ==========================================
 
-        // --- WS2812: kiểm tra cả on/off lẫn brightness ---
+        // --- WS2812: Check both on/off and brightness states ---
         if (xSemaphoreTake(xWS2812StateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             bool    curOn   = is_ws2812_on;
             uint8_t curBrt  = ws2812_brightness;
@@ -106,7 +106,7 @@ void digital_manager(void *pvParameters) {
             }
         }
 
-        // --- Quạt mini: điều chỉnh tốc độ bằng PWM ---
+        // --- Mini fan: Adjust speed using PWM ---
         if (xSemaphoreTake(xFanStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             int16_t curSpeed = fan_speed;
             xSemaphoreGive(xFanStateSemaphore);
@@ -117,7 +117,7 @@ void digital_manager(void *pvParameters) {
             }
         }
 
-        // --- Relay: vẫn giữ bật/tắt đơn giản ---
+        // --- Relay: Keep simple on/off control ---
         if (xSemaphoreTake(xRelayStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
             digitalWrite(RELAY_PIN, is_relay_on ? HIGH : LOW);
             xSemaphoreGive(xRelayStateSemaphore);

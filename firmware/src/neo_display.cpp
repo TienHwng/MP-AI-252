@@ -147,7 +147,7 @@ void neoLED_set_brightness(uint8_t brightness) {
 
     neoLED.setBrightness(brightness > 0 ? brightness : 0);
 
-    // Re-render ngay lập tức nếu đèn đang bật
+    // Re-render immediately if light is enabled
     if (neoLedStateLocal) {
         neoLED.show();
     }
