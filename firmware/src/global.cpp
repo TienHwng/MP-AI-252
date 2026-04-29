@@ -5,9 +5,9 @@ DHT20 dht20;
 String WIFI_SSID = "Hung 2.4GHz";
 String WIFI_PASS = "bat4glendi";
 
-String CORE_IOT_TOKEN;
-String CORE_IOT_SERVER;
-String CORE_IOT_PORT;
+String CORE_IOT_TOKEN = "ehehehe";
+String CORE_IOT_SERVER = "192.168.1.2";
+String CORE_IOT_PORT = "1883";
 
 boolean isWifiConnected = false;
 

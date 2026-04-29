@@ -47,6 +47,7 @@
 #include "ir_receiver.h"
 #include "mqtt_handle.h"
 #include "button_handler.h"
+#include "board_config_server.h"
 
 void system_init();
 void semaphore_init();

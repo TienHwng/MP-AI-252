@@ -9,6 +9,8 @@ void setup() {
 
 	Serial.println("\n======= System initializing... =======\n");
 
+	xTaskCreate(board_config_server_task, "Board Config", 8192, NULL, PRIO_NET, NULL);
+
 	xTaskCreate(button_handler,    "Button",     2048, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(digital_manager,   "Digital IO", 4096, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(analog_manager,    "Analog IO",  4096, NULL, PRIO_INPUT, NULL);
@@ -74,6 +76,8 @@ void system_init() {
 
 	Serial.begin(115200);
 
+	load_board_config_from_storage();
+
 	// check_info_File(0);
 
 	Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
@@ -89,4 +93,3 @@ void system_init() {
 	
     delay(1000); // Wait for Serial to be ready
 }
-

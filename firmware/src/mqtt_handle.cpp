@@ -43,10 +43,6 @@ void forceConnectWiFi() {
 
 
 
-const char *mqtt_server	  = "192.168.1.2"; // IP cua may chay Mosquitto
-const int	mqtt_port	  = 1883;
-const char *coreIOT_Token = "ehehehe"; // device access Token
-
 const char *TOPIC_TELEMETRY	   = "v1/devices/me/telemetry";
 const char *TOPIC_RPC_REQUEST  = "v1/devices/me/rpc/request/+";
 const char *TOPIC_RPC_RESPONSE = "v1/devices/me/rpc/response/";
@@ -336,9 +332,9 @@ void callback(char *topic, byte *payload, unsigned int length) {
 void reconnect() {
 	while (!client.connected()) {
 		Serial.print("[MQTT] Attempting to connect to Broker ");
-        Serial.print(mqtt_server);
+        Serial.print(CORE_IOT_SERVER);
         Serial.print(":");
-        Serial.print(mqtt_port);
+        Serial.print(CORE_IOT_PORT);
         Serial.println(" ...");
 
         String clientId = "ESP32_AIoT_Core-";
@@ -386,7 +382,7 @@ void setup_mqtt() {
 	// 	Serial.print(".");
 	// }
 
-	client.setServer(mqtt_server, mqtt_port);
+	client.setServer(CORE_IOT_SERVER.c_str(), CORE_IOT_PORT.toInt());
 	client.setCallback(callback);
 }
 
