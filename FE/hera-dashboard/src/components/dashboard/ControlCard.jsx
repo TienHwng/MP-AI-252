@@ -22,11 +22,15 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 	const active = status === true;
 
 	const serverIntensity = data?.[control.id]?.intensity || 50;
-	const [localVal, setLocalVal] = useState(serverIntensity);
+	// Show 0% when device is off, otherwise show the server intensity
+	const displayIntensity = active ? serverIntensity : 0;
+	const [localVal, setLocalVal] = useState(displayIntensity);
+	const [initialVal, setInitialVal] = useState(displayIntensity);
 
 	useEffect(() => {
-		setLocalVal(serverIntensity);
-	}, [serverIntensity]);
+		setLocalVal(displayIntensity);
+		setInitialVal(displayIntensity);
+	}, [displayIntensity]);
 
 	const cardClass = active
 		? 'bg-[#3A7D44] text-white hover:bg-[#9DC08B]'
@@ -40,32 +44,47 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 	};
 
 	const handleSliderRelease = () => {
-		if (onChangeIntensity && localVal !== serverIntensity) {
-			// 1023 === 2^10 - 1 for mini_fan
-			// 255 === 2^8 - 1 for others
+		// Helper function to send intensity command
+		const sendIntensityCommand = (value) => {
+			if (!onChangeIntensity) return;
+			
 			let bitRef = 2**8 - 1;
-
 			if (control.id === "mini_fan") {
 				bitRef = 2**10 - 1;
 			}
-
-			// Quy đổi % (0-100) sang dải PWM tương ứng
-			// mini_fan: 0-1023
-			// các thiết bị khác: 0-255
-			const pwmValue = Math.round((localVal / 100) * bitRef);
 			
-			// Map đúng tên method dựa trên mqtt_manager.py
+			const pwmValue = Math.round((value / 100) * bitRef);
+			
 			let rpcMethod = "";
 			switch (control.id) {
 				case 'ws2812': rpcMethod = 'setWS2812Brightness'; break;
 				case 'neo_led': rpcMethod = 'setStripBrightness'; break;
 				case 'mini_fan': rpcMethod = 'setFanSpeed'; break;
-				case 'main_led': rpcMethod = 'setMainLedBrightness'; break; // Anh giả định tên hàm này
+				case 'main_led': rpcMethod = 'setMainLedBrightness'; break;
 				default: rpcMethod = '';
 			}
+			
+			if (rpcMethod) {
+				onChangeIntensity(control.id, value, pwmValue, rpcMethod);
+			}
+		};
 
-			// Gửi dữ liệu lên component cha
-			onChangeIntensity(control.id, localVal, pwmValue, rpcMethod);
+		// Handle device on/off based on slider value
+		if (localVal === 0) {
+			// Turn device off if slider is at 0%
+			if (active) {
+				onToggleDevice(control.id);
+			}
+			// Send intensity 0% command
+			sendIntensityCommand(0);
+		} else {
+			// Turn device on if slider > 0% and device is off
+			if (!active) {
+				onToggleDevice(control.id);
+			}
+			
+			// Always send intensity command for any non-zero value
+			sendIntensityCommand(localVal);
 		}
 	};
 
@@ -79,9 +98,9 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 			<button
 				type="button"
-				onClick={() => onToggleDevice(control.id)}
-				disabled={disabled}
-				className={`text-left outline-none w-full flex-grow ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+				onClick={control.hasSlider ? undefined : () => onToggleDevice(control.id)}
+				disabled={control.hasSlider || disabled}
+				className={`text-left outline-none w-full flex-grow ${(control.hasSlider || disabled) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
 			>
 				<div className={`mb-4 ${iconClass}`}>
 					<Icon size={24} strokeWidth={1.9} className="shrink-0" />
@@ -94,7 +113,7 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 			{/* Khu vực thanh cuộn */}
 			{control.hasSlider && (
-				<div className={`mt-1 transition-all duration-300 ease-in-out overflow-hidden flex flex-col justify-end ${active ? 'h-[3rem] opacity-100' : 'h-0 opacity-0'}`}>
+				<div className={`mt-1 transition-all duration-300 ease-in-out overflow-hidden flex flex-col justify-end h-[3rem] opacity-100`}>
 					
 					{/* Hiển thị % */}
 					<div className="flex justify-end mb-1 px-0.5">
@@ -110,7 +129,7 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 							min="0"
 							max="100"
 							value={localVal}
-							disabled={disabled || !active}
+							disabled={disabled}
 							onChange={handleSliderChange}
 							onMouseUp={handleSliderRelease}
 							onTouchEnd={handleSliderRelease}

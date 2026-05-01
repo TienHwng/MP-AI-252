@@ -26,7 +26,7 @@ const COMMAND_CONFIRM_TIMEOUT_MS = 8_000;
 const markerDefinitions = [
   {
     id: 'main_led',
-    name: 'LED toilet',
+    name: 'LED',
     type: 'light',
     room: 'toilet',
     x: 85,
@@ -36,7 +36,7 @@ const markerDefinitions = [
   },
   {
     id: 'ws2812',
-    name: 'LED bedroom',
+    name: 'LED',
     type: 'light',
     room: 'Bedroom',
     x: 83,
@@ -46,7 +46,7 @@ const markerDefinitions = [
   },
   {
     id: 'neo_led',
-    name: 'LED living room',
+    name: 'LED',
     type: 'light',
     room: 'Living Room',
     x: 46,
@@ -55,7 +55,7 @@ const markerDefinitions = [
     Icon: Lightbulb,
   },
   {
-    id: 'Fan living room',
+    id: 'Fan',
     name: 'Mini Fan',
     type: 'fan',
     room: 'Living Room',
@@ -344,7 +344,7 @@ function DevicePanel({
 
 export default function FloorPlan() {
   const [telemetry, setTelemetry] = useState(null);
-  const [selectedId, setSelectedId] = useState('main_led');
+  const [selectedId, setSelectedId] = useState(null);
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState('info');
   const [pendingCommand, setPendingCommand] = useState(null);
@@ -443,7 +443,7 @@ export default function FloorPlan() {
 
   const markers = useMemo(() => buildMarkers(telemetry), [telemetry]);
   const selectedMarker = useMemo(
-    () => markers.find((marker) => marker.id === selectedId) || markers[0],
+    () => markers.find((marker) => marker.id === selectedId),
     [markers, selectedId],
   );
   const updatedAtMs = toTimeMs(telemetry?.updatedAt || telemetry?.last_seen_at);
@@ -506,7 +506,7 @@ export default function FloorPlan() {
   const visibleNoticeTone = stale || runtimeError ? 'error' : noticeTone;
 
   return (
-    <div className="grid min-h-screen w-full grid-cols-1 gap-4 bg-background p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-5 lg:p-6">
+    <div className={`grid min-h-screen w-full gap-4 bg-background p-3 sm:p-4 lg:gap-5 lg:p-6 ${selectedMarker ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px]' : 'grid-cols-1'}`}>
       <div className="min-w-0">
         <Notice tone={visibleNoticeTone}>{visibleNotice}</Notice>
 
@@ -534,7 +534,7 @@ export default function FloorPlan() {
                 selected={marker.id === selectedMarker?.id}
                 stale={stale}
                 pending={pendingCommand?.id === marker.id}
-                onClick={() => setSelectedId(marker.id)}
+                onClick={() => setSelectedId(selectedId === marker.id ? null : marker.id)}
               />
             ))}
 
@@ -547,15 +547,17 @@ export default function FloorPlan() {
         </div>
       </div>
 
-      <DevicePanel
-        marker={selectedMarker}
-        telemetry={telemetry}
-        stale={stale}
-        runtimeAvailable={!runtimeError}
-        pendingCommand={pendingCommand}
-        onToggle={toggleDevice}
-        onWriteSensor={writeSensor}
-      />
+      {selectedMarker && (
+        <DevicePanel
+          marker={selectedMarker}
+          telemetry={telemetry}
+          stale={stale}
+          runtimeAvailable={!runtimeError}
+          pendingCommand={pendingCommand}
+          onToggle={toggleDevice}
+          onWriteSensor={writeSensor}
+        />
+      )}
     </div>
   );
 }

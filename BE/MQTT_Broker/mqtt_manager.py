@@ -665,7 +665,7 @@ if __name__ == "__main__":
 				),
 				menu_row(
 					menu_option(8, "Set WS2812 Brightness", Color.YELLOW),
-					menu_option(9, "Set WS2812 Color", Color.MAGENTA),
+					menu_option(9, "Set WS2812 Color", Color.YELLOW),
 				),
 				menu_border("╟", "─", "╢"),
 

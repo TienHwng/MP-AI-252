@@ -4,7 +4,8 @@ import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SceneCards from '../components/dashboard/SceneCards';
 // Giả sử em sẽ tạo component này sau, anh tạm để placeholder ở đây
-import ActivityLog from '../components/dashboard/ActivityLog'; 
+import ActivityLog from '../components/dashboard/ActivityLog';
+import FloorPlan from '../components/FloorPlan'; 
 
 import {
   controlDeviceState,
@@ -99,6 +100,30 @@ const Home = ({ user, onLogout }) => {
 
     try {
       await controlDeviceState(target, nextValue);
+      
+      // When turning on devices with intensity control, set to 50% default
+      if (nextValue === true) {
+        let rpcMethod = '';
+        let pwmValue = 0;
+        
+        if (target === 'mini_fan') {
+          pwmValue = Math.round((50 / 100) * (2**10 - 1)); // 50% of 1023
+          rpcMethod = 'setFanSpeed';
+        } else if (target === 'main_led') {
+          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
+          rpcMethod = 'setMainLedBrightness';
+        } else if (target === 'neo_led') {
+          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
+          rpcMethod = 'setStripBrightness';
+        } else if (target === 'ws2812') {
+          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
+          rpcMethod = 'setWS2812Brightness';
+        }
+        
+        if (rpcMethod) {
+          await sendRpcCommand(rpcMethod, pwmValue);
+        }
+      }
     } catch (error) {
       console.error(`Failed to toggle ${target}:`, error);
       setTelemetryError(error.message || `Failed to toggle ${target}`);
@@ -193,6 +218,13 @@ const Home = ({ user, onLogout }) => {
         <section>
           <h4 className="font-medium mb-3">Smart Scenes</h4>
           <SceneCards isSubmitting={isSubmittingControl} onActivateScene={handleActivateScene} />
+        </section>
+
+        <section>
+          <h4 className="font-medium mb-3">House Floor Plan</h4>
+          <div className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+            <FloorPlan />
+          </div>
         </section>
 
         <section>
