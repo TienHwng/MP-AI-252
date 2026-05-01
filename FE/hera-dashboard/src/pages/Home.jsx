@@ -100,30 +100,6 @@ const Home = ({ user, onLogout }) => {
 
     try {
       await controlDeviceState(target, nextValue);
-      
-      // When turning on devices with intensity control, set to 50% default
-      if (nextValue === true) {
-        let rpcMethod = '';
-        let pwmValue = 0;
-        
-        if (target === 'mini_fan') {
-          pwmValue = Math.round((50 / 100) * (2**10 - 1)); // 50% of 1023
-          rpcMethod = 'setFanSpeed';
-        } else if (target === 'main_led') {
-          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
-          rpcMethod = 'setMainLedBrightness';
-        } else if (target === 'neo_led') {
-          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
-          rpcMethod = 'setStripBrightness';
-        } else if (target === 'ws2812') {
-          pwmValue = Math.round((50 / 100) * (2**8 - 1)); // 50% of 255
-          rpcMethod = 'setWS2812Brightness';
-        }
-        
-        if (rpcMethod) {
-          await sendRpcCommand(rpcMethod, pwmValue);
-        }
-      }
     } catch (error) {
       console.error(`Failed to toggle ${target}:`, error);
       setTelemetryError(error.message || `Failed to toggle ${target}`);
@@ -138,22 +114,39 @@ const Home = ({ user, onLogout }) => {
       if (sceneId === 'movie') {
         await Promise.all([
           controlDeviceState('main_led', false),
+          controlDeviceState('neo_led', false),
+          controlDeviceState('ws2812', false),
           controlDeviceState('mini_fan', true),
-          controlDeviceState('relay', true) 
+          controlDeviceState('relay', true),
+          // Set light intensity to 0
+          sendRpcCommand('setMainLedBrightness', 0),
+          sendRpcCommand('setStripBrightness', 0),
+          sendRpcCommand('setWS2812Brightness', 0)
         ]);
       } 
       else if (sceneId === 'sleep') {
         await Promise.all([
           controlDeviceState('main_led', false),
           controlDeviceState('neo_led', false),
-          controlDeviceState('ws2812', false)
+          controlDeviceState('ws2812', false),
+          // Set light intensity to 0
+          sendRpcCommand('setMainLedBrightness', 0),
+          sendRpcCommand('setStripBrightness', 0),
+          sendRpcCommand('setWS2812Brightness', 0)
         ]);
       } 
       else if (sceneId === 'away') {
         await Promise.all([
           controlDeviceState('main_led', false),
+          controlDeviceState('neo_led', false),
+          controlDeviceState('ws2812', false),
           controlDeviceState('mini_fan', false),
-          controlDeviceState('relay', false)
+          controlDeviceState('relay', false),
+          // Set intensity to 0
+          sendRpcCommand('setMainLedBrightness', 0),
+          sendRpcCommand('setStripBrightness', 0),
+          sendRpcCommand('setWS2812Brightness', 0),
+          sendRpcCommand('setFanSpeed', 0)
         ]);
       }
     } catch (error) {

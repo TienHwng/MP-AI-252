@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Fan, Lightbulb, Plug, Square } from 'lucide-react';
 import { getDeviceStatus } from '../../services/api';
 
@@ -22,15 +22,21 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 	const active = status === true;
 
 	const serverIntensity = data?.[control.id]?.intensity || 50;
-	// Show 0% when device is off, otherwise show the server intensity
-	const displayIntensity = active ? serverIntensity : 0;
-	const [localVal, setLocalVal] = useState(displayIntensity);
-	const [initialVal, setInitialVal] = useState(displayIntensity);
+	const [localVal, setLocalVal] = useState(serverIntensity);
+	const [initialVal, setInitialVal] = useState(serverIntensity);
+	const prevIntensityRef = useRef(serverIntensity);
 
 	useEffect(() => {
-		setLocalVal(displayIntensity);
-		setInitialVal(displayIntensity);
-	}, [displayIntensity]);
+		// Only update if server intensity actually changed (not on active status change)
+		if (serverIntensity !== prevIntensityRef.current) {
+			setLocalVal(serverIntensity);
+			setInitialVal(serverIntensity);
+			prevIntensityRef.current = serverIntensity;
+		}
+	}, [serverIntensity]);
+
+	// Show 0% UI when device is off, but keep localVal unchanged
+	const displayValue = active ? localVal : 0;
 
 	const cardClass = active
 		? 'bg-[#3A7D44] text-white hover:bg-[#9DC08B]'
@@ -118,7 +124,7 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 					{/* Hiển thị % */}
 					<div className="flex justify-end mb-1 px-0.5">
 						<span className="text-[11px] font-bold text-[#faf2f2] drop-shadow-sm tracking-wide">
-							{localVal}%
+							{displayValue}%
 						</span>
 					</div>
 
@@ -128,13 +134,13 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 							type="range"
 							min="0"
 							max="100"
-							value={localVal}
+							value={displayValue}
 							disabled={disabled}
 							onChange={handleSliderChange}
 							onMouseUp={handleSliderRelease}
 							onTouchEnd={handleSliderRelease}
 							style={{
-								background: `linear-gradient(to right, #faf2f2 ${localVal}%, rgba(255, 255, 255, 0.25) ${localVal}%)`
+								background: `linear-gradient(to right, #faf2f2 ${displayValue}%, rgba(255, 255, 255, 0.25) ${displayValue}%)`
 							}}
 							className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none 
 							[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:bg-[#faf2f2] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-sm
