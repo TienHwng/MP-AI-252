@@ -59,12 +59,12 @@ const App = () => {
     switch (activePage) {
       case 'analytics':
         return <Analytics />;
-      case 'floorplan':
-        return <FloorPlanPage />;
-      case 'devices':
-        return <Devices />;
-      case 'settings':
-        return <Settings />;
+      // case 'floorplan':
+      //   return <FloorPlanPage />;
+      // case 'devices':
+      //   return <Devices />;
+      // case 'settings':
+      //   return <Settings />;
       case 'home':
       default:
         return <Home user={user} onLogout={handleLogout} />;

@@ -3,7 +3,6 @@ import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
 import SceneCards from '../components/dashboard/SceneCards';
-// Giả sử em sẽ tạo component này sau, anh tạm để placeholder ở đây
 import ActivityLog from '../components/dashboard/ActivityLog';
 import FloorPlan from '../components/FloorPlan'; 
 
