@@ -9,13 +9,30 @@ void setup() {
 
 	Serial.println("\n======= System initializing... =======\n");
 
-	xTaskCreate(board_config_server_task, "Board Config", 8192, NULL, PRIO_NET, NULL);
+	const bool configReady = check_info_File(false);
+	bool	   networkReady = false;
+
+	if (configReady) {
+		networkReady = Wifi_reconnect(WIFI_CONNECT_TIMEOUT_MS);
+		if (!networkReady) {
+			Serial.println("[INIT] WiFi connection failed. Config portal remains available.");
+			startAP();
+			Webserver_reconnect();
+		}
+	}
+
+	xTaskCreate(Task_Toogle_BOOT, "BOOT", 4096, NULL, PRIO_INPUT, NULL);
 
 	xTaskCreate(button_handler,    "Button",     2048, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(digital_manager,   "Digital IO", 4096, NULL, PRIO_INPUT, NULL);
 	xTaskCreate(analog_manager,    "Analog IO",  4096, NULL, PRIO_INPUT, NULL);
 	// xTaskCreate(ir_receiver_task,   "IR Receiver", 4096, NULL, PRIO_INPUT, NULL);
-	xTaskCreate(mqtt_task,    "MQTT Handler",  4096, NULL, 2, NULL);
+	if (configReady && networkReady) {
+		xTaskCreate(mqtt_task, "MQTT Handler", 4096, NULL, PRIO_NET, NULL);
+	}
+	else {
+		Serial.println("[INIT] MQTT task skipped until board configuration is saved.");
+	}
 
 	xTaskCreate(sensor_dht20,      	"DHT20",   4096, NULL, PRIO_SENSOR, NULL);
 	xTaskCreate(LCD_display, 	 	"LCD",     4096, NULL, PRIO_UI,     NULL);
@@ -52,7 +69,7 @@ void loop() {
 void semaphore_init() {
 	// Mutex for LCD I2C
 	xLCDSemaphore		  = xSemaphoreCreateMutex();
-	
+
 	// Individual Mutex for each type of sensor data
 	xDHT20Semaphore   = xSemaphoreCreateMutex();
 	xLightSemaphore  = xSemaphoreCreateMutex();
@@ -76,10 +93,6 @@ void system_init() {
 
 	Serial.begin(115200);
 
-	load_board_config_from_storage();
-
-	// check_info_File(0);
-
 	Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 	// dht20.begin();
 
@@ -90,6 +103,5 @@ void system_init() {
     // analogSetPinAttenuation(ANALOG_GPIO_PIN, ADC_11db);
     // pinMode(ANALOG_GPIO_PIN, INPUT);
 
-	
     delay(1000); // Wait for Serial to be ready
 }

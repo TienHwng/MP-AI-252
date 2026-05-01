@@ -47,7 +47,10 @@
 #include "ir_receiver.h"
 #include "mqtt_handle.h"
 #include "button_handler.h"
-#include "board_config_server.h"
+#include "task_check_info.h"
+#include "task_toogle_boot.h"
+#include "task_webserver.h"
+#include "task_wifi.h"
 
 void system_init();
 void semaphore_init();
