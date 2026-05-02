@@ -1,5 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Droplets, Sun, Thermometer } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	ChevronLeft,
+	ChevronRight,
+	Droplets,
+	RefreshCw,
+	Search,
+	Sun,
+	Thermometer,
+} from "lucide-react";
 import {
 	AreaChart,
 	Area,
@@ -9,12 +17,18 @@ import {
 	ResponsiveContainer,
 	CartesianGrid,
 } from "recharts";
-import { fetchTelemetrySeries, getSensorValue, subscribeTelemetrySeries } from "../services/api";
+import {
+	fetchActivityLogs,
+	fetchTelemetrySeries,
+	getSensorValue,
+	subscribeTelemetrySeries,
+} from "../services/api";
 
 const CHART_BUCKET_MS = 5 * 1000;
 const TELEMETRY_HISTORY_LIMIT = 10000;
 const TELEMETRY_REFRESH_MS = 30 * 1000;
-const EXTENDED_POINT_LIMIT = 60;
+const AUDIT_PAGE_SIZE = 12;
+const SHOW_AUDIT_LOGS = false;
 
 const TIME_WINDOW_CONFIG = {
 	"5m": {
@@ -46,12 +60,49 @@ const DATA_TICK_STEPS = [
 ];
 
 const WINDOW_OPTIONS = [
-	{ key: "all", label: "All" },
-	{ key: "last60", label: "60 latest points" },
 	{ key: "5m", label: "5 minutes" },
 	{ key: "15m", label: "15 minutes" },
 	{ key: "1h", label: "1 hour" },
+	{ key: "all", label: "All" },
 ];
+
+const AUDIT_TYPE_OPTIONS = [
+	{ value: "all", label: "All types" },
+	{ value: "control", label: "Control" },
+	{ value: "threshold", label: "Threshold" },
+	{ value: "scene", label: "Scene" },
+	{ value: "security", label: "Security" },
+	{ value: "system", label: "System" },
+];
+
+const AUDIT_TRIGGER_OPTIONS = [
+	{ value: "all", label: "All triggers" },
+	{ value: "web_dashboard", label: "Web" },
+	{ value: "hera_assistant", label: "H.E.R.A" },
+	{ value: "automation", label: "Automation" },
+	{ value: "scene", label: "Scene" },
+	{ value: "auth", label: "Security" },
+	{ value: "simulator", label: "Simulator" },
+];
+
+const AUDIT_ROOM_OPTIONS = [
+	{ value: "all", label: "All rooms" },
+	{ value: "Living Room", label: "Living Room" },
+	{ value: "Bedroom", label: "Bedroom" },
+	{ value: "Toilet", label: "Toilet" },
+	{ value: "Main Room", label: "Main Room" },
+	{ value: "Whole Home", label: "Whole Home" },
+	{ value: "Security", label: "Security" },
+	{ value: "System", label: "System" },
+];
+
+const auditSeverityClass = {
+	danger: "bg-red-50 text-red-700 border-red-100",
+	warning: "bg-[#FFF7ED] text-[#DF6D14] border-[#FED7AA]",
+	success: "bg-[#E8F5E9] text-[#3A7D44] border-[#DDEEDD]",
+	neutral: "bg-gray-100 text-gray-600 border-gray-200",
+	info: "bg-sky-50 text-sky-700 border-sky-100",
+};
 
 const getStats = (series) => {
 	if (!series.length) {
@@ -72,6 +123,39 @@ const formatFullDateTime = (value) => {
 	return new Date(value).toLocaleString("vi-VN", {
 		hour12: false,
 	});
+};
+
+const toDateInputValue = (value) => {
+	if (!value) return "";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "";
+	return date.toISOString().slice(0, 10);
+};
+
+const fromDateInputValue = (value, endOfDay = false) => {
+	if (!value) return "";
+	const suffix = endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+	const date = new Date(`${value}${suffix}`);
+	return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+};
+
+const formatAuditValue = (value) => {
+	if (value === null || value === undefined || value === "") return "--";
+	if (typeof value === "boolean") return value ? "ON" : "OFF";
+	if (typeof value === "object") return JSON.stringify(value);
+	return String(value);
+};
+
+const formatAuditDetails = (log) => {
+	if (log.oldValue !== null || log.newValue !== null) {
+		return `${formatAuditValue(log.oldValue)} -> ${formatAuditValue(log.newValue)}`;
+	}
+	if (log.details?.threshold !== undefined) {
+		return `${formatAuditValue(log.details.value)} / ${formatAuditValue(log.details.threshold)} ${log.details.unit || ""}`.trim();
+	}
+	if (log.details?.ip) return `IP: ${log.details.ip}`;
+	if (log.details?.method) return log.details.method;
+	return "--";
 };
 
 const getTimeValue = (value) => {
@@ -255,7 +339,6 @@ const filterDataByWindow = (data, windowKey, windowRange) => {
 	if (!data.length) return [];
 
 	if (windowKey === "all") return data;
-	if (windowKey === "last60") return data.slice(-EXTENDED_POINT_LIMIT);
 
 	if (!windowRange) return data;
 
@@ -431,10 +514,220 @@ const ChartCard = ({ title, value, unit, dataKey, color, data, stats, status, ti
 	);
 };
 
+const AuditLogTable = () => {
+	const [logs, setLogs] = useState([]);
+	const [total, setTotal] = useState(0);
+	const [page, setPage] = useState(1);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState("");
+	const [filters, setFilters] = useState({
+		eventType: "all",
+		triggerSource: "all",
+		room: "all",
+		search: "",
+		from: "",
+		to: "",
+	});
+
+	const totalPages = Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE));
+
+	const loadLogs = useCallback(async () => {
+		setIsLoading(true);
+		try {
+			const result = await fetchActivityLogs({
+				surface: "audit",
+				page,
+				pageSize: AUDIT_PAGE_SIZE,
+				filters,
+			});
+			setLogs(result.items);
+			setTotal(result.total);
+			setError("");
+		} catch (loadError) {
+			setError(loadError.message || "Failed to load audit logs");
+		} finally {
+			setIsLoading(false);
+		}
+	}, [filters, page]);
+
+	useEffect(() => {
+		loadLogs();
+	}, [loadLogs]);
+
+	const updateFilter = (key, value) => {
+		setFilters((prev) => ({ ...prev, [key]: value }));
+		setPage(1);
+	};
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="rounded-2xl bg-white p-4 shadow-sm">
+				<div className="grid gap-3 md:grid-cols-[1.1fr_0.85fr_0.85fr_0.85fr] xl:grid-cols-[1.2fr_0.85fr_0.85fr_0.85fr_0.85fr_0.85fr_auto]">
+					<label className="relative min-w-0">
+						<Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+						<input
+							type="search"
+							value={filters.search}
+							onChange={(event) => updateFilter("search", event.target.value)}
+							placeholder="Search logs"
+							className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#3A7D44]"
+						/>
+					</label>
+
+					<select
+						value={filters.eventType}
+						onChange={(event) => updateFilter("eventType", event.target.value)}
+						className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3A7D44]"
+					>
+						{AUDIT_TYPE_OPTIONS.map((item) => (
+							<option key={item.value} value={item.value}>{item.label}</option>
+						))}
+					</select>
+
+					<select
+						value={filters.triggerSource}
+						onChange={(event) => updateFilter("triggerSource", event.target.value)}
+						className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3A7D44]"
+					>
+						{AUDIT_TRIGGER_OPTIONS.map((item) => (
+							<option key={item.value} value={item.value}>{item.label}</option>
+						))}
+					</select>
+
+					<select
+						value={filters.room}
+						onChange={(event) => updateFilter("room", event.target.value)}
+						className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3A7D44]"
+					>
+						{AUDIT_ROOM_OPTIONS.map((item) => (
+							<option key={item.value} value={item.value}>{item.label}</option>
+						))}
+					</select>
+
+					<input
+						type="date"
+						value={toDateInputValue(filters.from)}
+						onChange={(event) => updateFilter("from", fromDateInputValue(event.target.value))}
+						className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3A7D44]"
+					/>
+
+					<input
+						type="date"
+						value={toDateInputValue(filters.to)}
+						onChange={(event) => updateFilter("to", fromDateInputValue(event.target.value, true))}
+						className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3A7D44]"
+					/>
+
+					<button
+						type="button"
+						onClick={loadLogs}
+						title="Refresh audit logs"
+						className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-[#3A7D44]"
+					>
+						<RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+					</button>
+				</div>
+			</div>
+
+			{error && (
+				<div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{error}
+				</div>
+			)}
+
+			<div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+				<div className="overflow-x-auto">
+					<table className="min-w-[980px] w-full text-left text-sm">
+						<thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-textMuted">
+							<tr>
+								<th className="px-4 py-3 font-semibold">Exact Time</th>
+								<th className="px-4 py-3 font-semibold">Type</th>
+								<th className="px-4 py-3 font-semibold">Device / Area</th>
+								<th className="px-4 py-3 font-semibold">Action</th>
+								<th className="px-4 py-3 font-semibold">Actor</th>
+								<th className="px-4 py-3 font-semibold">Details</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-100">
+							{isLoading && logs.length === 0 ? (
+								<tr>
+									<td colSpan="6" className="px-4 py-8 text-center text-textMuted">
+										Loading audit logs...
+									</td>
+								</tr>
+							) : logs.length === 0 ? (
+								<tr>
+									<td colSpan="6" className="px-4 py-8 text-center text-textMuted">
+										No logs match the current filters.
+									</td>
+								</tr>
+							) : (
+								logs.map((log) => (
+									<tr key={log.id} className="align-top hover:bg-gray-50/70">
+										<td className="whitespace-nowrap px-4 py-3 text-textMain">
+											{formatFullDateTime(log.createdAt)}
+										</td>
+										<td className="px-4 py-3">
+											<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${auditSeverityClass[log.severity] || auditSeverityClass.info}`}>
+												{log.eventType}
+											</span>
+										</td>
+										<td className="px-4 py-3">
+											<p className="font-medium text-textMain">{log.deviceName || log.targetId || "--"}</p>
+											<p className="text-xs text-textMuted">{log.room || "--"}</p>
+										</td>
+										<td className="px-4 py-3">
+											<p className="font-medium text-textMain">{log.action || "--"}</p>
+											<p className="max-w-[260px] text-xs text-textMuted">{log.message || "--"}</p>
+										</td>
+										<td className="px-4 py-3">
+											<p className="font-medium text-textMain">{log.actorName || "--"}</p>
+											<p className="text-xs text-textMuted">{log.triggerSource}</p>
+										</td>
+										<td className="px-4 py-3 text-textMuted">
+											{formatAuditDetails(log)}
+										</td>
+									</tr>
+								))
+							)}
+						</tbody>
+					</table>
+				</div>
+
+				<div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+					<p className="text-sm text-textMuted">
+						{total} logs - Page {page} of {totalPages}
+					</p>
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+							disabled={page <= 1}
+							className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
+						>
+							<ChevronLeft size={16} />
+						</button>
+						<button
+							type="button"
+							onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+							disabled={page >= totalPages}
+							className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
+						>
+							<ChevronRight size={16} />
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+};
+
 const Analytics = () => {
 	const [data, setData] = useState([]);
-	const [windowKey, setWindowKey] = useState("all");
+	const [windowKey, setWindowKey] = useState("5m");
 	const [currentChartTimestamp, setCurrentChartTimestamp] = useState(getCurrentChartTimestamp);
+	const [activeTab, setActiveTab] = useState("charts");
+	const isAuditVisible = SHOW_AUDIT_LOGS && activeTab === "audit";
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -542,93 +835,132 @@ const Analytics = () => {
 			<div className="mb-6 lg:mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 				<div className="min-w-0">
 					<h2 className="text-2xl font-semibold text-textMain sm:text-3xl">
-						Environmental Trends
+						{isAuditVisible ? "System Audit" : "Environmental Trends"}
 					</h2>
 					<p className="text-textMuted mt-1">
-						Monitor your home's climate and lighting conditions over the last 24 hours
+						{isAuditVisible
+							? "Trace device controls, threshold warnings, scenes, security, and system changes"
+							: "Monitor your home's climate and lighting conditions over the last 24 hours"}
 					</p>
 				</div>
 
-				<div className="flex max-w-full gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
-					{WINDOW_OPTIONS.map((item) => (
-						<button
-							key={item.key}
-							type="button"
-							onClick={() => setWindowKey(item.key)}
-							className={`shrink-0 rounded-xl border px-3 py-2 text-sm ${
-								windowKey === item.key
-									? "bg-black text-white border-black"
-									: "bg-white text-textMain border-gray-200"
-							}`}
-						>
-							{item.label}
-						</button>
-					))}
+				<div className="flex max-w-full flex-col gap-2 lg:items-end">
+					{SHOW_AUDIT_LOGS && (
+						<div className="flex gap-2 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+							<button
+								type="button"
+								onClick={() => setActiveTab("charts")}
+								className={`rounded-md px-3 py-2 text-sm font-medium ${
+									activeTab === "charts"
+										? "bg-black text-white"
+										: "text-textMuted hover:text-textMain"
+								}`}
+							>
+								Charts
+							</button>
+							<button
+								type="button"
+								onClick={() => setActiveTab("audit")}
+								className={`rounded-md px-3 py-2 text-sm font-medium ${
+									activeTab === "audit"
+										? "bg-black text-white"
+										: "text-textMuted hover:text-textMain"
+								}`}
+							>
+								Audit Logs
+							</button>
+						</div>
+					)}
+
+					{!isAuditVisible && (
+						<div className="flex max-w-full gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
+							{WINDOW_OPTIONS.map((item) => (
+								<button
+									key={item.key}
+									type="button"
+									onClick={() => setWindowKey(item.key)}
+									className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${
+										windowKey === item.key
+											? "bg-[#3A7D44] text-white border-[#3A7D44]"
+											: "bg-white text-textMain border-gray-200"
+									}`}
+								>
+									{item.label}
+								</button>
+							))}
+						</div>
+					)}
 				</div>
 			</div>
 
-			<div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
-				<div className="grid gap-4 md:grid-cols-3">
-					<div>
-						<p className="text-sm text-textMuted">Latest Records</p>
-						<p className="mt-1 text-base text-textMain">
-							{latestRecord.recorded_at ? formatFullDateTime(latestRecord.recorded_at) : "--"}
-						</p>
+			{!isAuditVisible ? (
+				<>
+					<div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+						<div className="grid gap-4 md:grid-cols-3">
+							<div>
+								<p className="text-sm text-textMuted">Latest Records</p>
+								<p className="mt-1 text-base text-textMain">
+									{latestRecord.recorded_at ? formatFullDateTime(latestRecord.recorded_at) : "--"}
+								</p>
+							</div>
+							<div>
+								<p className="text-sm text-textMuted">Selected Records</p>
+								<p className="mt-1 text-base text-textMain">
+									{visibleData.length} / {data.length}
+								</p>
+							</div>
+							<div>
+								<p className="text-sm text-textMuted">Chart Span</p>
+								<p className="mt-1 text-base text-textMain">{timeSpanLabel}</p>
+								<p className="mt-1 text-xs text-textMuted">{chartPointCount} chart points</p>
+							</div>
+						</div>
 					</div>
-					<div>
-						<p className="text-sm text-textMuted">Selected Records</p>
-						<p className="mt-1 text-base text-textMain">
-							{visibleData.length} / {data.length}
-						</p>
+
+					<div className="flex flex-col gap-6">
+						<ChartCard
+							title="Temperature"
+							value={latestTemperature.temp == null ? "--" : formatMetric(latestTemperature.temp)}
+							unit="Celsius"
+							dataKey="temp"
+							color="#DF6D14"
+							data={temperatureData}
+							Icon={Thermometer}
+							stats={tempStats}
+							status={temperatureStatus}
+							timeScale={chartTimeScale}
+						/>
+
+						<ChartCard
+							title="Humidity"
+							value={latestHumidity.humidity == null ? "--" : formatMetric(latestHumidity.humidity)}
+							unit="Relative Humidity"
+							dataKey="humidity"
+							color="#3A7D44"
+							data={humidityData}
+							Icon={Droplets}
+							stats={humidityStats}
+							status={humidityStatus}
+							timeScale={chartTimeScale}
+						/>
+
+						<ChartCard
+							title="Ambient Light"
+							value={latestLight.light == null ? "--" : formatMetric(latestLight.light)}
+							unit="Lux"
+							dataKey="light"
+							color="#F4D03F"
+							data={lightData}
+							Icon={Sun}
+							stats={lightStats}
+							status={lightStatus}
+							timeScale={chartTimeScale}
+						/>
 					</div>
-					<div>
-						<p className="text-sm text-textMuted">Chart Span</p>
-						<p className="mt-1 text-base text-textMain">{timeSpanLabel}</p>
-						<p className="mt-1 text-xs text-textMuted">{chartPointCount} chart points</p>
-					</div>
-				</div>
-			</div>
-
-			<div className="flex flex-col gap-6">
-				<ChartCard
-					title="Temperature"
-					value={latestTemperature.temp == null ? "--" : formatMetric(latestTemperature.temp)}
-					unit="Celsius"
-					dataKey="temp"
-					color="#DF6D14"
-					data={temperatureData}
-					Icon={Thermometer}
-					stats={tempStats}
-					status={temperatureStatus}
-					timeScale={chartTimeScale}
-				/>
-
-				<ChartCard
-					title="Humidity"
-					value={latestHumidity.humidity == null ? "--" : formatMetric(latestHumidity.humidity)}
-					unit="Relative Humidity"
-					dataKey="humidity"
-					color="#3A7D44"
-					data={humidityData}
-					Icon={Droplets}
-					stats={humidityStats}
-					status={humidityStatus}
-					timeScale={chartTimeScale}
-				/>
-
-				<ChartCard
-					title="Ambient Light"
-					value={latestLight.light == null ? "--" : formatMetric(latestLight.light)}
-					unit="Lux"
-					dataKey="light"
-					color="#F4D03F"
-					data={lightData}
-					Icon={Sun}
-					stats={lightStats}
-					status={lightStatus}
-					timeScale={chartTimeScale}
-				/>
-			</div>
+				</>
+			) : (
+				<AuditLogTable />
+			)}
 		</div>
 	);
 };

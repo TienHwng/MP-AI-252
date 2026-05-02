@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AiAssistant from '../components/chat/AI';
 import ControlCard from '../components/dashboard/ControlCard';
 import EnvironmentCards from '../components/dashboard/EnvironmentCards';
@@ -12,22 +13,25 @@ import {
   getDeviceStatus,
   subscribeLatestSensorData,
   logoutUser,
+  recordActivityLog,
   sendRpcCommand 
 } from '../services/api';
 
-const getRelativeUpdatedLabel = (timestamp) => {
-  const updated = new Date(timestamp).getTime();
-  if (Number.isNaN(updated)) return 'just now';
-
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - updated) / 1000));
-  if (diffSeconds < 60) return 'just now';
-
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  return `${diffHours}h ago`;
+const DEVICE_LABELS = {
+  main_led: 'LED living room',
+  neo_led: 'LED bedroom',
+  ws2812: 'LED toilet',
+  mini_fan: 'Fan living room',
+  relay: 'TV',
 };
+
+const SCENE_LABELS = {
+  movie: 'Movie Mode',
+  sleep: 'Sleep Mode',
+  away: 'Away Mode',
+};
+
+const RIGHT_SIDEBAR_TRANSITION_MS = 300;
 
 const Home = ({ user, onLogout }) => {
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -37,6 +41,8 @@ const Home = ({ user, onLogout }) => {
   
   // State mới để quản lý Tab ở cột phải
   const [activeRightTab, setActiveRightTab] = useState('assistant');
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [shouldRenderRightSidebar, setShouldRenderRightSidebar] = useState(true);
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -44,6 +50,19 @@ const Home = ({ user, onLogout }) => {
     }, 1000);
     return () => clearInterval(timerId);
   }, []);
+
+  useEffect(() => {
+    if (isRightSidebarOpen) {
+      setShouldRenderRightSidebar(true);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldRenderRightSidebar(false);
+    }, RIGHT_SIDEBAR_TRANSITION_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isRightSidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,7 +117,11 @@ const Home = ({ user, onLogout }) => {
     setIsSubmittingControl(true);
 
     try {
-      await controlDeviceState(target, nextValue);
+      await controlDeviceState(target, nextValue, {
+        oldValue: currentStatus,
+        triggerSource: 'web_dashboard',
+        actorName: user?.full_name || 'Dashboard',
+      });
     } catch (error) {
       console.error(`Failed to toggle ${target}:`, error);
       setTelemetryError(error.message || `Failed to toggle ${target}`);
@@ -109,45 +132,83 @@ const Home = ({ user, onLogout }) => {
 
   const handleActivateScene = async (sceneId) => {
     setIsSubmittingControl(true);
+    const sceneLabel = SCENE_LABELS[sceneId] || sceneId;
+    const sceneActivity = {
+      triggerSource: 'scene',
+      actorType: 'scene',
+      actorName: sceneLabel,
+      details: { scene_id: sceneId },
+    };
+    const sceneRpcActivity = (targetId, percentValue = 0) => ({
+      triggerSource: 'scene',
+      activity: {
+        targetId,
+        actorType: 'scene',
+        actorName: sceneLabel,
+        percentValue,
+        displayValue: percentValue,
+        unit: '%',
+        details: { scene_id: sceneId },
+        showOnSidebar: false,
+      },
+    });
+    const sceneLogPromise = recordActivityLog({
+      target_id: sceneId,
+      device_name: sceneLabel,
+      room: 'Whole Home',
+      event_type: 'scene',
+      trigger_source: 'web_dashboard',
+      severity: 'info',
+      action: 'Scene Activated',
+      message: `${user?.full_name || 'Dashboard'} activated ${sceneLabel}.`,
+      actor_type: 'user',
+      actor_name: user?.full_name || 'Dashboard',
+      details: { scene_id: sceneId },
+      show_on_sidebar: true,
+    }).catch((logError) => {
+      console.warn('Failed to record scene activity:', logError);
+    });
+
     try {
       if (sceneId === 'movie') {
         await Promise.all([
-          controlDeviceState('main_led', false),
-          controlDeviceState('neo_led', false),
-          controlDeviceState('ws2812', false),
-          controlDeviceState('mini_fan', true),
-          controlDeviceState('relay', true),
+          controlDeviceState('main_led', false, sceneActivity),
+          controlDeviceState('neo_led', false, sceneActivity),
+          controlDeviceState('ws2812', false, sceneActivity),
+          controlDeviceState('mini_fan', true, sceneActivity),
+          controlDeviceState('relay', true, sceneActivity),
           // Set light intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0),
-          sendRpcCommand('setStripBrightness', 0),
-          sendRpcCommand('setWS2812Brightness', 0)
+          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
+          sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
+          sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812'))
         ]);
       } 
       else if (sceneId === 'sleep') {
         await Promise.all([
-          controlDeviceState('main_led', false),
-          controlDeviceState('neo_led', false),
-          controlDeviceState('ws2812', false),
+          controlDeviceState('main_led', false, sceneActivity),
+          controlDeviceState('neo_led', false, sceneActivity),
+          controlDeviceState('ws2812', false, sceneActivity),
           // Set light intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0),
-          sendRpcCommand('setStripBrightness', 0),
-          sendRpcCommand('setWS2812Brightness', 0)
+          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
+          sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
+          sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812'))
         ]);
       } 
       else if (sceneId === 'away') {
         await Promise.all([
-          controlDeviceState('main_led', false),
-          controlDeviceState('neo_led', false),
-          controlDeviceState('ws2812', false),
-          controlDeviceState('mini_fan', false),
-          controlDeviceState('relay', false),
+          controlDeviceState('main_led', false, sceneActivity),
+          controlDeviceState('neo_led', false, sceneActivity),
+          controlDeviceState('ws2812', false, sceneActivity),
+          controlDeviceState('mini_fan', false, sceneActivity),
+          controlDeviceState('relay', false, sceneActivity),
           // Set intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0),
-          sendRpcCommand('setStripBrightness', 0),
-          sendRpcCommand('setWS2812Brightness', 0),
-          sendRpcCommand('setFanSpeed', 0)
+          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
+          sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
+          sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812')),
+          sendRpcCommand('setFanSpeed', 0, sceneRpcActivity('mini_fan'))
         ]);
       }
+      await sceneLogPromise;
     } catch (error) {
       console.error(`Failed to activate scene ${sceneId}:`, error);
       setTelemetryError(error.message || `Failed to activate ${sceneId}`);
@@ -159,7 +220,19 @@ const Home = ({ user, onLogout }) => {
   const handleIntensityChange = async (deviceId, percentValue, pwmValue, rpcMethod) => {
     if (!rpcMethod) return;
     try {
-      await sendRpcCommand(rpcMethod, pwmValue);
+      await sendRpcCommand(rpcMethod, pwmValue, {
+        triggerSource: 'web_dashboard',
+        activity: {
+          targetId: deviceId,
+          deviceName: DEVICE_LABELS[deviceId] || deviceId,
+          percentValue,
+          displayValue: percentValue,
+          unit: '%',
+          action: 'Intensity Changed',
+          message: `${user?.full_name || 'Dashboard'} set ${DEVICE_LABELS[deviceId] || deviceId} to ${percentValue}%.`,
+          actorName: user?.full_name || 'Dashboard',
+        },
+      });
     } catch (error) {
       console.error(`Lỗi khi điều chỉnh cường độ cho ${deviceId}:`, error);
       setTelemetryError(error.message || `Không thể điều chỉnh cường độ cho ${deviceId}`);
@@ -171,8 +244,19 @@ const Home = ({ user, onLogout }) => {
     onLogout();
   };
 
+  const openRightSidebar = () => {
+    setShouldRenderRightSidebar(true);
+    window.requestAnimationFrame(() => {
+      setIsRightSidebarOpen(true);
+    });
+  };
+
+  const closeRightSidebar = () => {
+    setIsRightSidebarOpen(false);
+  };
+
   return (
-    <div className="grid min-h-screen w-full grid-cols-1 gap-4 bg-background p-3 sm:p-4 lg:p-6 xl:h-screen xl:grid-cols-[minmax(0,1fr)_350px] xl:gap-6 xl:overflow-hidden">
+    <div className={`relative grid min-h-screen w-full grid-cols-1 gap-4 overflow-x-hidden bg-background p-3 transition-[grid-template-columns] duration-300 sm:p-4 lg:p-6 xl:h-screen xl:overflow-hidden ${shouldRenderRightSidebar ? 'xl:grid-cols-[minmax(0,1fr)_350px] xl:gap-6' : 'xl:grid-cols-1'}`}>
       {/* CỘT TRÁI: Dashboard chính */}
       <div className="min-w-0 flex flex-col gap-5 xl:overflow-y-auto xl:pr-1 custom-scrollbar">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -225,38 +309,62 @@ const Home = ({ user, onLogout }) => {
         </section>
       </div>
 
-      {/* CỘT PHẢI: AI Assistant & Activity Log */}
-      <div className="flex min-h-[70svh] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white/70 shadow-sm backdrop-blur-sm sm:min-h-[560px] xl:h-full xl:min-h-0">
-        {/* Tab Switcher */}
-        <div className="flex gap-2 bg-gray-50/50 p-2">
-          <button 
-            onClick={() => setActiveRightTab('assistant')}
-            className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'assistant' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            H.E.R.A Assistant
-          </button>
-          <button 
-            onClick={() => setActiveRightTab('logs')}
-            className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'logs' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Activity Log
-          </button>
-        </div>
+      <button
+        type="button"
+        onClick={openRightSidebar}
+        aria-label="Expand right sidebar"
+        title="Open H.E.R.A panel"
+        className={`fixed right-3 top-3 z-40 inline-flex h-10 items-center gap-2 rounded-full border border-gray-100 bg-white/95 px-3 text-sm font-semibold text-[#3A7D44] shadow-md backdrop-blur transition-all duration-300 hover:bg-[#E8F5E9] sm:right-4 sm:top-4 ${shouldRenderRightSidebar ? 'pointer-events-none translate-x-3 scale-95 opacity-0' : 'translate-x-0 scale-100 opacity-100'}`}
+      >
+        <ChevronLeft size={16} />
+        <span>H.E.R.A</span>
+      </button>
 
-        {/* Nội dung Tab */}
-        <div className="flex-1 overflow-hidden relative">
-          {activeRightTab === 'assistant' ? (
-            <div className="h-full animate-fadeIn">
-              <AiAssistant />
+      {/* CỘT PHẢI: AI Assistant & Activity Log */}
+      {shouldRenderRightSidebar && (
+        <aside className={`relative flex min-h-[70svh] transform flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white/70 shadow-sm backdrop-blur-sm transition-transform duration-300 sm:min-h-[560px] xl:h-full xl:min-h-0 ${isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <button
+            type="button"
+            onClick={closeRightSidebar}
+            aria-label="Collapse right sidebar"
+            title="Collapse sidebar"
+            className="absolute right-2 top-2 z-20 grid h-9 w-9 place-items-center rounded-lg border border-gray-100 bg-white text-gray-500 shadow-sm transition-colors hover:text-[#3A7D44]"
+          >
+            <ChevronRight size={17} />
+          </button>
+
+            {/* Tab Switcher */}
+            <div className="flex gap-2 bg-gray-50/50 p-2 pr-12">
+              <button
+                type="button"
+                onClick={() => setActiveRightTab('assistant')}
+                className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'assistant' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                H.E.R.A Assistant
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveRightTab('logs')}
+                className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all duration-200 ${activeRightTab === 'logs' ? 'bg-white text-[#3A7D44] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Activity Log
+              </button>
             </div>
-          ) : (
-            <div className="h-full animate-fadeIn">
-              {/* Truyền sensorData vào nếu bé Mận muốn log cập nhật realtime từ state */}
-              <ActivityLog data={sensorData} />
+
+            {/* Nội dung Tab */}
+            <div className="relative flex-1 overflow-hidden">
+              {activeRightTab === 'assistant' ? (
+                <div className="h-full animate-fadeIn">
+                  <AiAssistant />
+                </div>
+              ) : (
+                <div className="h-full animate-fadeIn">
+                  <ActivityLog data={sensorData} />
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+        </aside>
+      )}
     </div>
   );
 };

@@ -1,19 +1,63 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Send, X } from 'lucide-react';
-import { sendAssistantMessage } from '../../services/api';
+import {
+  fetchAssistantChatHistory,
+  saveAssistantInteraction,
+  sendAssistantMessage,
+} from '../../services/api';
 
-const formatTime = () =>
-  new Date().toLocaleTimeString([], {
+const formatTime = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safeDate.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const chatHistoryToMessages = (items = []) =>
+  items
+    .filter((item) => item?.text)
+    .map((item) => ({
+      text: item.text,
+      isBot: item.role !== 'user',
+      time: formatTime(item.createdAt || item.timestamp),
+      createdAt: item.createdAt || new Date(item.timestamp || Date.now()).toISOString(),
+      isError: Boolean(item.isError || item.metadata?.is_error),
+    }));
 
 const AiAssistant = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadChatHistory = async () => {
+      try {
+        const history = await fetchAssistantChatHistory();
+        if (isMounted) {
+          setMessages(chatHistoryToMessages(history.messages));
+        }
+      } catch (error) {
+        console.warn('Failed to load assistant chat history:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadChatHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -31,9 +75,15 @@ const AiAssistant = () => {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isSending) return;
+    if (!text || isSending || isLoadingHistory) return;
 
-    const userMessage = { text, isBot: false, time: formatTime() };
+    const userCreatedAt = new Date().toISOString();
+    const userMessage = {
+      text,
+      isBot: false,
+      time: formatTime(userCreatedAt),
+      createdAt: userCreatedAt,
+    };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsRecording(false);
@@ -41,24 +91,52 @@ const AiAssistant = () => {
 
     try {
       const response = await sendAssistantMessage(text);
+      const assistantText = response.text || 'HERA completed the request.';
+      const assistantCreatedAt = new Date().toISOString();
       setMessages((prev) => [
         ...prev,
         {
-          text: response.text || 'HERA completed the request.',
+          text: assistantText,
           isBot: true,
-          time: formatTime(),
+          time: formatTime(assistantCreatedAt),
+          createdAt: assistantCreatedAt,
         },
       ]);
+      saveAssistantInteraction({
+        userText: text,
+        assistantText,
+        response,
+        userCreatedAt,
+        assistantCreatedAt,
+      }).catch((error) => {
+        console.warn('Failed to save assistant chat history:', error);
+      });
     } catch (error) {
+      const assistantText = error.message || 'HERA runtime is unavailable.';
+      const assistantCreatedAt = new Date().toISOString();
       setMessages((prev) => [
         ...prev,
         {
-          text: error.message || 'HERA runtime is unavailable.',
+          text: assistantText,
           isBot: true,
-          time: formatTime(),
+          time: formatTime(assistantCreatedAt),
+          createdAt: assistantCreatedAt,
           isError: true,
         },
       ]);
+      saveAssistantInteraction({
+        userText: text,
+        assistantText,
+        response: { ok: false },
+        userCreatedAt,
+        assistantCreatedAt,
+        assistantMetadata: {
+          is_error: true,
+          error_message: assistantText,
+        },
+      }).catch((saveError) => {
+        console.warn('Failed to save assistant chat history:', saveError);
+      });
     } finally {
       setIsSending(false);
     }
@@ -77,7 +155,7 @@ const AiAssistant = () => {
       >
         {messages.length === 0 && (
           <div className="rounded-lg border border-gray-100 bg-background p-4 text-sm text-textMuted">
-            No assistant messages in this session.
+            {isLoadingHistory ? 'Loading assistant messages...' : 'No assistant messages in this session.'}
           </div>
         )}
         {messages.map((msg, idx) => (
@@ -111,7 +189,7 @@ const AiAssistant = () => {
           <button
             type="button"
             onClick={handleSend}
-            disabled={isSending}
+            disabled={isSending || isLoadingHistory}
             className="grid min-h-11 min-w-11 place-items-center rounded-lg bg-[#3A7D44] p-3 text-white shadow-sm transition-colors hover:bg-[#9DC08B] disabled:opacity-60"
           >
             <Send size={18} />

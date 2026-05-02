@@ -23,14 +23,13 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 
 	const serverIntensity = data?.[control.id]?.intensity || 50;
 	const [localVal, setLocalVal] = useState(serverIntensity);
-	const [initialVal, setInitialVal] = useState(serverIntensity);
 	const prevIntensityRef = useRef(serverIntensity);
 
 	useEffect(() => {
 		// Only update if server intensity actually changed (not on active status change)
 		if (serverIntensity !== prevIntensityRef.current) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setLocalVal(serverIntensity);
-			setInitialVal(serverIntensity);
 			prevIntensityRef.current = serverIntensity;
 		}
 	}, [serverIntensity]);

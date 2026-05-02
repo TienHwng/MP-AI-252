@@ -224,13 +224,14 @@ async def handle_assistant_message(request: web.Request) -> web.Response:
 		return web.json_response({"ok": False, "error": "text is required"}, status=400)
 
 	user_id = str(payload.get("user_id") or "dashboard")
+	session_id = str(payload.get("session_id") or user_id)
 	message = UserMessage(
 		text=text,
-		chat_id=f"dashboard:{user_id}",
+		chat_id=f"dashboard:{session_id}",
 		source=MessageSource.REST,
 		metadata={
 			"user_id": user_id,
-			"session_id": str(payload.get("session_id") or user_id),
+			"session_id": session_id,
 			"mode": MODE,
 		},
 	)

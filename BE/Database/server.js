@@ -15,6 +15,8 @@ let collection; // telemetry_points
 let usersCollection;
 let modelSettingsCollection;
 let devicesCollection; // Thêm collection devices
+let activityLogsCollection;
+let interactionSessionsCollection;
 
 const ENV_PATH = path.resolve(__dirname, "../../.env");
 const MODEL_SETTINGS_DOC_ID = "hera_model_settings";
@@ -27,6 +29,54 @@ const ANSI = {
 const VN_TIMEZONE = "Asia/Ho_Chi_Minh";
 const TELEMETRY_BUCKET_MS = 5 * 1000;
 const MAX_TELEMETRY_LIMIT = 20000;
+const DEFAULT_ENV_ID = "env_0001";
+const DEFAULT_DEVICE_ID = "device_0001";
+const DEFAULT_CHAT_MODEL_NAME = "H.E.R.A Assistant";
+const DEFAULT_ACTIVITY_LOG_LIMIT = 15;
+const MAX_ACTIVITY_LOG_LIMIT = 100;
+const MAX_ACTIVITY_EXCLUDE_IDS = 200;
+const ACTIVITY_LOG_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
+const CHAT_MESSAGE_ROLES = new Set(["user", "assistant", "system"]);
+const DEFAULT_SENSOR_THRESHOLD_CONFIG = {
+	temperatureMin: 25,
+	temperatureMax: 35,
+	temperatureDangerMin: 20,
+	temperatureDangerMax: 40,
+	humidityMin: 60,
+	humidityMax: 80,
+	lightMin: null,
+	lightMax: 500,
+	gasMax: 300,
+};
+let sensorThresholdConfig = { ...DEFAULT_SENSOR_THRESHOLD_CONFIG };
+
+const ACTIVITY_SEVERITY_PRIORITY = {
+	danger: 4,
+	alert: 4,
+	warning: 3,
+	success: 2,
+	info: 1,
+	neutral: 0,
+};
+
+const ACTIVITY_SEVERITIES = new Set([
+	"info",
+	"success",
+	"neutral",
+	"warning",
+	"danger",
+	"alert",
+]);
+
+const DEVICE_TARGET_LABELS = {
+	main_led: "LED living room",
+	neo_led: "LED bedroom",
+	ws2812: "LED toilet",
+	mini_fan: "Fan living room",
+	relay: "TV",
+	device_0001: "Yolo Uno",
+	system: "System",
+};
 
 const DEFAULT_MODEL_SETTINGS = {
 	provider: "openrouter",
@@ -161,6 +211,18 @@ const parseTelemetryLimit = (value, fallback = 300) => {
 	return Math.min(Math.max(Math.trunc(parsed), 1), MAX_TELEMETRY_LIMIT);
 };
 
+const parseActivityLimit = (value, fallback = DEFAULT_ACTIVITY_LOG_LIMIT) => {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.min(Math.max(Math.trunc(parsed), 1), MAX_ACTIVITY_LOG_LIMIT);
+};
+
+const parseActivityPage = (value) => {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return 1;
+	return Math.max(Math.trunc(parsed), 1);
+};
+
 const floorToTelemetryBucket = (value) => {
 	const date = toValidDate(value);
 	if (!date) return null;
@@ -189,6 +251,69 @@ const toNullableNumber = (value) => {
 	return Number.isFinite(parsed) ? parsed : null;
 };
 
+const envNumber = (envValues, keys, fallback = null) => {
+	for (const key of keys) {
+		const parsed = toNullableNumber(firstPresent(process.env[key], envValues[key]));
+		if (parsed !== null) return parsed;
+	}
+	return fallback;
+};
+
+const normalizeRange = (min, max) => {
+	if (min !== null && max !== null && min > max) {
+		return { min: max, max: min };
+	}
+	return { min, max };
+};
+
+const buildSensorThresholdConfig = (envValues = {}) => {
+	const temperature = normalizeRange(
+		envNumber(envValues, ["NORMAL_TEMP_MIN"], DEFAULT_SENSOR_THRESHOLD_CONFIG.temperatureMin),
+		envNumber(envValues, ["NORMAL_TEMP_MAX"], DEFAULT_SENSOR_THRESHOLD_CONFIG.temperatureMax),
+	);
+	const humidity = normalizeRange(
+		envNumber(envValues, ["NORMAL_HUMI_MIN", "NORMAL_HUMIDITY_MIN"], DEFAULT_SENSOR_THRESHOLD_CONFIG.humidityMin),
+		envNumber(envValues, ["NORMAL_HUMI_MAX", "NORMAL_HUMIDITY_MAX"], DEFAULT_SENSOR_THRESHOLD_CONFIG.humidityMax),
+	);
+	const light = normalizeRange(
+		envNumber(envValues, ["NORMAL_LIGHT_MIN", "LIGHT_MIN", "SIM_LIGHT_MIN"], DEFAULT_SENSOR_THRESHOLD_CONFIG.lightMin),
+		envNumber(envValues, ["NORMAL_LIGHT_MAX", "LIGHT_MAX", "SIM_LIGHT_MAX"], DEFAULT_SENSOR_THRESHOLD_CONFIG.lightMax),
+	);
+
+	return {
+		temperatureMin: temperature.min,
+		temperatureMax: temperature.max,
+		temperatureDangerMin: envNumber(
+			envValues,
+			["NORMAL_TEMP_DANGER_MIN", "TEMP_DANGER_MIN", "CRITICAL_TEMP_MIN"],
+			temperature.min === null ? DEFAULT_SENSOR_THRESHOLD_CONFIG.temperatureDangerMin : temperature.min - 5,
+		),
+		temperatureDangerMax: envNumber(
+			envValues,
+			["NORMAL_TEMP_DANGER_MAX", "TEMP_DANGER_MAX", "CRITICAL_TEMP_MAX"],
+			temperature.max === null ? DEFAULT_SENSOR_THRESHOLD_CONFIG.temperatureDangerMax : temperature.max + 5,
+		),
+		humidityMin: humidity.min,
+		humidityMax: humidity.max,
+		lightMin: light.min,
+		lightMax: light.max,
+		gasMax: envNumber(
+			envValues,
+			["NORMAL_GAS_MAX", "GAS_MAX", "SIM_GAS_DETECTED_THRESHOLD"],
+			DEFAULT_SENSOR_THRESHOLD_CONFIG.gasMax,
+		),
+	};
+};
+
+const loadSensorThresholdConfig = async () => {
+	try {
+		const envContent = await fs.readFile(ENV_PATH, "utf8");
+		sensorThresholdConfig = buildSensorThresholdConfig(parseEnv(envContent));
+	} catch {
+		sensorThresholdConfig = buildSensorThresholdConfig();
+	}
+};
+
 const toNullableBoolean = (value) => {
 	const scalar = scalarValue(value);
 	if (typeof scalar === "boolean") return scalar;
@@ -205,6 +330,570 @@ const toNullableBoolean = (value) => {
 };
 
 const asObject = (value) => (isPlainObject(value) ? value : {});
+
+const cleanString = (value, fallback = "") => {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed || fallback;
+	}
+	if (value === undefined || value === null) return fallback;
+	const coerced = String(value).trim();
+	return coerced || fallback;
+};
+
+const cleanLowerString = (value, fallback = "") =>
+	cleanString(value, fallback).toLowerCase();
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const parseDelimitedQueryValues = (...values) => {
+	const rawValues = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
+	const parsed = [];
+
+	for (const rawValue of rawValues) {
+		const value = cleanString(rawValue);
+		if (!value) continue;
+		parsed.push(...value.split(",").map((item) => cleanString(item)).filter(Boolean));
+	}
+
+	return [...new Set(parsed)];
+};
+
+const getClientIp = (req) => {
+	const forwarded = req.headers["x-forwarded-for"];
+	if (typeof forwarded === "string" && forwarded.trim()) {
+		return forwarded.split(",")[0].trim();
+	}
+	return req.socket?.remoteAddress || "unknown";
+};
+
+const normalizeActivitySeverity = (value, eventType = "system") => {
+	const severity = cleanLowerString(value);
+	if (ACTIVITY_SEVERITIES.has(severity)) {
+		return severity === "alert" ? "danger" : severity;
+	}
+	if (eventType === "threshold" || eventType === "security") return "warning";
+	if (eventType === "control") return "success";
+	return "info";
+};
+
+const activityPriority = (severity) => ACTIVITY_SEVERITY_PRIORITY[severity] ?? 0;
+
+const activityLogDocToPayload = (doc = {}) => {
+	const createdAt = toValidDate(doc.created_at) || new Date();
+	return {
+		id: doc.log_id || String(doc._id || ""),
+		log_id: doc.log_id || String(doc._id || ""),
+		user_id: doc.user_id || "",
+		user_name: doc.user_name || "",
+		env_id: doc.env_id || DEFAULT_ENV_ID,
+		device_id: doc.device_id || DEFAULT_DEVICE_ID,
+		target_id: doc.target_id || "",
+		device_name: doc.device_name || "",
+		room: doc.room || "",
+		event_type: doc.event_type || "system",
+		trigger_source: doc.trigger_source || "system",
+		severity: doc.severity || doc.status || "info",
+		status: doc.status || doc.severity || "info",
+		priority: doc.priority ?? activityPriority(doc.severity || doc.status),
+		action: doc.action || "",
+		message: doc.message || doc.response_text || "",
+		response_text: doc.response_text || doc.message || "",
+		actor_type: doc.actor_type || "",
+		actor_name: doc.actor_name || doc.user_name || "",
+		old_value: doc.old_value ?? null,
+		new_value: doc.new_value ?? null,
+		details: doc.details || {},
+		metadata: doc.metadata || {},
+		show_on_sidebar: doc.show_on_sidebar !== false,
+		created_at: createdAt.toISOString(),
+		createdAt: createdAt.toISOString(),
+		created_at_vn: toVnTimestamp(createdAt),
+		timestamp: createdAt.getTime(),
+	};
+};
+
+const resolveUserName = async (userId, fallback = "") => {
+	if (!userId || userId === "system" || userId === "anonymous") {
+		return fallback;
+	}
+	try {
+		const user = await usersCollection?.findOne({ user_id: userId });
+		return user?.full_name || fallback;
+	} catch {
+		return fallback;
+	}
+};
+
+const buildActivityLogDocument = async (payload = {}, req = null) => {
+	const eventType = cleanLowerString(payload.event_type ?? payload.eventType, "system");
+	const triggerSource = cleanLowerString(
+		payload.trigger_source ?? payload.triggerSource,
+		"system",
+	);
+	const severity = normalizeActivitySeverity(payload.severity ?? payload.status, eventType);
+	const createdAt =
+		toValidDate(payload.created_at ?? payload.createdAt ?? payload.timestamp) ||
+		new Date();
+	const userId = cleanString(payload.user_id ?? payload.userId, "system");
+	const fallbackActor =
+		triggerSource === "hera_assistant"
+			? "H.E.R.A Assistant"
+			: triggerSource === "automation"
+				? "H.E.R.A Auto"
+				: userId;
+	const actorName =
+		cleanString(
+			payload.actor_name ??
+				payload.actorName ??
+				payload.user_name ??
+				payload.userName,
+		) ||
+		(await resolveUserName(userId, fallbackActor)) ||
+		fallbackActor;
+	const targetId = cleanString(payload.target_id ?? payload.targetId, "");
+	const deviceName =
+		cleanString(payload.device_name ?? payload.deviceName, "") ||
+		DEVICE_TARGET_LABELS[targetId] ||
+		DEVICE_TARGET_LABELS[payload.device_id] ||
+		DEVICE_TARGET_LABELS[DEFAULT_DEVICE_ID];
+	const message = cleanString(
+		payload.message ?? payload.response_text ?? payload.responseText,
+		"System event recorded.",
+	);
+	const details = asObject(payload.details);
+	const metadata = {
+		...asObject(payload.metadata),
+		...(req
+			? {
+					client_ip: getClientIp(req),
+				}
+			: {}),
+	};
+
+	return {
+		log_id:
+			cleanString(payload.log_id ?? payload.logId) ||
+			`log_${createdAt.getTime()}_${Math.random().toString(36).slice(2, 10)}`,
+		user_id: userId,
+		user_name: cleanString(payload.user_name ?? payload.userName, actorName),
+		env_id: cleanString(payload.env_id ?? payload.envId, DEFAULT_ENV_ID),
+		device_id: cleanString(payload.device_id ?? payload.deviceId, DEFAULT_DEVICE_ID),
+		target_id: targetId,
+		device_name: deviceName,
+		room: cleanString(payload.room, "Main Room"),
+		event_type: eventType,
+		trigger_source: triggerSource,
+		severity,
+		status: severity,
+		priority: activityPriority(severity),
+		action: cleanString(payload.action, eventType),
+		message,
+		response_text: message,
+		actor_type: cleanLowerString(payload.actor_type ?? payload.actorType, "system"),
+		actor_name: actorName,
+		old_value: payload.old_value ?? payload.oldValue ?? details.old_value ?? null,
+		new_value: payload.new_value ?? payload.newValue ?? details.new_value ?? null,
+		details,
+		metadata,
+		show_on_sidebar: payload.show_on_sidebar ?? payload.showOnSidebar ?? true,
+		dedupe_key: cleanString(payload.dedupe_key ?? payload.dedupeKey, ""),
+		created_at: createdAt,
+		updated_at: new Date(),
+	};
+};
+
+const createActivityLog = async (payload, options = {}) => {
+	if (!activityLogsCollection) return null;
+	const doc = await buildActivityLogDocument(payload, options.req || null);
+
+	if (doc.dedupe_key) {
+		await activityLogsCollection.updateOne(
+			{ dedupe_key: doc.dedupe_key },
+			{ $setOnInsert: doc },
+			{ upsert: true },
+		);
+		return activityLogsCollection.findOne({ dedupe_key: doc.dedupe_key });
+	}
+
+	await activityLogsCollection.insertOne(doc);
+	return doc;
+};
+
+const safeCreateActivityLog = async (payload, options = {}) => {
+	try {
+		return await createActivityLog(payload, options);
+	} catch (err) {
+		console.error("Failed to record activity log:", err);
+		return null;
+	}
+};
+
+const normalizeChatRole = (value, fallback = "user") => {
+	const role = cleanLowerString(value, fallback);
+	return CHAT_MESSAGE_ROLES.has(role) ? role : fallback;
+};
+
+const buildChatMessageDocument = (payload = {}, fallbackRole = "user") => {
+	const text = cleanString(payload.text ?? payload.content ?? payload.message);
+	if (!text) return null;
+
+	const createdAt =
+		toValidDate(payload.created_at ?? payload.createdAt ?? payload.timestamp) ||
+		new Date();
+
+	return {
+		message_id:
+			cleanString(payload.message_id ?? payload.messageId) ||
+			`msg_${createdAt.getTime()}_${Math.random().toString(36).slice(2, 10)}`,
+		role: normalizeChatRole(payload.role, fallbackRole),
+		text,
+		created_at: createdAt,
+		metadata: asObject(payload.metadata),
+	};
+};
+
+const chatMessageDocToPayload = (doc = {}) => {
+	const createdAt = toValidDate(doc.created_at) || new Date();
+	return {
+		message_id: doc.message_id || "",
+		role: normalizeChatRole(doc.role),
+		text: doc.text || "",
+		created_at: createdAt.toISOString(),
+		createdAt: createdAt.toISOString(),
+		created_at_vn: toVnTimestamp(createdAt),
+		timestamp: createdAt.getTime(),
+		metadata: doc.metadata || {},
+	};
+};
+
+const interactionSessionDocToPayload = (doc = {}) => {
+	const startDate = toValidDate(doc.start_date) || new Date();
+	const latestUpdate = toValidDate(doc.latest_update) || startDate;
+	return {
+		chat_id: doc.chat_id || "",
+		user_id: doc.user_id || "",
+		user_name: doc.user_name || "",
+		model_name: doc.model_name || DEFAULT_CHAT_MODEL_NAME,
+		env_id: doc.env_id || DEFAULT_ENV_ID,
+		start_date: startDate.toISOString(),
+		startDate: startDate.toISOString(),
+		latest_update: latestUpdate.toISOString(),
+		latestUpdate: latestUpdate.toISOString(),
+		ended_at: doc.ended_at ? toValidDate(doc.ended_at)?.toISOString() || null : null,
+		messages: Array.isArray(doc.messages)
+			? doc.messages.map(chatMessageDocToPayload)
+			: [],
+	};
+};
+
+const appendInteractionMessages = async (payload = {}) => {
+	if (!interactionSessionsCollection) {
+		throw new Error("interaction_sessions collection is not ready");
+	}
+
+	const chatId = cleanString(payload.chat_id ?? payload.chatId);
+	const userId = cleanString(payload.user_id ?? payload.userId);
+	if (!chatId || !userId) {
+		const error = new Error("chat_id and user_id are required");
+		error.statusCode = 400;
+		throw error;
+	}
+
+	const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
+	const messages = rawMessages
+		.map((message, index) =>
+			buildChatMessageDocument(
+				message,
+				index % 2 === 0 ? "user" : "assistant",
+			),
+		)
+		.filter(Boolean);
+
+	if (messages.length === 0) {
+		const error = new Error("messages are required");
+		error.statusCode = 400;
+		throw error;
+	}
+
+	const now = new Date();
+	const latestUpdate = messages[messages.length - 1]?.created_at || now;
+	const firstUserText =
+		messages.find((message) => message.role === "user")?.text ||
+		messages[0]?.text ||
+		"";
+	const sessionFields = {
+		user_name: cleanString(payload.user_name ?? payload.userName),
+		model_name: cleanString(
+			payload.model_name ?? payload.modelName,
+			DEFAULT_CHAT_MODEL_NAME,
+		),
+		env_id: cleanString(payload.env_id ?? payload.envId, DEFAULT_ENV_ID),
+	};
+
+	const update = {
+		$set: {
+			...sessionFields,
+			latest_update: latestUpdate,
+			ended_at: null,
+		},
+		$push: { messages: { $each: messages } },
+	};
+
+	const result = await interactionSessionsCollection.updateOne(
+		{ chat_id: chatId, user_id: userId },
+		update,
+	);
+
+	if (result.matchedCount === 0) {
+		try {
+			await interactionSessionsCollection.insertOne({
+				chat_id: chatId,
+				user_id: userId,
+				...sessionFields,
+				start_date: now,
+				latest_update: latestUpdate,
+				ended_at: null,
+				input_text: firstUserText,
+				messages,
+			});
+		} catch (err) {
+			if (err?.code !== 11000) throw err;
+			await interactionSessionsCollection.updateOne(
+				{ chat_id: chatId, user_id: userId },
+				update,
+			);
+		}
+	}
+
+	return interactionSessionsCollection.findOne({ chat_id: chatId, user_id: userId });
+};
+
+const buildActivityLogFilter = (query = {}) => {
+	const filter = {};
+	const surface = cleanLowerString(query.surface, "audit");
+	const userId = cleanString(query.user_id ?? query.userId);
+	const excludedLogIds = parseDelimitedQueryValues(
+		query.exclude_ids,
+		query.excludeIds,
+		query.exclude_log_ids,
+		query.excludeLogIds,
+	).slice(0, MAX_ACTIVITY_EXCLUDE_IDS);
+
+	if (userId) {
+		filter.$or = [
+			{ user_id: userId },
+			{ user_id: "system" },
+			{ user_id: "anonymous" },
+		];
+	}
+
+	if (surface === "sidebar") {
+		filter.show_on_sidebar = { $ne: false };
+	}
+
+	if (excludedLogIds.length > 0) {
+		filter.log_id = { $nin: excludedLogIds };
+	}
+
+	for (const [queryKey, field] of [
+		["event_type", "event_type"],
+		["eventType", "event_type"],
+		["severity", "severity"],
+		["trigger_source", "trigger_source"],
+		["triggerSource", "trigger_source"],
+		["device_id", "device_id"],
+		["deviceId", "device_id"],
+		["target_id", "target_id"],
+		["targetId", "target_id"],
+		["room", "room"],
+	]) {
+		const value = cleanString(query[queryKey]);
+		if (value && value !== "all") {
+			filter[field] = queryKey.includes("severity") ? value.toLowerCase() : value;
+		}
+	}
+
+	const fromValue = query.from ?? query.start ?? query.since;
+	const toValue = query.to ?? query.end ?? query.until;
+	const from = parseDateQuery(fromValue);
+	const to = parseDateQuery(toValue);
+	const createdAtRange = {};
+	if (from) createdAtRange.$gte = from;
+	if (to) createdAtRange.$lte = to;
+	if (Object.keys(createdAtRange).length) {
+		filter.created_at = createdAtRange;
+	}
+
+	const search = cleanString(query.search ?? query.q);
+	if (search) {
+		const regex = new RegExp(escapeRegex(search), "i");
+		const searchOr = [
+			{ message: regex },
+			{ response_text: regex },
+			{ device_name: regex },
+			{ actor_name: regex },
+		];
+		if (filter.$or) {
+			filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+			delete filter.$or;
+		} else {
+			filter.$or = searchOr;
+		}
+	}
+
+	return filter;
+};
+
+const createThresholdLogsFromTelemetry = async (telemetry, { userId, deviceId }) => {
+	if (!activityLogsCollection || !telemetry) return [];
+
+	const sensors = telemetry.sensors || {};
+	const temperature = sensors.dht20?.temperature ?? sensors.temperature;
+	const humidity = sensors.dht20?.humidity ?? sensors.humidity;
+	const light = sensors.light?.value ?? sensors.light;
+	const gasValue = sensors.gas?.value ?? sensors.gas;
+	const gasDetected = sensors.gas?.detected ?? sensors.gas_detected;
+	const temperatureValue = toNullableNumber(temperature);
+	const humidityValue = toNullableNumber(humidity);
+	const lightValue = toNullableNumber(light);
+	const gasNumericValue = toNullableNumber(gasValue);
+	const timestamp = Number(telemetry.timestamp) || Date.now();
+	const bucket = Math.floor(timestamp / ACTIVITY_LOG_DEDUPE_WINDOW_MS);
+	const logUserId = userId || telemetry.metadata?.user_id || "system";
+	const thresholds = sensorThresholdConfig;
+	const logs = [];
+
+	const pushThreshold = ({
+		sensor,
+		value,
+		threshold,
+		unit,
+		severity,
+		message,
+		comparison,
+	}) => {
+		if (value === null || value === undefined) return;
+		logs.push(
+			safeCreateActivityLog({
+				user_id: logUserId,
+				env_id: telemetry.metadata?.env_id || DEFAULT_ENV_ID,
+				device_id: deviceId || telemetry.metadata?.device_id || DEFAULT_DEVICE_ID,
+				target_id: sensor,
+				device_name: DEVICE_TARGET_LABELS[deviceId] || "Yolo Uno",
+				room: "Living Room",
+				event_type: "threshold",
+				trigger_source: "automation",
+				severity,
+				action: "Threshold Exceeded",
+				message,
+				actor_type: "automation",
+				actor_name: "H.E.R.A Auto",
+				new_value: value,
+				details: { sensor, value, threshold, unit, comparison },
+				show_on_sidebar: true,
+				dedupe_key: `${logUserId}:${deviceId || DEFAULT_DEVICE_ID}:threshold:${sensor}:${severity}:${bucket}`,
+				created_at: new Date(timestamp),
+			}),
+		);
+	};
+
+	if (temperatureValue !== null && thresholds.temperatureMax !== null && temperatureValue > thresholds.temperatureMax) {
+		const dangerThreshold = thresholds.temperatureDangerMax ?? thresholds.temperatureMax;
+		const severity = temperatureValue >= dangerThreshold ? "danger" : "warning";
+		const threshold = severity === "danger" ? dangerThreshold : thresholds.temperatureMax;
+		pushThreshold({
+			sensor: "temperature",
+			value: temperatureValue,
+			threshold,
+			unit: "C",
+			severity,
+			comparison: "above",
+			message: `Temperature in Living Room exceeded ${threshold}C (${temperatureValue.toFixed(1)}C).`,
+		});
+	}
+
+	if (temperatureValue !== null && thresholds.temperatureMin !== null && temperatureValue < thresholds.temperatureMin) {
+		const dangerThreshold = thresholds.temperatureDangerMin ?? thresholds.temperatureMin;
+		const severity = temperatureValue <= dangerThreshold ? "danger" : "warning";
+		const threshold = severity === "danger" ? dangerThreshold : thresholds.temperatureMin;
+		pushThreshold({
+			sensor: "temperature",
+			value: temperatureValue,
+			threshold,
+			unit: "C",
+			severity,
+			comparison: "below",
+			message: `Temperature in Living Room dropped below ${threshold}C (${temperatureValue.toFixed(1)}C).`,
+		});
+	}
+
+	if (humidityValue !== null && thresholds.humidityMax !== null && humidityValue > thresholds.humidityMax) {
+		pushThreshold({
+			sensor: "humidity",
+			value: humidityValue,
+			threshold: thresholds.humidityMax,
+			unit: "%",
+			severity: "warning",
+			comparison: "above",
+			message: `Humidity in Living Room exceeded ${thresholds.humidityMax}% (${humidityValue.toFixed(1)}%).`,
+		});
+	}
+
+	if (humidityValue !== null && thresholds.humidityMin !== null && humidityValue < thresholds.humidityMin) {
+		pushThreshold({
+			sensor: "humidity",
+			value: humidityValue,
+			threshold: thresholds.humidityMin,
+			unit: "%",
+			severity: "warning",
+			comparison: "below",
+			message: `Humidity in Living Room dropped below ${thresholds.humidityMin}% (${humidityValue.toFixed(1)}%).`,
+		});
+	}
+
+	if (lightValue !== null && thresholds.lightMax !== null && lightValue > thresholds.lightMax) {
+		pushThreshold({
+			sensor: "light",
+			value: lightValue,
+			threshold: thresholds.lightMax,
+			unit: "lux",
+			severity: "warning",
+			comparison: "above",
+			message: `Ambient light in Living Room exceeded ${thresholds.lightMax} lux (${lightValue.toFixed(0)} lux).`,
+		});
+	}
+
+	if (lightValue !== null && thresholds.lightMin !== null && lightValue < thresholds.lightMin) {
+		pushThreshold({
+			sensor: "light",
+			value: lightValue,
+			threshold: thresholds.lightMin,
+			unit: "lux",
+			severity: "warning",
+			comparison: "below",
+			message: `Ambient light in Living Room dropped below ${thresholds.lightMin} lux (${lightValue.toFixed(0)} lux).`,
+		});
+	}
+
+	if (gasDetected === true || (gasNumericValue !== null && gasNumericValue >= thresholds.gasMax)) {
+		const value = gasDetected === true ? "detected" : gasNumericValue;
+		pushThreshold({
+			sensor: "gas",
+			value,
+			threshold: thresholds.gasMax,
+			unit: "ppm",
+			severity: "danger",
+			comparison: "above",
+			message:
+				gasDetected === true
+					? "Gas leak signal detected in Living Room."
+					: `Gas level in Living Room reached ${gasNumericValue.toFixed(0)} ppm.`,
+		});
+	}
+
+	return Promise.all(logs);
+};
 
 const normalizeTelemetrySensors = (doc = {}) => {
 	const sensors = asObject(doc.sensors);
@@ -492,12 +1181,129 @@ const getModelSettings = async () => {
 };
 
 async function start() {
+	await loadSensorThresholdConfig();
 	await client.connect();
 	const db = client.db(MONGODB_DB);
 	collection = db.collection("telemetry_points");
 	usersCollection = db.collection("users");
 	modelSettingsCollection = db.collection("model_settings");
 	devicesCollection = db.collection("devices"); // Init thiết bị
+	activityLogsCollection = db.collection("activity_logs");
+	interactionSessionsCollection = db.collection("interaction_sessions");
+
+	await Promise.all([
+		interactionSessionsCollection.createIndex({ chat_id: 1, user_id: 1 }),
+		interactionSessionsCollection.createIndex({ user_id: 1 }),
+		interactionSessionsCollection.createIndex({ env_id: 1 }),
+		interactionSessionsCollection.createIndex({ user_id: 1, latest_update: -1 }),
+		activityLogsCollection.createIndex({ created_at: -1 }),
+		activityLogsCollection.createIndex({ user_id: 1, created_at: -1 }),
+		activityLogsCollection.createIndex({ event_type: 1, created_at: -1 }),
+		activityLogsCollection.createIndex({ severity: 1, created_at: -1 }),
+		activityLogsCollection.createIndex({ trigger_source: 1, created_at: -1 }),
+		activityLogsCollection.createIndex({ show_on_sidebar: 1, priority: -1, created_at: -1 }),
+		activityLogsCollection.createIndex(
+			{ dedupe_key: 1 },
+			{ unique: true, partialFilterExpression: { dedupe_key: { $exists: true, $gt: "" } } },
+		),
+	]);
+
+	app.get("/api/activity-logs", async (req, res) => {
+		try {
+			const surface = cleanLowerString(req.query.surface, "audit");
+			const page = parseActivityPage(req.query.page);
+			const pageSize = parseActivityLimit(req.query.page_size ?? req.query.pageSize ?? req.query.limit);
+			const skip = surface === "sidebar" ? 0 : (page - 1) * pageSize;
+			const filter = buildActivityLogFilter(req.query);
+			const sort =
+				surface === "sidebar"
+					? { created_at: -1, priority: -1 }
+					: { created_at: -1 };
+
+			const [docs, total] = await Promise.all([
+				activityLogsCollection
+					.find(filter, { projection: { _id: 0 } })
+					.sort(sort)
+					.skip(skip)
+					.limit(pageSize)
+					.toArray(),
+				activityLogsCollection.countDocuments(filter),
+			]);
+
+			res.json({
+				items: docs.map(activityLogDocToPayload),
+				total,
+				page,
+				pageSize,
+			});
+		} catch (err) {
+			console.error(err);
+			res.status(500).json({ error: "Failed to fetch activity logs" });
+		}
+	});
+
+	app.post("/api/activity-logs", async (req, res) => {
+		try {
+			const payload = req.body || {};
+			if (!payload.message && !payload.response_text && !payload.responseText) {
+				return res.status(400).json({ error: "message is required" });
+			}
+
+			const doc = await createActivityLog(payload, { req });
+			res.status(201).json({
+				success: true,
+				log: activityLogDocToPayload(doc),
+			});
+		} catch (err) {
+			if (err?.code === 11000) {
+				return res.status(409).json({ error: "Activity log already exists" });
+			}
+			console.error(err);
+			res.status(500).json({ error: "Failed to create activity log" });
+		}
+	});
+
+	app.get("/api/interaction-sessions/:chatId", async (req, res) => {
+		try {
+			const chatId = cleanString(req.params.chatId);
+			const userId = cleanString(req.query.user_id ?? req.query.userId);
+			if (!chatId || !userId) {
+				return res.status(400).json({ error: "chat_id and user_id are required" });
+			}
+
+			const doc = await interactionSessionsCollection.findOne(
+				{ chat_id: chatId, user_id: userId },
+				{ projection: { _id: 0 } },
+			);
+
+			if (!doc) {
+				return res.json({ session: null, messages: [] });
+			}
+
+			const session = interactionSessionDocToPayload(doc);
+			res.json({ session, messages: session.messages });
+		} catch (err) {
+			console.error(err);
+			res.status(500).json({ error: "Failed to fetch interaction session" });
+		}
+	});
+
+	app.post("/api/interaction-sessions/messages", async (req, res) => {
+		try {
+			const doc = await appendInteractionMessages(req.body || {});
+			const session = interactionSessionDocToPayload(doc);
+			res.status(201).json({
+				success: true,
+				session,
+				messages: session.messages,
+			});
+		} catch (err) {
+			console.error(err);
+			res
+				.status(err.statusCode || 500)
+				.json({ error: err.message || "Failed to save interaction session" });
+		}
+	});
 
 	app.post("/api/auth/login", async (req, res) => {
 		try {
@@ -513,8 +1319,57 @@ async function start() {
 			});
 
 			if (!user) {
+				await safeCreateActivityLog(
+					{
+						user_id: "anonymous",
+						env_id: DEFAULT_ENV_ID,
+						device_id: DEFAULT_DEVICE_ID,
+						target_id: "system",
+						device_name: "System",
+						room: "Security",
+						event_type: "security",
+						trigger_source: "auth",
+						severity: "warning",
+						action: "Login Failed",
+						message: `Login failed for ${email}.`,
+						actor_type: "unknown",
+						actor_name: "Unknown IP",
+						details: {
+							email,
+							reason: "invalid_credentials",
+							ip: getClientIp(req),
+						},
+						show_on_sidebar: true,
+					},
+					{ req },
+				);
 				return res.status(401).json({ error: "Invalid email or password" });
 			}
+
+			await safeCreateActivityLog(
+				{
+					user_id: user.user_id,
+					user_name: user.full_name,
+					env_id: DEFAULT_ENV_ID,
+					device_id: DEFAULT_DEVICE_ID,
+					target_id: "system",
+					device_name: "System",
+					room: "Security",
+					event_type: "security",
+					trigger_source: "auth",
+					severity: "info",
+					action: "Login Success",
+					message: `${user.full_name} signed in.`,
+					actor_type: "user",
+					actor_name: user.full_name,
+					details: {
+						email,
+						ip: getClientIp(req),
+					},
+					show_on_sidebar: false,
+				},
+				{ req },
+			);
 
 			return res.json({
 				success: true,
@@ -542,6 +1397,22 @@ async function start() {
                 { $set: { current_user_id: user_id } },
                 { upsert: true }
             );
+			await safeCreateActivityLog({
+				user_id,
+				env_id: DEFAULT_ENV_ID,
+				device_id,
+				target_id: device_id,
+				device_name: DEVICE_TARGET_LABELS[device_id] || device_id,
+				room: "Main Room",
+				event_type: "system",
+				trigger_source: "web_dashboard",
+				severity: "info",
+				action: "Device Claimed",
+				message: `Device ${device_id} is now assigned to ${user_id}.`,
+				actor_type: "user",
+				details: { device_id, user_id },
+				show_on_sidebar: false,
+			});
             res.json({ success: true, message: `Device ${device_id} is now claimed by ${user_id}` });
         } catch (err) {
             console.error(err);
@@ -599,7 +1470,9 @@ async function start() {
 				return res.status(404).json({ error: "No sensor data found for this user" });
 			}
 
-			res.json(telemetryDocToPayload(docs[0]));
+			const payload = telemetryDocToPayload(docs[0]);
+			await createThresholdLogsFromTelemetry(payload, { userId, deviceId });
+			res.json(payload);
 		} catch (err) {
 			console.error(err);
 			res.status(500).json({ error: "Failed to fetch latest sensor data" });
@@ -635,6 +1508,7 @@ async function start() {
 				}
 
 				lastTimestamp = payload.timestamp;
+				await createThresholdLogsFromTelemetry(payload, { userId, deviceId });
 				res.write(`event: telemetry\n`);
 				res.write(`data: ${JSON.stringify(payload)}\n\n`);
 			} catch (err) {
@@ -684,6 +1558,27 @@ async function start() {
 			console.log(
 				`${color}[ModelSettings] Switched to provider: ${providerText}${ANSI.reset}`,
 			);
+			await safeCreateActivityLog({
+				user_id: "system",
+				env_id: DEFAULT_ENV_ID,
+				device_id: DEFAULT_DEVICE_ID,
+				target_id: "model_settings",
+				device_name: "Model Settings",
+				room: "System",
+				event_type: "system",
+				trigger_source: "web_dashboard",
+				severity: providerChanged ? "warning" : "info",
+				action: providerChanged ? "Provider Changed" : "Model Settings Updated",
+				message: providerChanged
+					? `LLM provider changed from ${before.provider} to ${mergedPayload.provider}.`
+					: "Model settings were updated.",
+				actor_type: "user",
+				details: {
+					before_provider: before.provider,
+					after_provider: mergedPayload.provider,
+				},
+				show_on_sidebar: providerChanged,
+			});
 			res.json({
 				success: true,
 				settings: await getModelSettings(),

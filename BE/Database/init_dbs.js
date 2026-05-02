@@ -83,11 +83,12 @@ db.createCollection("interaction_sessions", {
 				"env_id",
 				"start_date",
 				"latest_update",
-				"input_text",
+				"messages",
 			],
 			properties: {
 				chat_id: { bsonType: "string", description: "Primary Key" },
 				user_id: { bsonType: "string", description: "Foreign Key -> users" },
+				user_name: { bsonType: "string" },
 				model_name: {
 					bsonType: "string",
 					description: "Foreign Key -> ai_models",
@@ -98,7 +99,22 @@ db.createCollection("interaction_sessions", {
 				},
 				start_date: { bsonType: "date" },
 				latest_update: { bsonType: "date" },
+				ended_at: { bsonType: ["date", "null"] },
 				input_text: { bsonType: "string" },
+				messages: {
+					bsonType: "array",
+					items: {
+						bsonType: "object",
+						required: ["role", "text", "created_at"],
+						properties: {
+							message_id: { bsonType: "string" },
+							role: { enum: ["user", "assistant", "system"] },
+							text: { bsonType: "string" },
+							created_at: { bsonType: "date" },
+							metadata: { bsonType: "object" },
+						},
+					},
+				},
 			},
 		},
 	},
@@ -116,21 +132,43 @@ db.createCollection("activity_logs", {
 				"event_type",
 				"trigger_source",
 				"response_text",
+				"message",
+				"severity",
+				"created_at",
 			],
 			properties: {
 				log_id: { bsonType: "string", description: "Primary Key" },
 				user_id: { bsonType: "string", description: "Foreign Key -> users" },
+				user_name: { bsonType: "string" },
 				env_id: {
 					bsonType: "string",
 					description: "Foreign Key -> environments",
 				},
 				device_id: {
 					bsonType: "string",
-					description: "Foreign Key -> devices",
+					description: "Foreign Key -> physical device/board",
 				},
+				target_id: { bsonType: "string", description: "Logical device/sensor target" },
+				device_name: { bsonType: "string" },
+				room: { bsonType: "string" },
 				event_type: { bsonType: "string" },
 				trigger_source: { bsonType: "string" },
+				severity: { bsonType: "string" },
+				status: { bsonType: "string" },
+				priority: { bsonType: ["int", "double"] },
+				action: { bsonType: "string" },
+				message: { bsonType: "string" },
 				response_text: { bsonType: "string" },
+				actor_type: { bsonType: "string" },
+				actor_name: { bsonType: "string" },
+				old_value: {},
+				new_value: {},
+				details: { bsonType: "object" },
+				metadata: { bsonType: "object" },
+				show_on_sidebar: { bsonType: "bool" },
+				dedupe_key: { bsonType: "string" },
+				created_at: { bsonType: "date" },
+				updated_at: { bsonType: "date" },
 			},
 		},
 	},
@@ -146,10 +184,20 @@ db.createCollection("telemetry_points", {
 
 // Tạo Index cho các Foreign Keys để tăng tốc độ truy vấn
 db.devices.createIndex({ env_id: 1 });
+db.interaction_sessions.createIndex({ chat_id: 1 }, { unique: true });
 db.interaction_sessions.createIndex({ user_id: 1 });
 db.interaction_sessions.createIndex({ env_id: 1 });
+db.interaction_sessions.createIndex({ user_id: 1, latest_update: -1 });
 db.activity_logs.createIndex({ user_id: 1 });
 db.activity_logs.createIndex({ device_id: 1 });
+db.activity_logs.createIndex({ created_at: -1 });
+db.activity_logs.createIndex({ event_type: 1, created_at: -1 });
+db.activity_logs.createIndex({ severity: 1, created_at: -1 });
+db.activity_logs.createIndex({ show_on_sidebar: 1, priority: -1, created_at: -1 });
+db.activity_logs.createIndex(
+	{ dedupe_key: 1 },
+	{ unique: true, partialFilterExpression: { dedupe_key: { $exists: true, $gt: "" } } }
+);
 
 // Cập nhật index cho telemetry_points để query theo thiết bị và người dùng
 db.telemetry_points.createIndex({ "metadata.device_id": 1 });
