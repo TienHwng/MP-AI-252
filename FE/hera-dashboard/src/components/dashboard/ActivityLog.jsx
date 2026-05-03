@@ -68,6 +68,24 @@ const triggerLabels = {
   system: 'System',
 };
 
+const DEVICE_TARGET_LABELS = {
+  main_led: 'LED living room',
+  neo_led: 'LED bedroom',
+  ws2812: 'LED toilet',
+  mini_fan: 'Fan living room',
+  relay: 'TV',
+};
+
+const DEVICE_TARGET_ROOMS = {
+  main_led: 'Living Room',
+  neo_led: 'Bedroom',
+  ws2812: 'Toilet',
+  mini_fan: 'Living Room',
+  relay: 'Living Room',
+};
+
+const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const fullTimestamp = (value) => {
   if (!value) return '';
   return new Date(value).toLocaleString('vi-VN', {
@@ -122,6 +140,36 @@ const getLogTimestamp = (log = {}) => {
 };
 
 const getLogId = (log = {}) => log.id || log.logId || log.log_id || '';
+
+const getLogTargetId = (log = {}) =>
+  log.targetId ||
+  log.target_id ||
+  log.details?.targetId ||
+  log.details?.target_id ||
+  '';
+
+const getLogDeviceLabel = (log = {}) => {
+  const targetId = getLogTargetId(log);
+  return DEVICE_TARGET_LABELS[targetId] || log.deviceName || targetId;
+};
+
+const getLogRoom = (log = {}) => {
+  const targetId = getLogTargetId(log);
+  return log.room || DEVICE_TARGET_ROOMS[targetId] || '';
+};
+
+const getDisplayMessage = (log = {}) => {
+  const message = log.message || '';
+  const targetId = getLogTargetId(log);
+  const canonicalLabel = DEVICE_TARGET_LABELS[targetId];
+
+  if (!message || !canonicalLabel) return message;
+
+  return Object.values(DEVICE_TARGET_LABELS).reduce((text, label) => {
+    if (label === canonicalLabel) return text;
+    return text.replace(new RegExp(escapeRegExp(label), 'gi'), canonicalLabel);
+  }, message);
+};
 
 const getLogIdentity = (log = {}) =>
   getLogId(log) ||
@@ -290,6 +338,16 @@ const ActivityLog = () => {
               const styles = severityStyles[log.severity] || severityStyles.info;
               const Icon = getLogIcon(log);
               const source = triggerLabels[log.triggerSource] || log.triggerSource || 'System';
+              const displayMessage = getDisplayMessage(log);
+              const deviceLabel = getLogDeviceLabel(log);
+              const room = getLogRoom(log);
+              const metaItems = [
+                log.actorName || source,
+                source,
+                deviceLabel,
+                room,
+                relativeTime(log.createdAt),
+              ].filter((item, index, items) => item && items.indexOf(item) === index);
 
               return (
                 <article
@@ -305,14 +363,15 @@ const ActivityLog = () => {
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-sm font-medium leading-snug text-gray-800">
                         <span className={styles.text}>{log.action || log.eventType}</span>
-                        {log.message ? `: ${log.message}` : ''}
+                        {displayMessage ? `: ${displayMessage}` : ''}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
-                        <span className="max-w-full truncate">{log.actorName || source}</span>
-                        <span className="h-1 w-1 rounded-full bg-gray-300" />
-                        <span>{source}</span>
-                        <span className="h-1 w-1 rounded-full bg-gray-300" />
-                        <span>{relativeTime(log.createdAt)}</span>
+                        {metaItems.map((item, index) => (
+                          <React.Fragment key={`${log.renderKey}-meta-${item}`}>
+                            {index > 0 && <span className="h-1 w-1 rounded-full bg-gray-300" />}
+                            <span className="max-w-full truncate">{item}</span>
+                          </React.Fragment>
+                        ))}
                       </div>
                     </div>
                   </div>
