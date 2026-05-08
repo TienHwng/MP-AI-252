@@ -27,7 +27,7 @@ const COMMAND_CONFIRM_TIMEOUT_MS = 8_000;
 const markerDefinitions = [
   {
     id: 'ws2812',
-    name: 'LED toilet',
+    name: 'LED',
     type: 'light',
     room: 'Toilet',
     x: 85,
@@ -37,7 +37,7 @@ const markerDefinitions = [
   },
   {
     id: 'neo_led',
-    name: 'LED bedroom',
+    name: 'LED',
     type: 'light',
     room: 'Bedroom',
     x: 83,
@@ -47,7 +47,7 @@ const markerDefinitions = [
   },
   {
     id: 'main_led',
-    name: 'LED living room',
+    name: 'LED',
     type: 'light',
     room: 'Living Room',
     x: 46,
