@@ -68,6 +68,53 @@ const triggerLabels = {
   system: 'System',
 };
 
+const DEVICE_TARGET_LABELS = {
+  main_led: 'LED living room',
+  neo_led: 'LED bedroom',
+  ws2812: 'LED toilet',
+  mini_fan: 'Fan living room',
+  relay: 'TV',
+};
+
+const DEVICE_TARGET_ROOMS = {
+  main_led: 'Living Room',
+  neo_led: 'Bedroom',
+  ws2812: 'Toilet',
+  mini_fan: 'Living Room',
+  relay: 'Living Room',
+};
+
+const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const readEnvNumber = (keys, fallback) => {
+  const env = import.meta.env || {};
+
+  for (const key of keys) {
+    const value = env[key];
+    if (value === undefined || value === null || value === '') continue;
+
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
+};
+
+const SENSOR_THRESHOLDS = {
+  temperature: {
+    label: 'Temperature',
+    unit: '°C',
+    min: readEnvNumber(['VITE_NORMAL_TEMP_MIN', 'NORMAL_TEMP_MIN'], 25),
+    max: readEnvNumber(['VITE_NORMAL_TEMP_MAX', 'NORMAL_TEMP_MAX'], 35),
+  },
+  humidity: {
+    label: 'Humidity',
+    unit: '%',
+    min: readEnvNumber(['VITE_NORMAL_HUMI_MIN', 'VITE_NORMAL_HUMIDITY_MIN', 'NORMAL_HUMI_MIN', 'NORMAL_HUMIDITY_MIN'], 60),
+    max: readEnvNumber(['VITE_NORMAL_HUMI_MAX', 'VITE_NORMAL_HUMIDITY_MAX', 'NORMAL_HUMI_MAX', 'NORMAL_HUMIDITY_MAX'], 80),
+  },
+};
+
 const fullTimestamp = (value) => {
   if (!value) return '';
   return new Date(value).toLocaleString('vi-VN', {
@@ -122,6 +169,90 @@ const getLogTimestamp = (log = {}) => {
 };
 
 const getLogId = (log = {}) => log.id || log.logId || log.log_id || '';
+
+const toFiniteNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatThresholdNumber = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return String(value);
+  return Number.isInteger(parsed) ? String(parsed) : parsed.toFixed(1);
+};
+
+const formatThresholdValue = (value, unit = '') => `${formatThresholdNumber(value)}${unit}`;
+
+const getLogTargetId = (log = {}) =>
+  log.targetId ||
+  log.target_id ||
+  log.details?.targetId ||
+  log.details?.target_id ||
+  '';
+
+const getThresholdSensor = (log = {}) => {
+  const sensor = (log.details?.sensor || getLogTargetId(log) || '').toLowerCase();
+  if (['temperature', 'temp'].includes(sensor)) return 'temperature';
+  if (['humidity', 'humi'].includes(sensor)) return 'humidity';
+
+  const message = (log.message || '').toLowerCase();
+  if (message.includes('temperature')) return 'temperature';
+  if (message.includes('humidity')) return 'humidity';
+
+  return '';
+};
+
+const getLogDeviceLabel = (log = {}) => {
+  const thresholdSensor = log.eventType === 'threshold' ? getThresholdSensor(log) : '';
+  if (thresholdSensor) return SENSOR_THRESHOLDS[thresholdSensor].label;
+
+  const targetId = getLogTargetId(log);
+  return DEVICE_TARGET_LABELS[targetId] || log.deviceName || targetId;
+};
+
+const getLogRoom = (log = {}) => {
+  const targetId = getLogTargetId(log);
+  return log.room || DEVICE_TARGET_ROOMS[targetId] || '';
+};
+
+const getThresholdMessage = (log = {}) => {
+  if (log.eventType !== 'threshold') return '';
+
+  const sensor = getThresholdSensor(log);
+  const threshold = SENSOR_THRESHOLDS[sensor];
+  if (!threshold) return '';
+
+  const value = toFiniteNumber(log.details?.value ?? log.newValue);
+  const comparison = log.details?.comparison || (
+    value !== null && value < threshold.min ? 'below' : 'above'
+  );
+  const crossedLimit = comparison === 'below' ? threshold.min : threshold.max;
+  const verb = comparison === 'below' ? 'dropped below' : 'exceeded';
+  const room = getLogRoom(log) || 'Living Room';
+  const currentText = value === null
+    ? ''
+    : `, current ${formatThresholdValue(value, threshold.unit)}`;
+  const rangeText = `${formatThresholdValue(threshold.min, threshold.unit)}-${formatThresholdValue(threshold.max, threshold.unit)}`;
+
+  return `${threshold.label} in ${room} ${verb} ${formatThresholdValue(crossedLimit, threshold.unit)} (${rangeText} normal${currentText}).`;
+};
+
+const getDisplayMessage = (log = {}) => {
+  const thresholdMessage = getThresholdMessage(log);
+  if (thresholdMessage) return thresholdMessage;
+
+  const message = log.message || '';
+  const targetId = getLogTargetId(log);
+  const canonicalLabel = DEVICE_TARGET_LABELS[targetId];
+
+  if (!message || !canonicalLabel) return message;
+
+  return Object.values(DEVICE_TARGET_LABELS).reduce((text, label) => {
+    if (label === canonicalLabel) return text;
+    return text.replace(new RegExp(escapeRegExp(label), 'gi'), canonicalLabel);
+  }, message);
+};
 
 const getLogIdentity = (log = {}) =>
   getLogId(log) ||
@@ -290,6 +421,16 @@ const ActivityLog = () => {
               const styles = severityStyles[log.severity] || severityStyles.info;
               const Icon = getLogIcon(log);
               const source = triggerLabels[log.triggerSource] || log.triggerSource || 'System';
+              const displayMessage = getDisplayMessage(log);
+              const deviceLabel = getLogDeviceLabel(log);
+              const room = getLogRoom(log);
+              const metaItems = [
+                log.actorName || source,
+                source,
+                deviceLabel,
+                room,
+                relativeTime(log.createdAt),
+              ].filter((item, index, items) => item && items.indexOf(item) === index);
 
               return (
                 <article
@@ -305,14 +446,15 @@ const ActivityLog = () => {
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-sm font-medium leading-snug text-gray-800">
                         <span className={styles.text}>{log.action || log.eventType}</span>
-                        {log.message ? `: ${log.message}` : ''}
+                        {displayMessage ? `: ${displayMessage}` : ''}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
-                        <span className="max-w-full truncate">{log.actorName || source}</span>
-                        <span className="h-1 w-1 rounded-full bg-gray-300" />
-                        <span>{source}</span>
-                        <span className="h-1 w-1 rounded-full bg-gray-300" />
-                        <span>{relativeTime(log.createdAt)}</span>
+                        {metaItems.map((item, index) => (
+                          <React.Fragment key={`${log.renderKey}-meta-${item}`}>
+                            {index > 0 && <span className="h-1 w-1 rounded-full bg-gray-300" />}
+                            <span className="max-w-full truncate">{item}</span>
+                          </React.Fragment>
+                        ))}
                       </div>
                     </div>
                   </div>

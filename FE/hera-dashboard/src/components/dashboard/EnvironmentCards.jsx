@@ -9,20 +9,27 @@ const formatMetric = (value, decimals = 1) => {
 
 // --- Evaluation functions with English status and descriptions ---
 
-const getTempInfo = (val) => {
-	const num = Number(val);
-	if (!Number.isFinite(num)) return { status: 'Unknown', desc: 'Updating...', color: 'text-gray-500', bg: 'bg-gray-100' };
-	if (num < 20) return { status: 'Cold', desc: 'Below standard temperature', color: 'text-[#427AB5]', bg: 'bg-[#DCE9F8]' };
-	if (num > 24) return { status: 'Hot', desc: 'Above standard temperature', color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
-	return { status: 'Optimal', desc: 'Comfortable temperature', color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
+const DEFAULT_THRESHOLDS = {
+  temperature: { min: 25, max: 35 },
+  humidity: { min: 60, max: 80 },
 };
 
-const getHumidInfo = (val) => {
+const formatRange = ({ min, max }, unit) => `${formatMetric(min, 0)}-${formatMetric(max, 0)}${unit}`;
+
+const getTempInfo = (val, thresholds = DEFAULT_THRESHOLDS.temperature) => {
 	const num = Number(val);
 	if (!Number.isFinite(num)) return { status: 'Unknown', desc: 'Updating...', color: 'text-gray-500', bg: 'bg-gray-100' };
-	if (num < 40) return { status: 'Dry', desc: 'Too dry: May cause irritation', color: 'text-[#427AB5]', bg: 'bg-[#DCE9F8]' };
-	if (num > 60) return { status: 'Humid', desc: 'Too humid', color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
-	return { status: 'Optimal', desc: 'Ideal humidity levels', color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
+	if (num < thresholds.min) return { status: 'Cold', desc: `Below normal range ${formatRange(thresholds, '°C')}`, color: 'text-[#427AB5]', bg: 'bg-[#DCE9F8]' };
+	if (num > thresholds.max) return { status: 'Hot', desc: `Above normal range ${formatRange(thresholds, '°C')}`, color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
+	return { status: 'Normal', desc: `Normal range ${formatRange(thresholds, '°C')}`, color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
+};
+
+const getHumidInfo = (val, thresholds = DEFAULT_THRESHOLDS.humidity) => {
+	const num = Number(val);
+	if (!Number.isFinite(num)) return { status: 'Unknown', desc: 'Updating...', color: 'text-gray-500', bg: 'bg-gray-100' };
+	if (num < thresholds.min) return { status: 'Dry', desc: `Below normal range ${formatRange(thresholds, '%')}`, color: 'text-[#427AB5]', bg: 'bg-[#DCE9F8]' };
+	if (num > thresholds.max) return { status: 'Humid', desc: `Above normal range ${formatRange(thresholds, '%')}`, color: 'text-[#DF6D14]', bg: 'bg-[#FED7AA]' };
+	return { status: 'Normal', desc: `Normal range ${formatRange(thresholds, '%')}`, color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
 };
 
 const getLightInfo = (val) => {
@@ -33,15 +40,15 @@ const getLightInfo = (val) => {
 	return { status: 'Optimal', desc: 'Standard illumination', color: 'text-[#3A7D44]', bg: 'bg-[#E8F5E9]' };
 };
 
-const EnvironmentCards = ({ data }) => {
+const EnvironmentCards = ({ data, thresholds = DEFAULT_THRESHOLDS }) => {
   const currentEnv = {
     temperature: getSensorValue(data, 'temperature'),
     humidity: getSensorValue(data, 'humidity'),
     light: getSensorValue(data, 'light') || getSensorValue(data, 'light living room'),
   };
 
-  const tempInfo = getTempInfo(currentEnv.temperature);
-  const humidInfo = getHumidInfo(currentEnv.humidity);
+  const tempInfo = getTempInfo(currentEnv.temperature, thresholds.temperature || DEFAULT_THRESHOLDS.temperature);
+  const humidInfo = getHumidInfo(currentEnv.humidity, thresholds.humidity || DEFAULT_THRESHOLDS.humidity);
   const lightInfo = getLightInfo(currentEnv.light);
 
   return (

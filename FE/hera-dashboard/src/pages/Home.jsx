@@ -33,6 +33,29 @@ const SCENE_LABELS = {
 
 const RIGHT_SIDEBAR_TRANSITION_MS = 300;
 
+const readEnvNumber = (keys, fallback) => {
+  for (const key of keys) {
+    const value = import.meta.env[key];
+    if (value === undefined || value === null || value === '') continue;
+
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
+};
+
+const ENVIRONMENT_THRESHOLDS = {
+  temperature: {
+    min: readEnvNumber(['NORMAL_TEMP_MIN', 'VITE_NORMAL_TEMP_MIN'], 25),
+    max: readEnvNumber(['NORMAL_TEMP_MAX', 'VITE_NORMAL_TEMP_MAX'], 35),
+  },
+  humidity: {
+    min: readEnvNumber(['NORMAL_HUMI_MIN', 'NORMAL_HUMIDITY_MIN', 'VITE_NORMAL_HUMI_MIN', 'VITE_NORMAL_HUMIDITY_MIN'], 60),
+    max: readEnvNumber(['NORMAL_HUMI_MAX', 'NORMAL_HUMIDITY_MAX', 'VITE_NORMAL_HUMI_MAX', 'VITE_NORMAL_HUMIDITY_MAX'], 80),
+  },
+};
+
 const Home = ({ user, onLogout }) => {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [sensorData, setSensorData] = useState(null);
@@ -285,7 +308,7 @@ const Home = ({ user, onLogout }) => {
         <section>
           <h4 className="font-medium mb-3">Environment & Safety</h4>
           {telemetryError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{telemetryError}</div>}
-          <EnvironmentCards data={sensorData} />
+          <EnvironmentCards data={sensorData} thresholds={ENVIRONMENT_THRESHOLDS} />
         </section>
 
         <section>
