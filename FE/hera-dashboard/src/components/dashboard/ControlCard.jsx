@@ -3,7 +3,7 @@ import { Fan, Lightbulb, Plug, Square } from 'lucide-react';
 import { getDeviceStatus } from '../../services/api';
 
 const controls = [
-	{ id: 'main_led', label: 'LED living room', Icon: Lightbulb, hasSlider: true },
+	{ id: 'main_led', label: 'LED living room', Icon: Lightbulb, hasSlider: false },
 	{ id: 'neo_led', label: 'LED bedroom', Icon: Square, hasSlider: true },
 	{ id: 'ws2812', label: 'LED toilet', Icon: Lightbulb, hasSlider: true },
 	{ id: 'mini_fan', label: 'Fan living room', Icon: Fan, hasSlider: true },
@@ -65,7 +65,6 @@ const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onC
 				case 'ws2812': rpcMethod = 'setWS2812Brightness'; break;
 				case 'neo_led': rpcMethod = 'setStripBrightness'; break;
 				case 'mini_fan': rpcMethod = 'setFanSpeed'; break;
-				case 'main_led': rpcMethod = 'setMainLedBrightness'; break;
 				default: rpcMethod = '';
 			}
 			

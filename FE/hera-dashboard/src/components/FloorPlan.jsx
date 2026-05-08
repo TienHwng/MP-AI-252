@@ -18,6 +18,7 @@ import {
   getSensorValue,
   subscribeLatestSensorData,
   writeSensorValue,
+  sendRpcCommand,
 } from '../services/api';
 
 const TELEMETRY_STALE_MS = 30_000;
@@ -150,15 +151,21 @@ const getMarkerLabel = (marker) => {
   return boolLabel(marker.status);
 };
 
-function DeviceMarker({ marker, selected, stale, pending, onClick }) {
+function DeviceMarker({ marker, selected, stale, pending, onLeftClick, onRightClick }) {
   const isSensor = marker.type === 'sensor';
   const isOn = marker.status === true;
   const Icon = marker.Icon;
 
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    onRightClick?.();
+  };
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={onLeftClick}
+      onContextMenu={handleContextMenu}
       title={`${marker.name} - ${getMarkerLabel(marker)}`}
       style={{
         ...styles.marker,
@@ -261,7 +268,18 @@ function DevicePanel({
   pendingCommand,
   onToggle,
   onWriteSensor,
+  onChangeIntensity,
 }) {
+  const [sliderValue, setSliderValue] = useState(50);
+
+  useEffect(() => {
+    if (marker?.status === false) {
+      setSliderValue(0);
+    } else if (marker?.status === true) {
+      setSliderValue(50);
+    }
+  }, [marker?.status]);
+  
   if (!telemetry) {
     return (
       <div style={styles.panel}>
@@ -281,11 +299,44 @@ function DevicePanel({
   }
 
   const isControllable = marker.target;
+  const isDimmable = ['neo_led', 'ws2812', 'mini_fan'].includes(marker.target);
+  const isOn = marker.status === true;
   const mode = telemetry.mode || 'unknown';
   const isSimMode = mode === 'sim';
   const controlDisabled = stale || !runtimeAvailable;
   const writeDisabled = marker.type !== 'sensor' || !isSimMode || controlDisabled;
   const pendingThisMarker = pendingCommand?.id === marker.id;
+
+  const handleSliderChange = (e) => {
+    setSliderValue(parseInt(e.target.value));
+  };
+
+  const handleSliderRelease = () => {
+    if (!onChangeIntensity) return;
+
+    let rpcMethod = '';
+    let pwmValue = 0;
+
+    const intensityPercent = sliderValue;
+
+    if (marker.target === 'main_led') {
+      // main_led không hỗ trợ brightness, chỉ on/off
+      return;
+    } else if (marker.target === 'neo_led') {
+      rpcMethod = 'setStripBrightness';
+      pwmValue = Math.round((intensityPercent / 100) * 255);
+    } else if (marker.target === 'ws2812') {
+      rpcMethod = 'setWS2812Brightness';
+      pwmValue = Math.round((intensityPercent / 100) * 255);
+    } else if (marker.target === 'mini_fan') {
+      rpcMethod = 'setFanSpeed';
+      pwmValue = Math.round((intensityPercent / 100) * 1023);
+    }
+
+    if (rpcMethod) {
+      onChangeIntensity(marker.target, intensityPercent, pwmValue, rpcMethod);
+    }
+  };
 
   return (
     <div style={styles.panel}>
@@ -301,17 +352,31 @@ function DevicePanel({
         <b>Type:</b> {marker.type}
       </p>
       <p style={styles.row}>
-        <b>State:</b> {getMarkerLabel(marker)}
-      </p>
-      <p style={styles.row}>
-        <b>Source:</b> {telemetry.source || 'mqtt'}
-      </p>
-      <p style={styles.row}>
         <b>Updated:</b>{' '}
         {telemetry.updatedAt ? new Date(telemetry.updatedAt).toLocaleTimeString() : 'unknown'}
       </p>
 
-      {isControllable && (
+      {isControllable && isDimmable ? (
+        <div style={styles.sliderContainer}>
+          <div style={styles.sliderHeader}>
+            <span style={styles.sliderValue}>{sliderValue}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={sliderValue}
+            disabled={controlDisabled}
+            onChange={handleSliderChange}
+            onMouseUp={handleSliderRelease}
+            onTouchEnd={handleSliderRelease}
+            style={{
+              ...styles.slider,
+              background: `linear-gradient(to right, #3A7D44 ${sliderValue}%, #cbd5e1 ${sliderValue}%)`,
+            }}
+          />
+        </div>
+      ) : isControllable ? (
         <button
           type="button"
           style={{
@@ -328,7 +393,7 @@ function DevicePanel({
           )}
           Set {marker.status === true ? 'OFF' : 'ON'}
         </button>
-      )}
+      ) : null}
 
       {marker.type === 'sensor' && (
         <SensorWriteControls
@@ -483,6 +548,65 @@ export default function FloorPlan() {
     }
   };
 
+  const toggleDeviceWithIntensity = async (marker) => {
+    if (runtimeError) {
+      setNotice(runtimeError);
+      setNoticeTone('error');
+      return;
+    }
+
+    const expectedState = marker.status !== true;
+    const pending = {
+      id: marker.id,
+      expectedState,
+      startedAt: Date.now(),
+    };
+    setPending(pending);
+    setNotice(`Toggling ${marker.name}...`);
+    setNoticeTone('info');
+
+    window.setTimeout(() => {
+      const current = pendingCommandRef.current;
+      if (current?.id !== pending.id || current?.startedAt !== pending.startedAt) return;
+      setPending(null);
+      setNotice('MQTT command was sent, but telemetry did not confirm the requested state.');
+      setNoticeTone('error');
+    }, COMMAND_CONFIRM_TIMEOUT_MS);
+
+    try {
+      await controlDeviceState(marker.target, expectedState);
+      
+      // Set intensity if turning on
+      if (expectedState) {
+        const intensityPercent = 50;
+        let rpcMethod = '';
+        let pwmValue = 0;
+        
+        if (marker.target === 'main_led') {
+          // main_led không hỗ trợ brightness
+          return;
+        } else if (marker.target === 'neo_led') {
+          rpcMethod = 'setStripBrightness';
+          pwmValue = Math.round((intensityPercent / 100) * 255);
+        } else if (marker.target === 'ws2812') {
+          rpcMethod = 'setWS2812Brightness';
+          pwmValue = Math.round((intensityPercent / 100) * 255);
+        } else if (marker.target === 'mini_fan') {
+          rpcMethod = 'setFanSpeed';
+          pwmValue = Math.round((intensityPercent / 100) * 1023);
+        }
+        
+        if (rpcMethod) {
+          await sendRpcCommand(rpcMethod, pwmValue);
+        }
+      }
+    } catch (error) {
+      setPending(null);
+      setNotice(error.message || `Failed to control ${marker.name}.`);
+      setNoticeTone('error');
+    }
+  };
+
   const writeSensor = async (sensor, value) => {
     if (runtimeError) {
       setNotice(runtimeError);
@@ -500,13 +624,53 @@ export default function FloorPlan() {
     }
   };
 
+  const handleIntensityChange = async (deviceId, percentValue, pwmValue, rpcMethod) => {
+    if (!rpcMethod) return;
+    try {
+      await sendRpcCommand(rpcMethod, pwmValue);
+      setNotice(`${deviceId} intensity set to ${percentValue}%.`);
+      setNoticeTone('info');
+    } catch (error) {
+      setNotice(error.message || `Failed to adjust ${deviceId} intensity.`);
+      setNoticeTone('error');
+    }
+  };
+
   const visibleNotice = stale
     ? 'Telemetry is stale or unavailable. Controls are disabled until MQTT data resumes.'
     : runtimeError || notice;
   const visibleNoticeTone = stale || runtimeError ? 'error' : noticeTone;
 
   return (
-    <div className={`grid min-h-screen w-full gap-4 bg-background p-3 sm:p-4 lg:gap-5 lg:p-6 ${selectedMarker ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px]' : 'grid-cols-1'}`}>
+    <>
+      <style>{`
+        input[type="range"] {
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          width: 18px !important;
+          height: 18px !important;
+          border-radius: 50% !important;
+          background-color: #3A7D44 !important;
+          cursor: pointer !important;
+          border: none !important;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 18px !important;
+          height: 18px !important;
+          border-radius: 50% !important;
+          background-color: #3A7D44 !important;
+          cursor: pointer !important;
+          border: none !important;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+        }
+      `}</style>
+      <div className={`grid min-h-screen w-full gap-4 bg-background p-3 sm:p-4 lg:gap-5 lg:p-6 ${selectedMarker ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_250px]' : 'grid-cols-1'}`}>
       <div className="min-w-0">
         <Notice tone={visibleNoticeTone}>{visibleNotice}</Notice>
 
@@ -534,7 +698,8 @@ export default function FloorPlan() {
                 selected={marker.id === selectedMarker?.id}
                 stale={stale}
                 pending={pendingCommand?.id === marker.id}
-                onClick={() => setSelectedId(selectedId === marker.id ? null : marker.id)}
+                onLeftClick={() => marker.target && toggleDeviceWithIntensity(marker)}
+                onRightClick={() => setSelectedId(selectedId === marker.id ? null : marker.id)}
               />
             ))}
 
@@ -556,9 +721,11 @@ export default function FloorPlan() {
           pendingCommand={pendingCommand}
           onToggle={toggleDevice}
           onWriteSensor={writeSensor}
+          onChangeIntensity={handleIntensityChange}
         />
       )}
     </div>
+    </>
   );
 }
 
@@ -740,5 +907,40 @@ const styles = {
   },
   spinIcon: {
     animation: 'spin 1s linear infinite',
+  },
+  sliderContainer: {
+    marginTop: 12,
+    padding: '12px',
+    borderRadius: 8,
+    background: '#f1f5f9',
+    border: '1px solid #e2e8f0',
+  },
+  sliderHeader: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#334155',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  sliderValue: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#3A7D44',
+  },
+  slider: {
+    width: '100%',
+    height: 6,
+    borderRadius: 4,
+    border: 'none',
+    outline: 'none',
+    cursor: 'pointer',
+    appearance: 'none',
+    WebkitAppearance: 'none',
   },
 };

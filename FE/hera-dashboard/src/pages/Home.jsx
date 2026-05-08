@@ -178,7 +178,6 @@ const Home = ({ user, onLogout }) => {
           controlDeviceState('mini_fan', true, sceneActivity),
           controlDeviceState('relay', true, sceneActivity),
           // Set light intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
           sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
           sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812'))
         ]);
@@ -189,7 +188,6 @@ const Home = ({ user, onLogout }) => {
           controlDeviceState('neo_led', false, sceneActivity),
           controlDeviceState('ws2812', false, sceneActivity),
           // Set light intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
           sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
           sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812'))
         ]);
@@ -202,7 +200,6 @@ const Home = ({ user, onLogout }) => {
           controlDeviceState('mini_fan', false, sceneActivity),
           controlDeviceState('relay', false, sceneActivity),
           // Set intensity to 0
-          sendRpcCommand('setMainLedBrightness', 0, sceneRpcActivity('main_led')),
           sendRpcCommand('setStripBrightness', 0, sceneRpcActivity('neo_led')),
           sendRpcCommand('setWS2812Brightness', 0, sceneRpcActivity('ws2812')),
           sendRpcCommand('setFanSpeed', 0, sceneRpcActivity('mini_fan'))
@@ -303,10 +300,10 @@ const Home = ({ user, onLogout }) => {
           </div>
         </section>
 
-        <section>
+        {/* <section>
           <h4 className="font-medium mb-3">Quick Controls</h4>
           <ControlCard data={sensorData} isSubmitting={isSubmittingControl} onToggleDevice={handleToggleDevice} onChangeIntensity={handleIntensityChange} />
-        </section>
+        </section> */}
       </div>
 
       <button
