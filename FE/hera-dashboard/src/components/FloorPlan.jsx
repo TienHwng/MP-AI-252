@@ -17,7 +17,6 @@ import {
   getDeviceStatus,
   getSensorValue,
   subscribeLatestSensorData,
-  writeSensorValue,
   sendRpcCommand,
 } from '../services/api';
 
@@ -151,9 +150,10 @@ const getMarkerLabel = (marker) => {
   return boolLabel(marker.status);
 };
 
-function DeviceMarker({ marker, selected, stale, pending, onLeftClick, onRightClick }) {
+function DeviceMarker({ marker, selected, stale, pending, intensity, onLeftClick, onRightClick }) {
   const isSensor = marker.type === 'sensor';
   const isOn = marker.status === true;
+  const isLit = intensity > 0;
   const Icon = marker.Icon;
 
   const handleContextMenu = (e) => {
@@ -176,12 +176,14 @@ function DeviceMarker({ marker, selected, stale, pending, onLeftClick, onRightCl
         border: selected ? '3px solid #DF6D14' : '2px solid white',
         background: isSensor
           ? 'rgba(66, 122, 181, 0.95)'
-          : isOn
+          : isLit
             ? 'rgba(58, 125, 68, 0.96)'
-            : 'rgba(107, 114, 128, 0.9)',
-        color: isSensor || isOn ? '#ffffff' : 'white',
+            : isOn
+              ? 'rgba(58, 125, 68, 0.96)'
+              : 'rgba(107, 114, 128, 0.9)',
+        color: isSensor || isOn || isLit ? '#ffffff' : 'white',
         opacity: stale ? 0.65 : 1,
-        boxShadow: isOn
+        boxShadow: isOn || isLit
           ? '0 0 28px rgba(58, 125, 68, 0.96), 0 8px 20px rgba(0,0,0,0.35)'
           : '0 8px 20px rgba(0,0,0,0.35)',
       }}
@@ -225,41 +227,6 @@ function Notice({ tone = 'info', children }) {
   );
 }
 
-function SensorWriteControls({ marker, disabled, onWriteSensor }) {
-  const [sensorValue, setSensorValue] = useState(
-    marker.value === null || marker.value === undefined ? '' : String(marker.value),
-  );
-
-  const submitSensorWrite = () => {
-    const parsed = Number(sensorValue);
-    if (!Number.isFinite(parsed)) return;
-    onWriteSensor(marker.sensor, parsed);
-  };
-
-  return (
-    <div style={styles.sensorWrite}>
-      <input
-        type="number"
-        value={sensorValue}
-        onChange={(event) => setSensorValue(event.target.value)}
-        style={styles.input}
-        disabled={disabled}
-      />
-      <button
-        type="button"
-        style={{
-          ...styles.secondaryButton,
-          opacity: disabled ? 0.55 : 1,
-        }}
-        onClick={submitSensorWrite}
-        disabled={disabled}
-      >
-        Write
-      </button>
-    </div>
-  );
-}
-
 function DevicePanel({
   marker,
   telemetry,
@@ -267,7 +234,7 @@ function DevicePanel({
   runtimeAvailable,
   pendingCommand,
   onToggle,
-  onWriteSensor,
+  onSliderChange,
   onChangeIntensity,
 }) {
   const [sliderValue, setSliderValue] = useState(50);
@@ -302,22 +269,28 @@ function DevicePanel({
   const isDimmable = ['neo_led', 'ws2812', 'mini_fan'].includes(marker.target);
   const isOn = marker.status === true;
   const mode = telemetry.mode || 'unknown';
-  const isSimMode = mode === 'sim';
   const controlDisabled = stale || !runtimeAvailable;
-  const writeDisabled = marker.type !== 'sensor' || !isSimMode || controlDisabled;
   const pendingThisMarker = pendingCommand?.id === marker.id;
 
   const handleSliderChange = (e) => {
-    setSliderValue(parseInt(e.target.value));
+    const newValue = parseInt(e.target.value);
+    setSliderValue(newValue);
+    onSliderChange?.(marker.id, newValue);
   };
 
   const handleSliderRelease = () => {
+    const intensityPercent = sliderValue;
+
+    // If setting intensity to 0%, turn off the device
+    if (intensityPercent === 0 && marker.status === true) {
+      onToggle(marker);
+      return;
+    }
+
     if (!onChangeIntensity) return;
 
     let rpcMethod = '';
     let pwmValue = 0;
-
-    const intensityPercent = sliderValue;
 
     if (marker.target === 'main_led') {
       // main_led không hỗ trợ brightness, chỉ on/off
@@ -338,12 +311,39 @@ function DevicePanel({
     }
   };
 
+  const Icon = marker.Icon;
+  const isLit = isDimmable && sliderValue > 0;
+
   return (
     <div style={styles.panel}>
       <div style={styles.panelHeader}>
-        <div>
-          <h3 style={styles.panelTitle}>{marker.name}</h3>
-          <p style={styles.muted}>{marker.room}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              borderRadius: 8,
+              background: isLit ? 'rgba(255, 193, 7, 0.15)' : 'rgba(203, 213, 225, 0.3)',
+              transition: 'all 200ms ease',
+            }}
+          >
+            <Icon
+              size={22}
+              strokeWidth={2}
+              style={{
+                color: isLit ? '#ffc107' : '#64748b',
+                transition: 'all 200ms ease',
+                filter: isLit ? 'drop-shadow(0 0 8px rgba(255, 193, 7, 0.6))' : 'none',
+              }}
+            />
+          </div>
+          <div>
+            <h3 style={styles.panelTitle}>{marker.name}</h3>
+            <p style={styles.muted}>{marker.room}</p>
+          </div>
         </div>
         <span style={styles.modeBadge}>{mode.toUpperCase()}</span>
       </div>
@@ -394,15 +394,6 @@ function DevicePanel({
           Set {marker.status === true ? 'OFF' : 'ON'}
         </button>
       ) : null}
-
-      {marker.type === 'sensor' && (
-        <SensorWriteControls
-          key={marker.id}
-          marker={marker}
-          disabled={writeDisabled}
-          onWriteSensor={onWriteSensor}
-        />
-      )}
     </div>
   );
 }
@@ -415,6 +406,7 @@ export default function FloorPlan() {
   const [pendingCommand, setPendingCommand] = useState(null);
   const [now, setNow] = useState(0);
   const [runtimeError, setRuntimeError] = useState('');
+  const [deviceIntensity, setDeviceIntensity] = useState({});
   const pendingCommandRef = useRef(null);
 
   const setPending = useCallback((value) => {
@@ -607,23 +599,6 @@ export default function FloorPlan() {
     }
   };
 
-  const writeSensor = async (sensor, value) => {
-    if (runtimeError) {
-      setNotice(runtimeError);
-      setNoticeTone('error');
-      return;
-    }
-
-    setNotice(`Writing ${sensor} through MQTT simulator...`);
-    setNoticeTone('info');
-    try {
-      await writeSensorValue(sensor, value);
-    } catch (error) {
-      setNotice(error.message || `Failed to write ${sensor}.`);
-      setNoticeTone('error');
-    }
-  };
-
   const handleIntensityChange = async (deviceId, percentValue, pwmValue, rpcMethod) => {
     if (!rpcMethod) return;
     try {
@@ -698,6 +673,7 @@ export default function FloorPlan() {
                 selected={marker.id === selectedMarker?.id}
                 stale={stale}
                 pending={pendingCommand?.id === marker.id}
+                intensity={deviceIntensity[marker.id] ?? 0}
                 onLeftClick={() => marker.target && toggleDeviceWithIntensity(marker)}
                 onRightClick={() => setSelectedId(selectedId === marker.id ? null : marker.id)}
               />
@@ -720,7 +696,7 @@ export default function FloorPlan() {
           runtimeAvailable={!runtimeError}
           pendingCommand={pendingCommand}
           onToggle={toggleDevice}
-          onWriteSensor={writeSensor}
+          onSliderChange={(deviceId, value) => setDeviceIntensity(prev => ({ ...prev, [deviceId]: value }))}
           onChangeIntensity={handleIntensityChange}
         />
       )}
@@ -849,20 +825,6 @@ const styles = {
     color: 'white',
     fontWeight: 700,
     cursor: 'pointer',
-  },
-  sensorWrite: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 84px',
-    gap: 8,
-    marginTop: 12,
-  },
-  input: {
-    width: '100%',
-    minWidth: 0,
-    border: '1px solid #cbd5e1',
-    borderRadius: 8,
-    padding: '10px 12px',
-    boxSizing: 'border-box',
   },
   notice: {
     display: 'flex',
