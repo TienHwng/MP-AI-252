@@ -4,6 +4,11 @@ static unsigned long previousMillis	 = 0;
 static unsigned long currentMillis	 = 0;
 static int			 currentBlinkInterval = BLINK_NORMAL;
 static boolean		 ledStateLocal		 = true;
+static uint16_t		 ledBrightnessLocal	 = 0;
+
+static inline uint16_t clamp_pwm_10bit(uint16_t brightness) {
+	return brightness > 1023 ? 1023 : brightness;
+}
 
 // clang-format off
 enum TempState {
@@ -83,26 +88,43 @@ void led_display(void *pvParameters) {
 		}
 
 		if (xSemaphoreTake(xLedStateSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
-			// Update is_LED_on from global variable
+			// Update LED state from global variables
 			ledStateLocal = is_LED_on;
+			ledBrightnessLocal = clamp_pwm_10bit(led_brightness);
 			xSemaphoreGive(xLedStateSemaphore);
 		}
 
-		if (!ledStateLocal) {
+		if (!ledStateLocal || ledBrightnessLocal == 0) {
 			// If LED is turned off, ensure it's LOW
-			digitalWrite(LED_PIN, LOW);
+			analogWrite(LED_PIN, 0);
 			vTaskDelay(pdMS_TO_TICKS(LED_BLINKY_DELAY_MS));
 		}
 		else {
 			// LED toggle behavior
 			for (int i = 0; i < loopTimes[state]; i++) {
-				digitalWrite(LED_PIN, HIGH);
+				analogWrite(LED_PIN, ledBrightnessLocal);
 				vTaskDelay(pdMS_TO_TICKS(blinkInterval[state]));
 
-				digitalWrite(LED_PIN, LOW);
+				analogWrite(LED_PIN, 0);
 				vTaskDelay(pdMS_TO_TICKS(blinkInterval[state]));
 			}
 		}
+	}
+}
+
+void led_set_brightness(uint16_t brightness) {
+	uint16_t pwm = clamp_pwm_10bit(brightness);
+
+	if (xSemaphoreTake(xLedStateSemaphore, portMAX_DELAY) == pdTRUE) {
+		led_brightness = pwm;
+		is_LED_on	   = (pwm > 0);
+		xSemaphoreGive(xLedStateSemaphore);
+	}
+
+	analogWrite(LED_PIN, pwm);
+
+	if (IS_DEBUG_MODE || IS_SHOW_LED_STATUS) {
+		Serial.printf("[LED] Brightness = %u / 1023\n", pwm);
 	}
 }
 
@@ -110,6 +132,9 @@ void setup_led_display() {
 	Serial.println("[INIT] LED Display task created successfully");
 
 	pinMode(LED_PIN, OUTPUT);
+	analogWriteResolution(10);     // 0..1023
+	analogWriteFrequency(20000);   // 20 kHz
+	analogWrite(LED_PIN, 0);
 
 	previousMillis = 0;
 	currentMillis  = 0;

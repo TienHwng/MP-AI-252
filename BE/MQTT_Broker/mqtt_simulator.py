@@ -62,6 +62,10 @@ SIM_ANOMALY_PROBABILITY = max(
 )
 SIM_GAS_DETECTED_THRESHOLD = _env_float("SIM_GAS_DETECTED_THRESHOLD", 300.0)
 SIM_FAN_ON_SPEED = max(_env_int("SIM_FAN_ON_SPEED", 4095), 0)
+SIM_DEFAULT_LED_BRIGHTNESS = max(
+	0,
+	min(_env_int("SIM_DEFAULT_LED_BRIGHTNESS", 100), 1023),
+)
 SIM_DEFAULT_WS2812_BRIGHTNESS = max(
 	0,
 	min(_env_int("SIM_DEFAULT_WS2812_BRIGHTNESS", 10), 255),
@@ -134,6 +138,7 @@ start_time = time.time()
 
 device_state = {
 	"led_status": False,
+	"led_brightness": SIM_DEFAULT_LED_BRIGHTNESS,
 	"neo_led_status": False,
 	"ws2812_status": False,
 	"ws2812_brightness": SIM_DEFAULT_WS2812_BRIGHTNESS,
@@ -332,8 +337,11 @@ def calculate_voltage(device_name: str, device_info: dict) -> float:
 	V_REF is 3.3V for sensors, but varies for devices.
 	"""
 	if device_name == "led":
-		# LED uses 3.3V when on
-		return 3.3 if device_info.get("status", False) else 0.0
+		# Normal LED voltage scales with 10-bit PWM brightness (0..1023)
+		if device_info.get("status", False):
+			brightness = max(0, min(int(device_info.get("brightness", 0)), 1023))
+			return round(3.3 * brightness / 1023.0, 2)
+		return 0.0
 
 	elif device_name == "neo_led":
 		# Neo LED voltage scales with brightness
@@ -417,7 +425,18 @@ def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
 					if params
 					else "[ACTION] Turning off normal LED"
 				)
-				response["LedState"] = params
+				response["Led_Status"] = params
+
+		elif method == "setLedBrightness":
+			value = clamp_int(params, 0, 1023)
+			if value is None:
+				response["error"] = "params must be int (0..1023)"
+			else:
+				device_state["led_brightness"] = value
+				device_state["led_status"] = value > 0
+				print(f"[ACTION] LED brightness -> {value}")
+				response["Led_Brightness"] = value
+				response["Led_Status"] = device_state["led_status"]
 
 		elif method == "setValueNeoLed":
 			if not isinstance(params, bool):
@@ -611,6 +630,7 @@ def build_telemetry_payload():
 		# Calculate device info for voltage calculations
 		led_info = {
 			"status": device_state["led_status"],
+			"brightness": device_state["led_brightness"],
 		}
 		neo_led_info = {
 			"status": device_state["neo_led_status"],
@@ -640,9 +660,11 @@ def build_telemetry_payload():
 			"devices": {
 				"led": {
 					"status": device_state["led_status"],
-					# LED brightness: 255 if on, 0 if off (matching firmware logic)
-					"brightness": 255 if device_state["led_status"] else 0,
-					# LED voltage: 3.3V if on, 0V if off
+					"brightness": (
+						device_state["led_brightness"]
+						if device_state["led_status"]
+						else 0
+					),
 					"voltage": calculate_voltage("led", led_info),
 				},
 				"neo_led": {

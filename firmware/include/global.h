@@ -54,6 +54,7 @@ extern String CORE_IOT_PORT;
 
 extern boolean isWifiConnected;
 extern boolean is_LED_on;
+extern uint16_t led_brightness;     // 0..1023, normal LED PWM duty
 extern boolean is_NeoLED_on;
 extern uint8_t strip_brightness;    // 0..255, NeoPixel strip brightness
 extern boolean is_ws2812_on;

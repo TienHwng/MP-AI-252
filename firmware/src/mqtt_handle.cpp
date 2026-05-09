@@ -1,5 +1,6 @@
 #include "mqtt_handle.h"
 #include "digital_manager.h"
+#include "led_display.h"
 #include "WiFi.h"
 
 void forceConnectWiFi() {
@@ -53,6 +54,7 @@ WiFiClient	 espClient;
 PubSubClient client(espClient);
 
 String method_led_blinky		= "setValueLedBlinky";
+String method_led_brightness	= "setLedBrightness";
 String method_neo_led			= "setValueNeoLed";
 String method_ws2812			= "setValueWS2812";
 String method_ws2812_brightness	= "setWS2812Brightness";
@@ -72,10 +74,16 @@ static bool setActuatorState(SemaphoreHandle_t mutex, boolean &stateRef, bool st
 	}
 
 	stateRef = state ? true : false;
+	uint16_t ledPwm = (pin == LED_PIN && state) ? (led_brightness > 1023 ? 1023 : led_brightness) : 0;
 	xSemaphoreGive(mutex);
 
 	pinMode(pin, OUTPUT);
-	digitalWrite(pin, state ? HIGH : LOW);
+	if (pin == LED_PIN) {
+		analogWrite(pin, ledPwm);
+	}
+	else {
+		digitalWrite(pin, state ? HIGH : LOW);
+	}
 	return true;
 }
 
@@ -225,7 +233,27 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Group 2: WS2812 brightness adjustment commands (int 0..255)
+	// Group 2: LED brightness adjustment commands (int 0..1023)
+	// ========================================
+	else if (method == method_led_brightness.c_str()) {
+		if (!doc["params"].is<int>()) {
+			Serial.println("[MQTT] params is not int!");
+			responseDoc["error"] = "params must be int (0..1023)";
+		}
+		else {
+			int val = doc["params"].as<int>();
+			if (val < 0)    val = 0;
+			if (val > 1023) val = 1023;
+
+			led_set_brightness((uint16_t)val);
+			responseDoc["Led_Brightness"] = val;
+			responseDoc["Led_Status"]     = (val > 0);
+			Serial.printf("[ACTION] LED brightness -> %d\n", val);
+		}
+	}
+
+	// ========================================
+	// Group 3: WS2812 brightness adjustment commands (int 0..255)
 	// ========================================
 	else if (method == method_ws2812_brightness.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -248,7 +276,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Group 3b: WS2812 color adjustment commands (hex #RRGGBB or {r,g,b} object)
+	// Group 4: WS2812 color adjustment commands (hex #RRGGBB or {r,g,b} object)
 	// ========================================
 	else if (method == method_ws2812_color.c_str()) {
 		JsonVariantConst params = doc["params"];
@@ -269,7 +297,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Group 3: Fan speed adjustment commands (int 0..1023)
+	// Group 5: Fan speed adjustment commands (int 0..1023)
 	// ========================================
 	else if (method == method_fan_speed.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -293,7 +321,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 	}
 
 	// ========================================
-	// Group 4: Strip brightness adjustment commands (int 0..255)
+	// Group 6: Strip brightness adjustment commands (int 0..255)
 	// ========================================
 	else if (method == method_strip_brightness.c_str()) {
 		if (!doc["params"].is<int>()) {
@@ -422,8 +450,8 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	JsonObject devices = doc.createNestedObject("devices");
 	JsonObject led = devices.createNestedObject("led");
 	led["status"] = led_state;
-	led["brightness"] = led_state ? 255 : 0;
-	led["voltage"] = led_state ? V_REF : 0.0;
+	led["brightness"] = led_state ? led_brightness : 0;
+	led["voltage"] = led_state ? (V_REF * led_brightness / 1023.0) : 0.0;
 
 	JsonObject neo_led = devices.createNestedObject("neo_led");
 	neo_led["status"] = neo_state;

@@ -14,5 +14,6 @@
 
 void setup_led_display(void);
 void led_display(void *pvParameters);
+void led_set_brightness(uint16_t brightness);
 
 #endif

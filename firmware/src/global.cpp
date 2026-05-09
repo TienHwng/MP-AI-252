@@ -12,15 +12,18 @@ String CORE_IOT_PORT = "1883";
 boolean isWifiConnected = false;
 
 boolean is_LED_on		= true;
+uint16_t led_brightness	= 100;      // default normal LED PWM duty (0..1023)
+
 boolean is_NeoLED_on	= true;
 uint8_t strip_brightness	= 10;   // default strip brightness (0..255)
+
 boolean is_ws2812_on	= true;
 uint8_t ws2812_brightness	= 10;   // default brightness (0..255)
 
-boolean is_relay_on		= true;
-
 boolean is_mini_fan_on	= false;
-int16_t fan_speed		= 500;     // default fan speed (0..4095, PWM duty)
+int16_t fan_speed		= 500;      // default fan speed PWM duty (0..1023)
+
+boolean is_relay_on		= true;
 
 LcdScreen current_lcd_screen = SCREEN_ENV;
 

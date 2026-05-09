@@ -350,7 +350,13 @@ class MQTTManager:
 							payload.get("led_state"),
 						)
 					),
-					"brightness": cls._number_value(led.get("brightness")),
+					"brightness": cls._number_value(
+						cls._first_present(
+							led.get("brightness"),
+							devices.get("led_brightness"),
+							payload.get("led_brightness"),
+						)
+					),
 					"voltage": cls._number_value(led.get("voltage")),
 				},
 				"neo_led": {
@@ -653,6 +659,9 @@ if __name__ == "__main__":
 					menu_option(2, "Turn OFF living room light", Color.YELLOW),
 				),
 				menu_row(
+					menu_option(19, "Set LED Brightness", Color.YELLOW),
+				),
+				menu_row(
 					menu_option(3, "Turn ON NeoPixel light", Color.YELLOW),
 					menu_option(4, "Turn OFF NeoPixel light", Color.YELLOW),
 				),
@@ -705,7 +714,7 @@ if __name__ == "__main__":
 
 			# Get user's choice
 			choice = input(
-				f"{Color.BOLD} [ INPUT ] Please choose an option (0-18): {Color.RESET}"
+				f"{Color.BOLD} [ INPUT ] Please choose an option (0-19): {Color.RESET}"
 			).strip()
 
 			if choice == "0":
@@ -731,6 +740,24 @@ if __name__ == "__main__":
 					+ Color.RESET
 				)
 				mqtt_system.send_rpc_command("setValueLedBlinky", False)
+
+			elif choice == "19":
+				print(
+					Color.GREEN
+					+ "\n>>> HERA: Setting LED brightness..."
+					+ Color.RESET
+				)
+				try:
+					val = int(
+						input(
+							Color.YELLOW
+							+ "Enter LED Brightness (0-1023): "
+							+ Color.RESET
+						).strip()
+					)
+					mqtt_system.send_rpc_command("setLedBrightness", val)
+				except ValueError:
+					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
 
 			elif choice == "3":
 				print(
@@ -872,7 +899,8 @@ if __name__ == "__main__":
 						return str(status)
 
 					print(
-						f"  - LED       : {format_status(devices.get('led', {}).get('status', 'Unknown'))}"
+						f"  - LED       : {format_status(devices.get('led', {}).get('status', 'Unknown'))} "
+						f"(Brightness: {devices.get('led', {}).get('brightness', 'N/A')}/1023)"
 					)
 					print(
 						f"  - NeoPixel  : {format_status(devices.get('neo_led', {}).get('status', 'Unknown'))} "
@@ -942,7 +970,7 @@ if __name__ == "__main__":
 				print(
 					Color.RED
 					+ Color.BOLD
-					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 18."
+					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 19."
 					+ Color.RESET
 				)
 
