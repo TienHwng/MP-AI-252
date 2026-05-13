@@ -14,8 +14,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createRequire } from 'node:module';
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -103,7 +105,7 @@ await page.addInitScript(({ userIdValue }) => {
 }, { userIdValue: userId });
 
 const navigationStart = performance.now();
-await page.goto(url, { waitUntil: 'networkidle' });
+await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForSelector('img[alt="Smart home floor plan"]', { timeout: 15000 });
 const initialRenderMs = performance.now() - navigationStart;
 
@@ -154,15 +156,25 @@ await mongo.close();
 let lighthouse = null;
 if (runLighthouse) {
 	const lighthousePath = path.join(outDir, 'lighthouse_floorplan.json');
-	await execFileAsync('npx', [
-		'lighthouse',
+	const lighthouseTempDir = path.join(outDir, 'lighthouse-tmp');
+	await fs.mkdir(lighthouseTempDir, { recursive: true });
+	const lighthouseCli = require.resolve('lighthouse/cli/index.js');
+	await execFileAsync(process.execPath, [
+		lighthouseCli,
 		url,
 		'--quiet',
-		'--chrome-flags=--headless',
+		'--chrome-flags=--headless=new --disable-gpu --disable-dev-shm-usage --no-sandbox --disable-extensions --disable-background-networking',
 		'--only-categories=performance',
 		'--output=json',
 		`--output-path=${lighthousePath}`,
-	]);
+	], {
+		env: {
+			...process.env,
+			CHROME_PATH: chromium.executablePath(),
+			TEMP: lighthouseTempDir,
+			TMP: lighthouseTempDir,
+		},
+	});
 	const raw = JSON.parse(await fs.readFile(lighthousePath, 'utf8'));
 	lighthouse = {
 		performanceScore: raw.categories.performance.score,

@@ -1,0 +1,41 @@
+{
+  "url": "http://localhost:5173",
+  "initialRenderMs": 260.419,
+  "markersBefore": 0,
+  "sseToUiLatencyMs": {
+    "median": 156.563,
+    "p95": 485.184,
+    "min": 3.265,
+    "max": 526.216,
+    "samples": 20
+  },
+  "browserMetrics": {
+    "navigation": {
+      "domContentLoadedEventEnd": 155.19999999925494,
+      "loadEventEnd": 155.7999999988824,
+      "duration": 155.7999999988824
+    },
+    "paint": [
+      {
+        "name": "first-paint",
+        "startTime": 280
+      },
+      {
+        "name": "first-contentful-paint",
+        "startTime": 280
+      }
+    ],
+    "memory": {
+      "usedJSHeapSize": 16100000,
+      "totalJSHeapSize": 27600000,
+      "jsHeapSizeLimit": 3760000000
+    }
+  },
+  "lighthouse": {
+    "performanceScore": 0.55,
+    "firstContentfulPaint": 11643.185749999997,
+    "largestContentfulPaint": 21329.758499999993,
+    "totalBlockingTime": 22,
+    "cumulativeLayoutShift": 0
+  }
+}

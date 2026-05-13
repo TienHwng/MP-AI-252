@@ -1,0 +1,15 @@
+{
+  "provider": "ollama-local",
+  "cases": 7,
+  "runs": 7,
+  "intent_accuracy_percent": 0.0,
+  "tool_call_success_percent": 0.0,
+  "http_success_percent": 0.0,
+  "latency_ms": {
+    "mean": null,
+    "median": null,
+    "p95": null,
+    "min": null,
+    "max": null
+  }
+}

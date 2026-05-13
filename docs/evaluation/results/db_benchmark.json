@@ -1,0 +1,20 @@
+{
+  "mongoUri": "mongodb://localhost:27017",
+  "dbName": "HERA",
+  "collectionName": "telemetry_points",
+  "insertedDocuments": 17280,
+  "insertElapsedMs": 490.411,
+  "insertThroughputDocsPerSec": 35235.79,
+  "api24hQueryLatencyMs": {
+    "median": 2516.864,
+    "p95": 3809.621,
+    "min": 2093.143,
+    "max": 3844.533
+  },
+  "directMongo24hQueryLatencyMs": {
+    "median": 290.842,
+    "p95": 362.935,
+    "min": 247.801,
+    "max": 376.809
+  }
+}

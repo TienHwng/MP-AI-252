@@ -1,0 +1,8 @@
+provider,repeat,case_id,text,expected_intent,predicted_intent,intent_correct,expected_tools,tools_ok,tool_detail,http_ok,latency_ms,agent_name,tools_used
+ollama-local,0,intent_device_001,bật đèn phòng khách giúp tôi,device_control,,False,turn_on_device,False,turn_on_device,False,4110.322,,
+ollama-local,0,intent_device_002,tắt relay đi,device_control,,False,turn_off_device,False,turn_off_device,False,4112.124,,
+ollama-local,0,intent_sensor_001,nhiệt độ hiện tại bao nhiêu,sensor_query,,False,,True,not_applicable,False,4097.66,,
+ollama-local,0,intent_sensor_002,độ ẩm và ánh sáng trong nhà thế nào,sensor_query,,False,,True,not_applicable,False,4119.092,,
+ollama-local,0,intent_anomaly_001,hệ thống có bất thường gì không,anomaly_query,,False,,True,not_applicable,False,4117.419,,
+ollama-local,0,intent_general_001,"xin chào, bạn là ai",general,,False,,True,not_applicable,False,4076.039,,
+ollama-local,0,intent_web_001,tìm kiếm tin mới nhất về AI,web_search,,False,,True,not_applicable,False,4095.702,,
