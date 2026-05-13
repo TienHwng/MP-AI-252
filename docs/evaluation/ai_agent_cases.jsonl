@@ -1,0 +1,8 @@
+{"id":"intent_device_001","text":"bật đèn phòng khách giúp tôi","expected_intent":"device_control","expected_tools":["turn_on_device"]}
+{"id":"intent_device_002","text":"tắt relay đi","expected_intent":"device_control","expected_tools":["turn_off_device"]}
+{"id":"intent_sensor_001","text":"nhiệt độ hiện tại bao nhiêu","expected_intent":"sensor_query","expected_tools":[]}
+{"id":"intent_sensor_002","text":"độ ẩm và ánh sáng trong nhà thế nào","expected_intent":"sensor_query","expected_tools":[]}
+{"id":"intent_anomaly_001","text":"hệ thống có bất thường gì không","expected_intent":"anomaly_query","expected_tools":[]}
+{"id":"intent_general_001","text":"xin chào, bạn là ai","expected_intent":"general","expected_tools":[]}
+{"id":"intent_web_001","text":"tìm kiếm tin mới nhất về AI","expected_intent":"web_search","expected_tools":[]}
+

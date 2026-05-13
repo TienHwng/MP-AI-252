@@ -1,0 +1,13 @@
+{
+  "total": 100,
+  "successful": 100,
+  "success_rate_percent": 100.0,
+  "timeout_count": 0,
+  "latency_ms": {
+    "mean": 1.391,
+    "median": 1.163,
+    "p95": 2.601,
+    "min": 0.76,
+    "max": 5.998
+  }
+}
