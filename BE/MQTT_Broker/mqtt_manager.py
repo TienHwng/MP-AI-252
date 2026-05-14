@@ -46,6 +46,17 @@ from BE.HERA.config import (
 	MQTT_SUBSCRIBE_TOPIC,
 )
 
+try:
+	import sys as _sys
+	_hera_path = str(Path(__file__).resolve().parents[1] / "HERA")
+	if _hera_path not in _sys.path:
+		_sys.path.insert(0, _hera_path)
+	from core.runtime_settings import runtime_settings as _runtime_settings
+	_SETTINGS_AVAILABLE = True
+except Exception as _e:
+	_SETTINGS_AVAILABLE = False
+	_runtime_settings = None
+
 
 def _env_bool(name: str, default: bool) -> bool:
 	raw = os.getenv(name)
@@ -705,6 +716,24 @@ if __name__ == "__main__":
 				),
 				menu_border("╟", "─", "╢"),
 
+				# === Section 4: AI Model Config ===
+				menu_section("AI MODEL CONFIG", Color.GREEN),
+				menu_row(
+					menu_option(20, "View current model config", Color.GREEN),
+					menu_option(21, "Switch provider", Color.GREEN),
+				),
+				menu_row(
+					menu_option(22, "Set Orchestrator model", Color.GREEN),
+					menu_option(23, "Set Device Control model", Color.GREEN),
+				),
+				menu_row(
+					menu_option(24, "Set Sensor/Anomaly model", Color.GREEN),
+				),
+				menu_row(
+					menu_option(25, "Set & Verify OpenRouter API Key", Color.GREEN),
+				),
+				menu_border("╟", "─", "╢"),
+
 				# === Exit option ===
 				menu_row(menu_option(0, "Exit program", Color.RED)),
 				menu_border("╚", "═", "╝"),
@@ -714,7 +743,7 @@ if __name__ == "__main__":
 
 			# Get user's choice
 			choice = input(
-				f"{Color.BOLD} [ INPUT ] Please choose an option (0-19): {Color.RESET}"
+				f"{Color.BOLD} [ INPUT ] Please choose an option (0-25): {Color.RESET}"
 			).strip()
 
 			if choice == "0":
@@ -966,11 +995,184 @@ if __name__ == "__main__":
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
+			# === AI Model Config handlers ===
+			elif choice == "20":
+				print(Color.GREEN + "\n[ AI MODEL CONFIG ]" + Color.RESET)
+				if not _SETTINGS_AVAILABLE or _runtime_settings is None:
+					print(Color.RED + "  Settings store unavailable (MongoDB not connected)." + Color.RESET)
+				else:
+					settings = _runtime_settings.get()
+					provider = settings.get("provider", "?")
+					models = settings.get("models", {}).get(provider, {})
+					print(f"  Provider        : {Color.CYAN}{provider}{Color.RESET}")
+					print(f"  orchestratorModel : {Color.YELLOW}{models.get('orchestratorModel', '(default)')}{Color.RESET}")
+					print(f"  deviceControlModel: {Color.YELLOW}{models.get('deviceControlModel', '(default)')}{Color.RESET}")
+					print(f"  sensorAnalysisModel: {Color.YELLOW}{models.get('sensorAnalysisModel', '(default)')}{Color.RESET}")
+					print(f"  anomalyExpertModel : {Color.YELLOW}{models.get('anomalyExpertModel', '(default)')}{Color.RESET}")
+
+			elif choice == "21":
+				print(Color.GREEN + "\n[ SWITCH PROVIDER ]" + Color.RESET)
+				if not _SETTINGS_AVAILABLE or _runtime_settings is None:
+					print(Color.RED + "  Settings store unavailable (MongoDB not connected)." + Color.RESET)
+				else:
+					settings = _runtime_settings.get()
+					current = settings.get("provider", "openrouter")
+					print(f"  Current provider : {Color.CYAN}{current}{Color.RESET}")
+					new_provider = input(
+						f"{Color.YELLOW}  Enter provider (ollama / openrouter): {Color.RESET}"
+					).strip().lower()
+					if new_provider not in {"ollama", "openrouter"}:
+						print(Color.RED + "  Invalid provider. Must be 'ollama' or 'openrouter'." + Color.RESET)
+					else:
+						try:
+							col = _runtime_settings.collection
+							if col is None:
+								print(Color.RED + "  MongoDB unavailable — cannot persist setting." + Color.RESET)
+							else:
+								col.update_one(
+									{"_id": "hera_model_settings"},
+									{"$set": {"provider": new_provider}},
+									upsert=True,
+								)
+								_runtime_settings.refresh_and_log()
+								print(Color.GREEN + f"  Provider switched to '{new_provider}'. Hot-reload applied." + Color.RESET)
+						except Exception as e:
+							print(Color.RED + f"  Error: {e}" + Color.RESET)
+
+			elif choice in ("22", "23", "24"):
+				field_map = {
+					"22": ("orchestratorModel",   "Orchestrator"),
+					"23": ("deviceControlModel",   "Device Control"),
+					"24": ("sensorAnalysisModel",  "Sensor/Anomaly"),
+				}
+				field, label = field_map[choice]
+				if not _SETTINGS_AVAILABLE or _runtime_settings is None:
+					print(Color.RED + "  Settings store unavailable (MongoDB not connected)." + Color.RESET)
+				else:
+					settings = _runtime_settings.get()
+					provider = settings.get("provider", "openrouter")
+					current_model = settings.get("models", {}).get(provider, {}).get(field, "")
+					print(f"\n[ SET {label.upper()} MODEL ]")
+					print(f"  Provider : {Color.CYAN}{provider}{Color.RESET}")
+					print(f"  Current  : {Color.YELLOW}{current_model or '(default)'}{Color.RESET}")
+					if provider == "openrouter":
+						print(f"  {Color.MAGENTA}Tip: Use OpenRouter model IDs, e.g. 'deepseek/deepseek-v4-flash:free'{Color.RESET}")
+					else:
+						print(f"  {Color.MAGENTA}Tip: Use Ollama model names, e.g. 'qwen2.5:7b'{Color.RESET}")
+					new_model = input(
+						f"{Color.GREEN}  Enter new model ID (blank = keep current): {Color.RESET}"
+					).strip()
+					if not new_model:
+						print(Color.YELLOW + "  No change." + Color.RESET)
+					else:
+						# If choice 24, also update anomalyExpertModel to the same value
+						update_fields = {f"models.{provider}.{field}": new_model}
+						if choice == "24":
+							update_fields[f"models.{provider}.anomalyExpertModel"] = new_model
+						try:
+							col = _runtime_settings.collection
+							if col is None:
+								print(Color.RED + "  MongoDB unavailable — cannot persist." + Color.RESET)
+							else:
+								col.update_one(
+									{"_id": "hera_model_settings"},
+									{"$set": update_fields},
+									upsert=True,
+								)
+								_runtime_settings.refresh_and_log()
+								print(Color.GREEN + f"  Model updated to '{new_model}'. Hot-reload applied." + Color.RESET)
+						except Exception as e:
+							print(Color.RED + f"  Error: {e}" + Color.RESET)
+
+			# === OpenRouter API Key handler ===
+			elif choice == "25":
+				import urllib.request
+				import urllib.error
+				print(Color.GREEN + "\n[ SET & VERIFY OPENROUTER API KEY ]" + Color.RESET)
+
+				# Locate .env file (project root = 2 levels up from this script)
+				env_path = Path(__file__).resolve().parents[2] / ".env"
+
+				# Read & display current key (masked)
+				current_key = ""
+				env_lines: list[str] = []
+				if env_path.exists():
+					with open(env_path, encoding="utf-8") as f:
+						env_lines = f.readlines()
+					for line in env_lines:
+						if line.startswith("OPENROUTER_API_KEY="):
+							current_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+							break
+
+				if current_key:
+					masked = current_key[:8] + "*" * max(0, len(current_key) - 12) + current_key[-4:]
+					print(f"  Current key : {Color.YELLOW}{masked}{Color.RESET}")
+				else:
+					print(f"  Current key : {Color.RED}(not set){Color.RESET}")
+
+				print(f"  {Color.MAGENTA}Tip: Get your key at https://openrouter.ai/settings/keys{Color.RESET}")
+				new_key = input(
+					f"{Color.YELLOW}  Enter new API key (blank = keep current): {Color.RESET}"
+				).strip()
+
+				if not new_key:
+					print(Color.YELLOW + "  No change." + Color.RESET)
+				else:
+					# --- Verify key against OpenRouter ---
+					print(Color.CYAN + "  Verifying key with OpenRouter..." + Color.RESET, end="", flush=True)
+					try:
+						req = urllib.request.Request(
+							"https://openrouter.ai/api/v1/auth/key",
+							headers={"Authorization": f"Bearer {new_key}"},
+						)
+						with urllib.request.urlopen(req, timeout=8) as resp:
+							import json as _json
+							data = _json.loads(resp.read().decode())
+							key_data = data.get("data", data)
+							label = key_data.get("label") or key_data.get("name") or "(unnamed key)"
+							limit = key_data.get("limit")
+							usage = key_data.get("usage")
+							is_free = key_data.get("is_free_tier", False)
+						print(Color.GREEN + " OK" + Color.RESET)
+						print(f"    Key label : {Color.CYAN}{label}{Color.RESET}")
+						if limit is not None:
+							print(f"    Credit limit: {Color.YELLOW}${limit}{Color.RESET}")
+						if usage is not None:
+							print(f"    Usage so far: {Color.YELLOW}${usage:.4f}{Color.RESET}")
+						if is_free:
+							print(f"    Tier        : {Color.GREEN}Free tier{Color.RESET}")
+
+						# --- Write key to .env ---
+						key_line = f"OPENROUTER_API_KEY={new_key}\n"
+						updated = False
+						new_lines = []
+						for line in env_lines:
+							if line.startswith("OPENROUTER_API_KEY="):
+								new_lines.append(key_line)
+								updated = True
+							else:
+								new_lines.append(line)
+						if not updated:
+							new_lines.append(key_line)
+						with open(env_path, "w", encoding="utf-8") as f:
+							f.writelines(new_lines)
+						print(Color.GREEN + f"  Key saved to .env. Restart HERA server to apply." + Color.RESET)
+
+					except urllib.error.HTTPError as e:
+						print(Color.RED + f" FAILED (HTTP {e.code})" + Color.RESET)
+						if e.code == 401:
+							print(Color.RED + "  Invalid API key. Please check and try again." + Color.RESET)
+						else:
+							print(Color.RED + f"  OpenRouter returned error {e.code}." + Color.RESET)
+					except Exception as e:
+						print(Color.RED + f" FAILED ({e})" + Color.RESET)
+						print(Color.YELLOW + "  Could not reach OpenRouter. Check your internet connection." + Color.RESET)
+
 			else:
 				print(
 					Color.RED
 					+ Color.BOLD
-					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 19."
+					+ "\n[ WARNING ] Invalid choice. Please enter a number from 0 to 25."
 					+ Color.RESET
 				)
 

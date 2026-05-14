@@ -43,7 +43,57 @@ DEVICE_STATUS_KEYS = {
 	"mini_fan": "mini_fan",
 }
 
+# Scene catalog — mirrors the FE's handleActivateScene logic exactly.
+# Each scene is a list of step dicts:
+#   {"type": "state",  "target": <device_target>, "state": <bool>}
+#   {"type": "value",  "target": <device_target>, "property": <str>, "value": <any>}
+SCENE_CATALOG: dict[str, list[dict]] = {
+	"movie": [
+		{"type": "state", "target": "main_led",  "state": False},
+		{"type": "state", "target": "neo_led",   "state": False},
+		{"type": "state", "target": "ws2812",    "state": False},
+		{"type": "state", "target": "mini_fan",  "state": True},
+		{"type": "state", "target": "relay",     "state": True},
+		{"type": "value", "target": "neo_led",   "property": "brightness", "value": 0},
+		{"type": "value", "target": "ws2812",    "property": "brightness", "value": 0},
+	],
+	"sleep": [
+		{"type": "state", "target": "main_led",  "state": False},
+		{"type": "state", "target": "neo_led",   "state": False},
+		{"type": "state", "target": "ws2812",    "state": False},
+		{"type": "value", "target": "neo_led",   "property": "brightness", "value": 0},
+		{"type": "value", "target": "ws2812",    "property": "brightness", "value": 0},
+	],
+	"away": [
+		{"type": "state", "target": "main_led",  "state": False},
+		{"type": "state", "target": "neo_led",   "state": False},
+		{"type": "state", "target": "ws2812",    "state": False},
+		{"type": "state", "target": "mini_fan",  "state": False},
+		{"type": "state", "target": "relay",     "state": False},
+		{"type": "value", "target": "neo_led",   "property": "brightness", "value": 0},
+		{"type": "value", "target": "ws2812",    "property": "brightness", "value": 0},
+		{"type": "value", "target": "mini_fan",  "property": "speed",      "value": 0},
+	],
+}
+
+SCENE_LABELS: dict[str, str] = {
+	"movie": "Movie Mode",
+	"sleep": "Sleep Mode",
+	"away":  "Away Mode",
+}
+
 DEVICE_VALUE_SPECS = {
+	"main_led": {
+		"brightness": {
+			"method": "setLedBrightness",
+			"device_key": "led",
+			"field": "brightness",
+			"label": "Main LED brightness",
+			"type": "int",
+			"minimum": 0,
+			"maximum": 1023,
+		},
+	},
 	"neo_led": {
 		"brightness": {
 			"method": "setStripBrightness",

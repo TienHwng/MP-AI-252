@@ -135,7 +135,52 @@ async def handle_set_device_state(request: web.Request) -> web.Response:
 	status = 200 if result.ok else 409
 	return web.json_response(jsonable(result.model_dump(mode="json")), status=status)
 
+async def handle_get_model_settings(request: web.Request) -> web.Response:
+	from core.runtime_settings import runtime_settings
+	settings = runtime_settings.get()
+	return web.json_response(jsonable({
+		"provider": settings.get("provider"),
+		"models": settings.get("models", {}),
+		"updatedAt": "",
+	}))
+
+
+async def handle_update_model_settings(request: web.Request) -> web.Response:
+	from core.runtime_settings import runtime_settings, prune_settings, deep_merge, DEFAULT_SETTINGS
+	try:
+		payload = await request.json()
+	except Exception:
+		return web.json_response({"ok": False, "error": "invalid_json"}, status=400)
+
+	pruned = prune_settings(payload)
+	collection = runtime_settings.collection
+	if collection is None:
+		return web.json_response(
+			{"ok": False, "error": "mongodb_unavailable"},
+			status=503,
+		)
+	try:
+		collection.update_one(
+			{"_id": "hera_model_settings"},
+			{"$set": {"provider": pruned["provider"], "models": pruned["models"]}},
+			upsert=True,
+		)
+	except Exception as exc:
+		return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+	updated = runtime_settings.refresh_and_log()
+	return web.json_response(jsonable({
+		"ok": True,
+		"settings": {
+			"provider": updated.get("provider"),
+			"models": updated.get("models", {}),
+			"updatedAt": "",
+		},
+	}))
+
+
 async def handle_rpc_command(request: web.Request) -> web.Response:
+
 	try:
 		payload = await request.json()
 	except json.JSONDecodeError:
@@ -317,6 +362,8 @@ def create_app() -> web.Application:
 	app.router.add_post("/api/sensors/{sensor}/value", handle_write_sensor_value)
 	app.router.add_post("/api/rpc", handle_rpc_command)
 	app.router.add_post("/api/assistant/message", handle_assistant_message)
+	app.router.add_get("/api/settings/models", handle_get_model_settings)
+	app.router.add_put("/api/settings/models", handle_update_model_settings)
 	app.router.add_options("/{tail:.*}", lambda request: web.Response(status=204))
 	app.on_cleanup.append(cleanup)
 	return app

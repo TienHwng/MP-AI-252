@@ -152,11 +152,7 @@ class DeviceExecutor:
 		states_before: dict[str, bool | None] = {}
 
 		for method, device_key, label in DEVICE_TARGETS[target]:
-			device_state = devices.setdefault(device_key, {})
-			if not isinstance(device_state, dict):
-				device_state = {"status": device_state}
-				devices[device_key] = device_state
-			current_state = device_state.get("status")
+			current_state = self._device_status(devices, device_key)
 			states_before[device_key] = current_state
 			if current_state is state:
 				unchanged.append(label)

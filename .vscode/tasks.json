@@ -3,9 +3,6 @@
   "tasks": [
     {
       "label": "Start All (VSCode Terminal)",
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
       "dependsOn": [
         "MQTT: Simulator",
         "MQTT: Manager",

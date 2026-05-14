@@ -18,6 +18,7 @@ from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.runtime_settings import runtime_settings
 from domain.devices import DEVICE_TARGETS, DEVICE_VALUE_SPECS, SENSOR_VALUE_SPECS
+from domain.devices.device_catalog import SCENE_CATALOG, SCENE_LABELS
 from prompts import (
 	DEVICE_COMMAND_INTERPRETER_PROMPT,
 	DEVICE_TARGET_CLARIFICATION_PROMPT,
@@ -42,270 +43,23 @@ DEVICE_LABEL_TARGETS = {
 	"Mini fan": "mini_fan",
 }
 
-ACTION_STOPWORDS = {
-	"bat",
-	"bật",
-	"tat",
-	"tắt",
-	"mo",
-	"mở",
-	"dong",
-	"đóng",
-	"turn",
-	"switch",
-	"status",
-	"trạng",
-	"trang",
-	"thái",
-	"thai",
-	"on",
-	"off",
-}
-
-FILLER_TOKENS = {
-	"toi",
-	"tôi",
-	"giup",
-	"giúp",
-	"gium",
-	"giùm",
-	"cho",
-	"hay",
-	"hãy",
-	"xin",
-	"vui",
-	"lòng",
-	"long",
-	"di",
-	"đi",
-	"nhe",
-	"nhé",
-	"nha",
-	"len",
-	"lên",
-	"voi",
-	"với",
-	"nao",
-	"nào",
-	"cac",
-	"các",
-	"nhung",
-	"những",
-	"cai",
-	"cái",
-	"the",
-	"dang",
-	"đang",
-	"hien",
-	"hiện",
-	"tai",
-	"tại",
-	"la",
-	"là",
-	"thi",
-	"thì",
-	"sao",
-	"phòng",
-	"phong",
-	"khách",
-	"khach",
-	"ngủ",
-	"ngu",
-	"bếp",
-	"bep",
-}
-
-RECENT_REFERENCE_TOKENS = {
-	"vua",
-	"vừa",
-	"duoc",
-	"được",
-	"recently",
-	"just",
-	"changed",
-}
-
-GENERIC_LIGHT_TOKEN_SETS = {
-	frozenset({"đèn"}),
-	frozenset({"den"}),
-	# frozenset({"led"}),  # Removed: "led" now defaults to main_led in SPECIFIC_TARGET_TOKEN_SETS
-	frozenset({"đèn", "led"}),
-	frozenset({"den", "led"}),
-	frozenset({"bóng", "đèn"}),
-	frozenset({"bong", "den"}),
-	frozenset({"lamp"}),
-	frozenset({"lamps"}),
-	frozenset({"light"}),
-	frozenset({"lights"}),
-	frozenset({"lighting"}),
-}
-
-GENERIC_DEVICE_TOKEN_SETS = {
-	frozenset({"thiết", "bị"}),
-	frozenset({"thiet", "bi"}),
-	frozenset({"device"}),
-	frozenset({"devices"}),
-}
-
-ALL_LIGHTS_TOKEN_SETS = {
-	frozenset({"tất", "cả", "đèn"}),
-	frozenset({"tat", "ca", "den"}),
-	frozenset({"toàn", "bộ", "đèn"}),
-	frozenset({"toan", "bo", "den"}),
-	frozenset({"all", "lights"}),
-}
-
-ALL_DEVICES_TOKEN_SETS = {
-	frozenset({"tất", "cả", "thiết", "bị"}),
-	frozenset({"tat", "ca", "thiet", "bi"}),
-	frozenset({"all", "devices"}),
-}
-
-STATUS_MARKERS = (
-	"trạng thái",
-	"trang thai",
-	"bật hay tắt",
-	"bat hay tat",
-	"tắt hay bật",
-	"tat hay bat",
-	"on hay off",
-	"status",
-)
-
-STATUS_FOLLOWUP_MARKERS = (
-	"chắc chưa",
-	"chac chua",
-	"đúng chưa",
-	"dung chua",
-	"đúng không",
-	"dung khong",
-	"chưa",
-	"chua",
-)
-
-CONDITIONAL_MARKERS = (
-	"nếu",
-	"neu",
-	"if",
-	"khi",
-	"when",
-	"trường hợp",
-	"truong hop",
-)
-
-LIGHT_LANGUAGE_TOKENS = {
-	"đèn",
-	"den",
-	"led",
-	"bóng",
-	"bong",
-	"lamp",
-	"lamps",
-	"light",
-	"lights",
-	"lighting",
-}
-
-GENERIC_DEVICE_LANGUAGE_TOKENS = {
-	"thiết",
-	"thiet",
-	"bị",
-	"bi",
-	"device",
-	"devices",
-}
-
-OTHER_DEVICE_MARKERS = (
-	"thiết bị khác",
-	"thiet bi khac",
-	"các thiết bị khác",
-	"cac thiet bi khac",
-	"những thiết bị khác",
-	"nhung thiet bi khac",
-	"other devices",
-)
-
-TURN_ON_MARKERS = (
-	"bật",
-	"bat",
-	"mở",
-	"mo",
-	"turn on",
-	"switch on",
-)
-
-TURN_OFF_MARKERS = (
-	"tắt",
-	"tat",
-	"đóng",
-	"dong",
-	"turn off",
-	"switch off",
-)
-
-RECENT_REFERENCE_MARKERS = (
-	"vừa được bật",
-	"vua duoc bat",
-	"vừa bật",
-	"vua bat",
-	"vừa được tắt",
-	"vua duoc tat",
-	"vừa tắt",
-	"vua tat",
-	"recently changed",
-)
-
-SPECIFIC_TARGET_TOKEN_SETS: dict[frozenset[str], str] = {
-	frozenset({"main", "led"}): "main_led",
-	frozenset({"đèn", "chính"}): "main_led",
-	frozenset({"den", "chinh"}): "main_led",
-	frozenset({"neo", "led"}): "neo_led",
-	frozenset({"neo"}): "neo_led",
-	frozenset({"neopixel", "led"}): "neo_led",
-	frozenset({"neopixel"}): "neo_led",
-	frozenset({"ws2812"}): "ws2812",
-	frozenset({"ws2812", "led"}): "ws2812",
-	frozenset({"relay"}): "relay",
-	frozenset({"mini", "fan"}): "mini_fan",
-	frozenset({"fan"}): "mini_fan",
-	frozenset({"quạt"}): "mini_fan",
-	frozenset({"quat"}): "mini_fan",
-	frozenset({"led"}): "main_led",
-}
-
+# Sensor metadata used by condition evaluator (runtime correctness, not NLU)
 SENSOR_CONDITION_ALIASES = {
-	"temperature": (
-		"nhiệt độ",
-		"nhiet do",
-		"temperature",
-		"temp",
-	),
-	"humidity": (
-		"độ ẩm",
-		"do am",
-		"humidity",
-	),
-	"light": (
-		"ánh sáng",
-		"anh sang",
-		"light",
-	),
-	"anomaly": (
-		"bất thường",
-		"bat thuong",
-		"anomaly",
-	),
+	"temperature": ("temperature", "temp"),
+	"humidity": ("humidity",),
+	"light": ("light",),
+	"anomaly": ("anomaly",),
 }
 
 SENSOR_LABELS_VI = {
-	"temperature": "nhiệt độ",
-	"humidity": "độ ẩm",
-	"light": "ánh sáng",
-	"anomaly": "điểm bất thường",
+	"temperature": "nhiá»‡t Ä‘á»™",
+	"humidity": "Ä‘á»™ áº©m",
+	"light": "Ã¡nh sÃ¡ng",
+	"anomaly": "Ä‘iá»ƒm báº¥t thÆ°á»ng",
 }
 
 SENSOR_UNITS = {
-	"temperature": "°C",
+	"temperature": "Â°C",
 	"humidity": "%",
 	"light": "",
 	"anomaly": "",
@@ -316,67 +70,6 @@ TELEMETRY_SUMMARY_FIELDS = {
 	"humidity": "humidity_percent",
 	"light": "light",
 	"anomaly": "anomaly_score",
-}
-
-VALUE_SET_MARKERS = (
-	"set",
-	"adjust",
-	"change",
-	"make",
-	"dat",
-	"chinh",
-	"dieu chinh",
-	"cap nhat",
-	"update",
-)
-
-DEVICE_VALUE_PROPERTY_MARKERS = {
-	"brightness": (
-		"brightness",
-		"bright",
-		"intensity",
-		"level",
-		"do sang",
-	),
-	"speed": (
-		"speed",
-		"fan speed",
-		"toc do",
-	),
-	"color": (
-		"color",
-		"colour",
-		"rgb",
-		"mau",
-	),
-}
-
-SENSOR_WRITE_ALIASES = {
-	"gas_detected": (
-		"gas detected",
-		"gas_detected",
-		"gasdetected",
-	),
-	"temperature": (
-		"temperature",
-		"temp",
-		"nhiet do",
-	),
-	"humidity": (
-		"humidity",
-		"humi",
-		"do am",
-	),
-	"light": (
-		"light sensor",
-		"lux",
-		"anh sang",
-	),
-	"gas": (
-		"gas ppm",
-		"gas_ppm",
-		"gas",
-	),
 }
 
 WINDOW_CONDITION_TYPES = {
@@ -411,506 +104,41 @@ def normalize_text(text: str) -> str:
 	return " ".join(text.strip().lower().split())
 
 
-def tokenize_text(text: str) -> set[str]:
-	return {
-		token
-		for token in re.findall(r"[0-9A-Za-zÀ-ỹđĐ]+", normalize_text(text))
-		if token
-	}
-
-
-def has_light_language(tokens: set[str]) -> bool:
-	return bool(tokens & LIGHT_LANGUAGE_TOKENS)
-
-
-def has_generic_device_language(tokens: set[str]) -> bool:
-	return bool(tokens & GENERIC_DEVICE_LANGUAGE_TOKENS)
-
-
-def needs_recent_action_memory(text: str) -> bool:
-	normalized = normalize_text(text)
-	if detect_condition_window_seconds(normalized) is not None:
-		return False
-	tokens = tokenize_text(text)
-	return any(marker in normalized for marker in RECENT_REFERENCE_MARKERS) or bool(
-		tokens & RECENT_REFERENCE_TOKENS
-	)
-
-
-def has_conditional_language(text: str) -> bool:
-	normalized = normalize_text(text)
-	return any(marker in normalized for marker in CONDITIONAL_MARKERS)
-
-
-def should_use_local_fast_path(text: str) -> bool:
-	return not has_conditional_language(text)
-
-
-def looks_like_standalone_device_request(text: str) -> bool:
-	"""True when a pending clarification should give way to a full new request."""
-	parsed = fast_parse_value_command(text)
-	if parsed is None:
-		parsed = fast_parse_local_command(text)
-	return (
-		isinstance(parsed, dict)
-		and (
-			(
-				parsed.get("action") in {"turn_on", "turn_off", "status"}
-				and parsed.get("target") is not None
-			)
-			or (
-				parsed.get("action") == "set_device_value"
-				and parsed.get("target") is not None
-			)
-			or (
-				parsed.get("action") == "set_sensor_value"
-				and parsed.get("sensor") is not None
-			)
-		)
-		and not has_conditional_language(text)
-	)
-
-
-def looks_like_contextual_device_request(text: str, focus_target: str | None) -> bool:
-	"""True when a short follow-up can use the active device focus."""
-	return fast_parse_contextual_command(text, focus_target) is not None
-
-
-def looks_like_conditional_device_request(
-	text: str,
-	focus_target: str | None = None,
-) -> bool:
-	"""True when a conditional sentence contains a concrete actuator request."""
-	if not has_conditional_language(text):
-		return False
-	parsed = fast_parse_local_command(text)
-	if parsed is None:
-		parsed = fast_parse_contextual_command(text, focus_target)
-	if not isinstance(parsed, dict):
-		return False
-	return parsed.get("action") in {"turn_on", "turn_off", "status"}
-
-
-def fast_parse_value_command(text: str) -> dict[str, Any] | None:
-	normalized = normalize_text(text)
-	if not normalized or not any(marker in normalized for marker in VALUE_SET_MARKERS):
-		return None
-
-	sensor = detect_sensor_write_target(normalized)
-	if sensor is not None:
-		value = extract_sensor_write_value(normalized, sensor)
-		if value is None:
-			return None
-		return {
-			"action": "set_sensor_value",
-			"target": None,
-			"sensor": sensor,
-			"value": value,
-			"reference": "none",
-			"confidence": 0.9,
-		}
-
-	target = explicit_target_from_text(text)
-	prop = detect_device_value_property(normalized, target)
-	if prop is None:
-		return None
-	if target is None:
-		if prop == "speed" and any(
-			marker in normalized for marker in ("fan", "qu?t", "quat")
-		):
-			target = "mini_fan"
-		elif prop == "brightness" and "neo" in normalized:
-			target = "neo_led"
-		elif prop in {"brightness", "color"} and "ws2812" in normalized:
-			target = "ws2812"
-	if target not in DEVICE_VALUE_SPECS:
-		return None
-	if prop not in DEVICE_VALUE_SPECS.get(str(target), {}):
-		return None
-
-	if prop == "color":
-		value = extract_color_setting(normalized)
-	else:
-		value = extract_numeric_setting(normalized, prop)
-		if isinstance(value, tuple):
-			number, is_percent = value
-			max_value = DEVICE_VALUE_SPECS[str(target)][prop].get("maximum")
-			value = scale_percent_value(number, int(max_value)) if is_percent else number
-	if value is None:
-		return None
-
-	return {
-		"action": "set_device_value",
-		"target": target,
-		"property": prop,
-		"value": value,
-		"reference": "none",
-		"confidence": 0.92,
-	}
-
-
-def detect_device_value_property(
-	normalized: str,
-	target: str | None,
-) -> str | None:
-	for prop, markers in DEVICE_VALUE_PROPERTY_MARKERS.items():
-		if any(marker in normalized for marker in markers):
-			return prop
-	if target == "mini_fan" and any(marker in normalized for marker in ("speed", "toc")):
-		return "speed"
-	return None
-
-
-def detect_sensor_write_target(normalized: str) -> str | None:
-	for sensor, aliases in SENSOR_WRITE_ALIASES.items():
-		if any(alias in normalized for alias in aliases):
-			if sensor == "light" and "sensor" not in normalized and "lux" not in normalized:
-				continue
-			return sensor
-	return None
-
-
-def extract_sensor_write_value(normalized: str, sensor: str) -> Any:
-	if sensor == "gas_detected":
-		if any(marker in normalized for marker in ("true", "yes", "on", "detected")):
-			return True
-		if any(marker in normalized for marker in ("false", "no", "off", "clear")):
-			return False
-		return None
-	value = extract_numeric_setting(normalized, sensor)
-	if isinstance(value, tuple):
-		number, _ = value
-		return number
-	return value
-
-
-def extract_color_setting(normalized: str) -> str | None:
-	match = re.search(r"(?:#|0x)?[0-9a-f]{6}\b", normalized, flags=re.IGNORECASE)
-	if not match:
-		return None
-	value = match.group(0)
-	if value.lower().startswith("0x"):
-		value = value[2:]
-	if not value.startswith("#"):
-		value = f"#{value}"
-	return value.upper()
-
-
-def extract_numeric_setting(
-	normalized: str,
-	property_name: str,
-) -> tuple[int, bool] | float | int | None:
-	markers = DEVICE_VALUE_PROPERTY_MARKERS.get(property_name, (property_name,))
-	markers = (*markers, property_name, "to", "at", "=")
-	for marker in markers:
-		index = normalized.find(marker)
-		if index == -1:
-			continue
-		tail = normalized[index + len(marker) :]
-		match = re.search(
-			r"(-?\d+(?:[\.,]\d+)?)\s*(%|percent|phan tram)?",
-			tail,
-			flags=re.IGNORECASE,
-		)
-		if match:
-			return parse_numeric_match(match)
-
-	search_text = normalized.replace("ws2812", " ")
-	match = re.search(
-		r"(-?\d+(?:[\.,]\d+)?)\s*(%|percent|phan tram)?",
-		search_text,
-		flags=re.IGNORECASE,
-	)
-	return parse_numeric_match(match) if match else None
-
-
-def parse_numeric_match(match: re.Match[str]) -> tuple[int, bool] | float | int:
-	raw_number = match.group(1).replace(",", ".")
-	number = float(raw_number)
-	is_percent = bool(match.group(2))
-	if is_percent:
-		return int(round(number)), True
-	return int(number) if number.is_integer() else number
-
-
-def scale_percent_value(percent: int, maximum: int) -> int:
-	clamped = max(0, min(int(percent), 100))
-	return int(round(maximum * clamped / 100))
-
-
-def detect_action(normalized: str) -> str | None:
-	if any(marker in normalized for marker in STATUS_MARKERS):
-		return "status"
-	if any(marker in normalized for marker in TURN_OFF_MARKERS):
-		return "turn_off"
-	if any(marker in normalized for marker in TURN_ON_MARKERS):
-		return "turn_on"
-	return None
-
-
-def detect_leading_action(normalized: str) -> str | None:
-	patterns = (
-		(
-			"turn_on",
-			r"^(?:xin\s+)?(?:hãy\s+|hay\s+)?(?:giúp\s+tôi\s+|giup\s+toi\s+)?(?:cho\s+tôi\s+|cho\s+toi\s+)?(?:vui\s+lòng\s+|vui\s+long\s+)?(?:bật|bat|mở|mo|turn on|switch on)\b",
-		),
-		(
-			"turn_off",
-			r"^(?:xin\s+)?(?:hãy\s+|hay\s+)?(?:giúp\s+tôi\s+|giup\s+toi\s+)?(?:cho\s+tôi\s+|cho\s+toi\s+)?(?:vui\s+lòng\s+|vui\s+long\s+)?(?:tắt|tat|đóng|dong|turn off|switch off)\b",
-		),
-		(
-			"status",
-			r"^(?:xin\s+)?(?:hãy\s+|hay\s+)?(?:cho\s+tôi\s+|cho\s+toi\s+)?(?:xem|kiểm tra|kiem tra|check)\b",
-		),
-	)
-	for action, pattern in patterns:
-		if re.search(pattern, normalized):
-			return action
-	return None
-
-
-def fast_parse_local_command(text: str) -> dict[str, Any] | None:
-	normalized = normalize_text(text)
-
-	# ── Status-question detection (must come BEFORE action detection) ──
-	# Patterns like "bật chưa", "đã bật", "tắt chưa", "đang tắt" are
-	# inquiries about device state, not commands to change state.
-	status_question_patterns = (
-		r"(?:đã|da)\s+(?:được\s+)?(?:bật|bat|tắt|tat|mở|mo|đóng|dong)",
-		r"(?:được|duoc)\s+(?:bật|bat|tắt|tat|mở|mo|đóng|dong)",
-		r"(?:đang|dang)\s+(?:bật|bat|tắt|tat|mở|mo|đóng|dong|chạy|chay|hoạt động|hoat dong)",
-		r"(?:bật|bat|tắt|tat|mở|mo|đóng|dong)\s+(?:chưa|chua|chưa\b|không|khong|rồi|roi)",
-		r"(?:bật|bat|tắt|tat)\s+hay\s+(?:tắt|tat|bật|bat)",
-		r"(?:có|co)\s+(?:đang|dang)\s+(?:bật|bat|tắt|tat|chạy|chay)",
-	)
-	question_particles = (
-		"chưa",
-		"chua",
-		"không",
-		"khong",
-		"nhỉ",
-		"nhi",
-		"hả",
-		"ha",
-		"?",
-	)
-	has_question = any(q in normalized for q in question_particles)
-	is_status_question = has_question and any(
-		re.search(p, normalized) for p in status_question_patterns
-	)
-
-	if is_status_question:
-		# Force action=status, skip normal action detection
-		action = "status"
-		leading_action = "status"
-	else:
-		action = detect_action(normalized)
-		leading_action = detect_leading_action(normalized)
-		if (
-			has_conditional_language(normalized)
-			and action in {"turn_on", "turn_off"}
-			and leading_action == "status"
-		):
-			pass
-		elif leading_action is not None:
-			action = leading_action
-		elif re.search(r"^(?:ắt|at)\b", normalized):
-			action = "turn_off"
-			leading_action = action
-
-	if action is None:
-		return None
-
-	tokens = tokenize_text(text)
-	if not tokens:
-		return None
-
-	has_recent_reference = any(
-		marker in normalized for marker in RECENT_REFERENCE_MARKERS
-	)
-	has_light = has_light_language(tokens)
-	has_generic_device = has_generic_device_language(tokens)
-	has_device_language = (
-		has_light
-		or has_generic_device
-		or any(token in tokens for token in ("relay", "ws2812", "fan", "quạt", "quat"))
-	)
-	if has_recent_reference and has_device_language and leading_action == action:
-		return {
-			"action": action,
-			"target": None,
-			"reference": "recent_changed_devices",
-			"confidence": 0.9,
-		}
-
-	significant_tokens = {
-		token
-		for token in tokens
-		if token not in ACTION_STOPWORDS
-		and token not in FILLER_TOKENS
-		and token not in RECENT_REFERENCE_TOKENS
-	}
-	if not significant_tokens:
-		return None
-
-	significant = frozenset(significant_tokens)
-	if has_light and any(marker in normalized for marker in OTHER_DEVICE_MARKERS):
-		return {
-			"action": action,
-			"target": "all_devices",
-			"reference": "none",
-			"confidence": 0.85,
-		}
-	target = None
-	for token_set, candidate in sorted(
-		SPECIFIC_TARGET_TOKEN_SETS.items(),
-		key=lambda item: len(item[0]),
-		reverse=True,
-	):
-		if token_set.issubset(significant):
-			target = candidate
-			break
-	if target is not None:
-		return {
-			"action": action,
-			"target": target,
-			"reference": "none",
-			"confidence": 0.98,
-		}
-	if significant in ALL_LIGHTS_TOKEN_SETS:
-		return {
-			"action": action,
-			"target": "all_lights",
-			"reference": "none",
-			"confidence": 0.95,
-		}
-	if significant in ALL_DEVICES_TOKEN_SETS:
-		return {
-			"action": action,
-			"target": "all_devices",
-			"reference": "none",
-			"confidence": 0.95,
-		}
-	if significant in GENERIC_LIGHT_TOKEN_SETS:
-		return {
-			"action": action,
-			"target": None,
-			"reference": "none",
-			"confidence": 0.9,
-		}
-	if has_light:
-		return {
-			"action": action,
-			"target": None,
-			"reference": "none",
-			"confidence": 0.82,
-		}
-	if significant in GENERIC_DEVICE_TOKEN_SETS:
-		return {
-			"action": action,
-			"target": None,
-			"reference": "none",
-			"confidence": 0.85,
-		}
-	if has_generic_device:
-		return {
-			"action": action,
-			"target": None,
-			"reference": "none",
-			"confidence": 0.75,
-		}
-	return None
-
-
 def explicit_target_from_text(text: str) -> str | None:
-	tokens = tokenize_text(text)
-	if not tokens:
-		return None
-	significant_tokens = {
-		token
-		for token in tokens
-		if token not in ACTION_STOPWORDS
-		and token not in FILLER_TOKENS
-		and token not in RECENT_REFERENCE_TOKENS
-	}
-	significant = frozenset(significant_tokens)
-	for token_set, candidate in sorted(
-		SPECIFIC_TARGET_TOKEN_SETS.items(),
-		key=lambda item: len(item[0]),
-		reverse=True,
-	):
-		if token_set.issubset(significant):
-			return candidate
-	if significant in ALL_DEVICES_TOKEN_SETS:
-		return "all_devices"
-	if significant in ALL_LIGHTS_TOKEN_SETS:
-		return "all_lights"
-	return None
+	"""Extract an explicit device target from text using canonical device IDs.
 
-
-def detect_contextual_action(text: str) -> str | None:
+	This is used for discourse focus extraction (grounding), not for intent
+	routing. It only matches when a canonical device ID appears literally
+	in the user text.
+	"""
 	normalized = normalize_text(text)
-	action = detect_action(normalized)
-	leading_action = detect_leading_action(normalized)
-	if leading_action in {"turn_on", "turn_off"}:
-		return leading_action
-	if action in {"turn_on", "turn_off", "status"}:
-		return action
-	if any(marker in normalized for marker in STATUS_FOLLOWUP_MARKERS):
-		return "status"
+	if not normalized:
+		return None
+	# Check canonical device IDs directly â€” no keyword token sets needed
+	canonical_ids = {
+		"main_led": ("main led", "main_led"),
+		"neo_led": ("neo led", "neo_led", "neopixel"),
+		"ws2812": ("ws2812",),
+		"relay": ("relay",),
+		"mini_fan": ("mini fan", "mini_fan"),
+	}
+	for target, patterns in canonical_ids.items():
+		if any(pattern in normalized for pattern in patterns):
+			return target
+	# Check group targets
+	group_markers = {
+		"all_devices": ("all devices", "all_devices"),
+		"all_lights": ("all lights", "all_lights"),
+	}
+	for target, patterns in group_markers.items():
+		if any(pattern in normalized for pattern in patterns):
+			return target
 	return None
 
 
-def fast_parse_contextual_command(
-	text: str,
-	focus_target: str | None,
-) -> dict[str, Any] | None:
-	if focus_target not in DEVICE_TARGETS:
-		return None
-	if explicit_target_from_text(text) is not None:
-		return None
-	action = detect_contextual_action(text)
-	if action not in {"turn_on", "turn_off", "status"}:
-		return None
-	return {
-		"action": action,
-		"target": focus_target,
-		"reference": "discourse_focus",
-		"confidence": 0.88,
-	}
 
 
-def fast_resolve_target_text(text: str) -> dict[str, Any] | None:
-	normalized = normalize_text(text)
-	tokens = tokenize_text(text)
-	if not tokens:
-		return None
-	significant_tokens = {
-		token
-		for token in tokens
-		if token not in ACTION_STOPWORDS
-		and token not in FILLER_TOKENS
-		and token not in RECENT_REFERENCE_TOKENS
-	}
-	significant = frozenset(significant_tokens)
-	for token_set, candidate in sorted(
-		SPECIFIC_TARGET_TOKEN_SETS.items(),
-		key=lambda item: len(item[0]),
-		reverse=True,
-	):
-		if token_set.issubset(significant):
-			return {"target": candidate, "confidence": 0.98}
-	if significant in ALL_LIGHTS_TOKEN_SETS or (
-		has_light_language(tokens) and "tất cả" in normalized
-	):
-		return {"target": "all_lights", "confidence": 0.95}
-	if significant in ALL_DEVICES_TOKEN_SETS or any(
-		marker in normalized for marker in OTHER_DEVICE_MARKERS
-	):
-		return {"target": "all_devices", "confidence": 0.9}
-	if significant in GENERIC_LIGHT_TOKEN_SETS or has_light_language(tokens):
-		return {"target": None, "confidence": 0.82}
-	return None
+
 
 
 def build_sensor_condition(
@@ -1189,8 +417,8 @@ def detect_condition_sensor(normalized: str) -> str | None:
 
 def detect_condition_window_seconds(normalized: str) -> int | None:
 	patterns = (
-		r"(?:trong|tong|vòng|vong|within|last)\s+(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)",
-		r"(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)\s+(?:vừa rồi|vua roi|qua|gần đây|gan day|last|ago)",
+		r"(?:trong|tong|vÃ²ng|vong|within|last)\s+(\d+(?:[.,]\d+)?)\s*(giÃ¢y|giay|s|sec|secs|second|seconds|phÃºt|phut|m|min|mins|minute|minutes)",
+		r"(\d+(?:[.,]\d+)?)\s*(giÃ¢y|giay|s|sec|secs|second|seconds|phÃºt|phut|m|min|mins|minute|minutes)\s+(?:vá»«a rá»“i|vua roi|qua|gáº§n Ä‘Ã¢y|gan day|last|ago)",
 	)
 	for pattern in patterns:
 		match = re.search(pattern, normalized)
@@ -1198,7 +426,7 @@ def detect_condition_window_seconds(normalized: str) -> int | None:
 			continue
 		value = float(match.group(1).replace(",", "."))
 		unit = match.group(2)
-		if unit in {"phút", "phut", "m", "min", "mins", "minute", "minutes"}:
+		if unit in {"phÃºt", "phut", "m", "min", "mins", "minute", "minutes"}:
 			value *= 60
 		return max(1, int(value))
 	return None
@@ -1213,31 +441,31 @@ def detect_condition_operator_threshold(
 			">=",
 			(
 				r">=\s*",
-				r"ít nhất\s+",
+				r"Ã­t nháº¥t\s+",
 				r"it nhat\s+",
-				r"từ\s+",
+				r"tá»«\s+",
 				r"tu\s+",
-				r"lên\s+",
+				r"lÃªn\s+",
 				r"len\s+",
-				r"đạt\s+",
+				r"Ä‘áº¡t\s+",
 				r"dat\s+",
-				r"chạm\s+",
+				r"cháº¡m\s+",
 				r"cham\s+",
-				r"tới\s+",
+				r"tá»›i\s+",
 			),
 		),
-		("<=", (r"<=\s*", r"tối đa\s+", r"toi da\s+")),
+		("<=", (r"<=\s*", r"tá»‘i Ä‘a\s+", r"toi da\s+")),
 		(
 			">",
 			(
 				r">\s*",
-				r"trên\s+",
+				r"trÃªn\s+",
 				r"tren\s+",
-				r"cao hơn\s+",
+				r"cao hÆ¡n\s+",
 				r"cao hon\s+",
-				r"lớn hơn\s+",
+				r"lá»›n hÆ¡n\s+",
 				r"lon hon\s+",
-				r"hơn\s+",
+				r"hÆ¡n\s+",
 				r"hon\s+",
 			),
 		),
@@ -1245,11 +473,11 @@ def detect_condition_operator_threshold(
 			"<",
 			(
 				r"<\s*",
-				r"dưới\s+",
+				r"dÆ°á»›i\s+",
 				r"duoi\s+",
-				r"thấp hơn\s+",
+				r"tháº¥p hÆ¡n\s+",
 				r"thap hon\s+",
-				r"nhỏ hơn\s+",
+				r"nhá» hÆ¡n\s+",
 				r"nho hon\s+",
 			),
 		),
@@ -1261,17 +489,17 @@ def detect_condition_operator_threshold(
 				return operator, float(match.group(1).replace(",", "."))
 
 	if sensor_name == "temperature":
-		if any(marker in normalized for marker in ("cao", "nóng", "nong", "high")):
+		if any(marker in normalized for marker in ("cao", "nÃ³ng", "nong", "high")):
 			return ">", float(NORMAL_TEMP_MAX)
 		if any(
-			marker in normalized for marker in ("thấp", "thap", "lạnh", "lanh", "low")
+			marker in normalized for marker in ("tháº¥p", "thap", "láº¡nh", "lanh", "low")
 		):
 			return "<", float(NORMAL_TEMP_MIN)
 	if sensor_name == "humidity":
-		if any(marker in normalized for marker in ("cao", "ẩm", "am", "high")):
+		if any(marker in normalized for marker in ("cao", "áº©m", "am", "high")):
 			return ">", float(NORMAL_HUMI_MAX)
 		if any(
-			marker in normalized for marker in ("thấp", "thap", "khô", "kho", "low")
+			marker in normalized for marker in ("tháº¥p", "thap", "khÃ´", "kho", "low")
 		):
 			return "<", float(NORMAL_HUMI_MIN)
 	return None, None
@@ -1455,44 +683,6 @@ def deduplicate_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any]]
 	return deduped
 
 
-def parse_additional_action_segments(
-	text: str,
-	*,
-	recent_actions: list,
-	focus_target: str | None,
-) -> list[dict[str, Any]]:
-	segments = [
-		segment.strip(" ,.;")
-		for segment in re.split(
-			r"\b(?:với|và|va|đồng thời|dong thoi|tiện thể|tien the|and|plus)\b",
-			text,
-			flags=re.IGNORECASE,
-		)
-	]
-	if len(segments) <= 1:
-		return []
-
-	commands: list[dict[str, Any]] = []
-	for segment in segments[1:]:
-		if not segment:
-			continue
-		parsed = fast_parse_value_command(segment)
-		if parsed is None:
-			parsed = fast_parse_local_command(segment)
-		if parsed is None:
-			parsed = fast_parse_contextual_command(segment, focus_target)
-		if parsed is None:
-			continue
-		command = normalise_command(parsed, recent_actions)
-		command = apply_discourse_and_explicit_target(
-			command,
-			segment,
-			focus_target,
-		)
-		commands.append(command)
-	return commands
-
-
 def expand_multi_action_command(
 	command: dict[str, Any],
 	text: str,
@@ -1500,14 +690,8 @@ def expand_multi_action_command(
 	recent_actions: list,
 	focus_target: str | None,
 ) -> dict[str, Any]:
+	_ = text, recent_actions, focus_target
 	commands = command_list_from(command)
-	commands.extend(
-		parse_additional_action_segments(
-			text,
-			recent_actions=recent_actions,
-			focus_target=focus_target,
-		)
-	)
 	commands = deduplicate_commands(commands)
 	return combine_commands(commands)
 
@@ -1614,6 +798,35 @@ def build_tool_call(command: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def build_tool_calls(command: dict[str, Any]) -> list[dict[str, Any]]:
+	"""Expand a parsed command (including activate_scene) into tool calls."""
+	# Scene expansion: convert activate_scene → sequence of state/value calls
+	if command.get("action") == "activate_scene":
+		scene_id = command.get("scene")
+		if scene_id not in SCENE_CATALOG:
+			return []
+		result: list[dict[str, Any]] = []
+		for step in SCENE_CATALOG[scene_id]:
+			if step["type"] == "state":
+				result.append(
+					set_device_state_call(
+						step["target"],
+						step["state"],
+						confidence=1.0,
+						source="scene_planner",
+					)
+				)
+			elif step["type"] == "value":
+				result.append(
+					set_device_value_call(
+						step["target"],
+						step["property"],
+						step["value"],
+						confidence=1.0,
+						source="scene_planner",
+					)
+				)
+		return result
+	# Normal single/multi-action expansion
 	return [
 		tool_call
 		for item in command_list_from(command)
@@ -1738,33 +951,6 @@ class DeviceControlAgent:
 			"user_profile": raw_memory_context.get("user_profile", {}),
 		}
 		focus_target = context.get("conversation_focus_target")
-		fast_parsed = (
-			fast_parse_value_command(message.text)
-			if should_use_local_fast_path(message.text)
-			else None
-		)
-		if fast_parsed is None and should_use_local_fast_path(message.text):
-			fast_parsed = fast_parse_local_command(message.text)
-		if fast_parsed is None:
-			fast_parsed = fast_parse_contextual_command(message.text, focus_target)
-		if fast_parsed is not None:
-			command = normalise_command(
-				fast_parsed,
-				device_memory_context.get("recent_actions", []),
-			)
-			command = apply_discourse_and_explicit_target(
-				command,
-				message.text,
-				str(focus_target) if isinstance(focus_target, str) else None,
-			)
-			return expand_multi_action_command(
-				command,
-				message.text,
-				recent_actions=device_memory_context.get("recent_actions", []),
-				focus_target=str(focus_target)
-				if isinstance(focus_target, str)
-				else None,
-			)
 		device_context = json.dumps(
 			self.tool_runner.get_device_status_report(),
 			indent=2,
@@ -1818,9 +1004,6 @@ class DeviceControlAgent:
 		*,
 		requested_action: str,
 	) -> dict[str, Any]:
-		fast_resolved = fast_resolve_target_text(message.text)
-		if fast_resolved is not None:
-			return fast_resolved
 		model_override = runtime_settings.get_active_model("deviceControlModel")
 		messages = [
 			{
@@ -1949,10 +1132,10 @@ class DeviceControlAgent:
 		]
 		if needs_clarification and tool_calls:
 			summary = "partial_tool_call_ready_awaiting_target_clarification"
-			clarification_question = "Bạn muốn mình điều khiển thiết bị nào?"
+			clarification_question = "Báº¡n muá»‘n mÃ¬nh Ä‘iá»u khiá»ƒn thiáº¿t bá»‹ nÃ o?"
 		elif needs_clarification:
 			summary = "awaiting_target_clarification"
-			clarification_question = "Bạn muốn mình điều khiển thiết bị nào?"
+			clarification_question = "Báº¡n muá»‘n mÃ¬nh Ä‘iá»u khiá»ƒn thiáº¿t bá»‹ nÃ o?"
 		elif any(
 			isinstance(condition, dict) and condition.get("status") == "not_met"
 			for condition in conditions

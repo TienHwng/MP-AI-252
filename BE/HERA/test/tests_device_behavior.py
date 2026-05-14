@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 import agents.device_agent as device_agent_module
@@ -76,6 +77,7 @@ class FakeLLM:
 			payload.get("default_search_location") or "Ho Chi Minh City, Vietnam"
 		)
 		pending = payload.get("pending_device_clarification")
+		focus_target = payload.get("current_device_focus")
 		pending_mode = "none"
 		if isinstance(pending, dict):
 			pending_mode = "new_request" if "nếu" in text else "clarification_answer"
@@ -113,7 +115,22 @@ class FakeLLM:
 			)
 		):
 			intent = "sensor_query"
-		elif any(marker in text for marker in ("nếu", "bật", "tắt", "relay", "quạt")):
+		elif (
+			focus_target
+			and any(
+				marker in text
+				for marker in (
+					"chắc chưa",
+					"chac chua",
+					"đúng chưa",
+					"dung chua",
+					"chưa",
+					"chua",
+				)
+			)
+		) or any(
+			marker in text for marker in ("nếu", "bật", "tắt", "relay", "quạt")
+		):
 			intent = "device_control"
 		if text.strip() in {"xin chào", "chào", "hello", "hi"}:
 			direct_response = "Chào bạn, mình đây."
@@ -130,96 +147,105 @@ class FakeLLM:
 
 	@staticmethod
 	def _parse_command(text: str) -> dict:
-		if "5 phút" in text and "20" in text and "quạt" in text:
-			return {
-				"action": "turn_on",
-				"target": "mini_fan",
-				"reference": "none",
-				"confidence": 0.94,
-				"condition": {
-					"type": "sensor_window_threshold",
-					"sensor": "temperature",
-					"operator": ">",
-					"threshold": 20,
-					"window_seconds": 300,
-				},
-			}
-		if "trên 40" in text and "quạt" in text:
-			return {
-				"action": "turn_on",
-				"target": "all_lights",
-				"reference": "recent_changed_devices",
-				"confidence": 0.98,
-				"condition": {
-					"type": "sensor_threshold",
-					"sensor": "temperature",
-					"operator": ">",
-					"threshold": 40,
-				},
-			}
-		if "10 giây" in text and "35" in text and "quạt" in text:
-			return {
-				"action": "turn_on",
-				"target": "mini_fan",
-				"reference": "none",
-				"confidence": 0.92,
-				"condition": {
-					"type": "sensor_window_threshold",
-					"sensor": "temperature",
-					"operator": ">=",
-					"threshold": 35,
-					"window_seconds": 10,
-				},
-			}
-		if "trên 30" in text and "quạt" in text:
-			return {
-				"action": "turn_on",
-				"target": "mini_fan",
-				"reference": "none",
-				"confidence": 0.92,
-				"condition": {
-					"type": "sensor_threshold",
-					"sensor": "temperature",
-					"operator": ">",
-					"threshold": 30,
-				},
-			}
-		if "các thiết bị khác" in text:
-			return {
-				"action": "turn_on",
-				"target": "all_devices",
-				"reference": "none",
-				"confidence": 0.9,
-			}
-		if "tất cả thiết bị" in text:
-			return {
-				"action": "turn_on",
-				"target": "all_devices",
-				"reference": "none",
-				"confidence": 0.9,
-			}
-		if "tất cả đèn" in text:
-			return {
-				"action": "turn_on",
-				"target": "all_lights",
-				"reference": "none",
-				"confidence": 0.9,
-			}
-		if "vừa được bật" in text:
+		lower_text = text.lower()
+		if "vừa được bật" in text or lower_text.startswith("ắt "):
 			return {
 				"action": "turn_off",
 				"target": None,
 				"reference": "recent_changed_devices",
 				"confidence": 0.9,
 			}
-		if "bật đèn" in text:
-			# Simulate the bad model behavior we saw in Telegram logs.
-			return {
-				"action": "unknown",
-				"target": "all_lights",
+
+		action = None
+		if any(
+			marker in lower_text
+			for marker in (
+				"bật hay tắt",
+				"bat hay tat",
+				"chắc chưa",
+				"chac chua",
+				"status",
+			)
+		):
+			action = "status"
+		elif any(marker in lower_text for marker in ("bật", "bat", "turn on")):
+			action = "turn_on"
+		elif any(marker in lower_text for marker in ("tắt", "tat", "turn off")):
+			action = "turn_off"
+
+		target = None
+		if "tất cả thiết bị" in lower_text or "các thiết bị khác" in lower_text:
+			target = "all_devices"
+		elif "tất cả đèn" in lower_text:
+			target = "all_lights"
+		elif "relay" in lower_text:
+			target = "relay"
+		elif "neo" in lower_text:
+			target = "neo_led"
+		elif "ws2812" in lower_text:
+			target = "ws2812"
+		elif "main led" in lower_text or "đèn chính" in lower_text:
+			target = "main_led"
+		elif "quạt" in lower_text or "quat" in lower_text or "fan" in lower_text:
+			target = "mini_fan"
+
+		if action in {"turn_on", "turn_off", "status"}:
+			command = {
+				"action": action,
+				"target": target,
 				"reference": "none",
-				"confidence": 0.8,
+				"confidence": 0.9 if target else 0.82,
 			}
+			threshold_match = re.search(
+				r"(?:trên|tren|lên|len|>=|>)\s*(\d+(?:[.,]\d+)?)",
+				lower_text,
+			)
+			if "nhiệt độ" in lower_text and threshold_match and target == "mini_fan":
+				threshold = float(threshold_match.group(1).replace(",", "."))
+				if threshold.is_integer():
+					threshold = int(threshold)
+				window_seconds = None
+				window_match = re.search(
+					r"(\d+)\s*(giây|giay|phút|phut)",
+					lower_text,
+				)
+				if window_match:
+					unit = window_match.group(2)
+					multiplier = 60 if unit in {"phút", "phut"} else 1
+					window_seconds = int(window_match.group(1)) * multiplier
+				operator = ">=" if any(marker in lower_text for marker in ("lên", "len", ">=")) else ">"
+				condition = {
+					"type": (
+						"sensor_window_threshold"
+						if window_seconds is not None
+						else "sensor_threshold"
+					),
+					"sensor": "temperature",
+					"operator": operator,
+					"threshold": threshold,
+				}
+				if window_seconds is not None:
+					condition["window_seconds"] = window_seconds
+				command["condition"] = condition
+			if (
+				target == "mini_fan"
+				and any(
+					marker in lower_text
+					for marker in ("với", "voi", "tiện thể", "tien the", "and")
+				)
+				and any(marker in lower_text for marker in ("đèn", "den", "light"))
+			):
+				command["commands"] = [
+					dict(command),
+					{
+						"action": action,
+						"target": None,
+						"reference": "none",
+						"confidence": 0.82,
+					},
+				]
+			return command
+
 		return {
 			"action": "unknown",
 			"target": None,
@@ -523,19 +549,19 @@ async def test_device_semantics() -> None:
 
 	generic_light = await parse(agent, "bật đèn lên giùm")
 	assert_command(generic_light, action="turn_on", target=None)
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
 
 	generic_led = await parse(agent, "bật đèn led giúp tôi")
 	assert_command(generic_led, action="turn_on", target=None)
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
 
 	all_lights = await parse(agent, "bật tất cả đèn")
 	assert_command(all_lights, action="turn_on", target="all_lights")
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
 
 	all_devices = await parse(agent, "bật tất cả thiết bị")
 	assert_command(all_devices, action="turn_on", target="all_devices")
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
 
 	parser_failed_group_command = await parse(
 		agent,
@@ -565,7 +591,7 @@ async def test_device_semantics() -> None:
 
 	explicit_device = await parse(agent, "bật đèn neo giúp tôi")
 	assert_command(explicit_device, action="turn_on", target="neo_led")
-	assert fake_llm.device_call_count <= 3, fake_llm.device_call_count
+
 
 
 async def test_target_resolution_from_clarification() -> None:
@@ -577,7 +603,7 @@ async def test_target_resolution_from_clarification() -> None:
 		requested_action="turn_on",
 	)
 	assert result["target"] == "neo_led", result
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
+
 
 
 async def test_fast_confirmation_and_direct_device_rendering() -> None:
@@ -613,7 +639,7 @@ async def test_device_clarification_payload_is_serializable() -> None:
 	json.dumps(response.metadata, ensure_ascii=False)
 
 
-async def test_fast_device_intent_routing() -> None:
+async def test_device_intent_routing() -> None:
 	orchestrator = Orchestrator(
 		FakeLLM(),
 		{},
@@ -639,7 +665,7 @@ async def test_fast_device_intent_routing() -> None:
 	)
 
 
-async def test_fast_read_only_routing_and_rendering() -> None:
+async def test_read_only_routing_and_rendering() -> None:
 	fake_llm = FakeLLM()
 	fake_mqtt = FakeMQTT()
 	orchestrator = Orchestrator(
@@ -662,13 +688,13 @@ async def test_fast_read_only_routing_and_rendering() -> None:
 
 	general = await orchestrator.handle_general(message("xin chào"))
 	assert "mình đây" in general.text.lower(), general.text
-	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
+
 
 	date_response = await orchestrator.handle_general(
 		message("hôm nay là thứ mấy, ngày mấy")
 	)
 	assert "24/04/2026" in date_response.text, date_response.text
-	assert fake_llm.general_call_count == 2, fake_llm.general_call_count
+
 
 	sensor_response = orchestrator.render_sensor_text(
 		"nhiệt độ hiện tại bao nhiêu",
@@ -685,6 +711,10 @@ async def test_fast_read_only_routing_and_rendering() -> None:
 		),
 	)
 	assert "29.1" in sensor_response, sensor_response
+
+	short_sensor = await orchestrator.handle(message("nhiệt độ hiện tại bao nhiêu"))
+	assert short_sensor.metadata.get("short_path") is True, short_sensor.metadata
+	assert "29.1" in short_sensor.text, short_sensor.text
 
 
 async def test_identity_questions_do_not_use_router_direct_response() -> None:
@@ -750,7 +780,7 @@ async def test_answer_previous_followup_uses_conversation_context() -> None:
 	assert "bất thường" in anomaly_response.lower(), anomaly_response
 
 
-async def test_fast_device_pipeline_skips_memory_and_parser_llm() -> None:
+async def test_ambiguous_light_request_asks_for_clarification() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
 	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
@@ -772,17 +802,11 @@ async def test_fast_device_pipeline_skips_memory_and_parser_llm() -> None:
 
 	response = await orchestrator.handle(message("bật đèn phòng khách giúp tôi"))
 
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
-	assert memory.retrieve_count == 0, memory.retrieve_count
-	assert memory.turn_write_count == 1, memory.turn_write_count
-	assert memory.tool_write_count == 0, memory.tool_write_count
 	assert fake_mqtt.published == []
 	assert "đèn nào" in response.text.lower(), response.text
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
-	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
 
 
-async def test_simple_general_pipeline_skips_memory_retrieval() -> None:
+async def test_simple_general_short_path_returns_direct_response() -> None:
 	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
 	fake_llm = FakeLLM()
 	memory = FakeMemoryService()
@@ -795,11 +819,8 @@ async def test_simple_general_pipeline_skips_memory_retrieval() -> None:
 
 	response = await orchestrator.handle(message("xin chào"))
 
-	assert memory.retrieve_count == 0, memory.retrieve_count
-	assert memory.turn_write_count == 1, memory.turn_write_count
 	assert "mình" in response.text.lower(), response.text
-	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
-	assert fake_llm.general_call_count == 0, fake_llm.general_call_count
+	assert response.metadata.get("short_path") is True, response.metadata
 
 
 async def test_action_memory_question_is_not_device_control() -> None:
@@ -824,9 +845,6 @@ async def test_action_memory_question_is_not_device_control() -> None:
 	)
 
 	assert response.metadata["intent"] == "general", response.metadata
-	assert memory.retrieve_count == 1, memory.retrieve_count
-	assert fake_llm.device_call_count == 0, fake_llm.device_call_count
-	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
 	assert "which device" not in response.text.lower(), response.text
 
 
@@ -863,7 +881,7 @@ async def test_conditional_device_request_checks_sensor_before_acting() -> None:
 		]
 		== "turn_on"
 	)
-	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
 
 
 async def test_temporal_condition_checks_telemetry_window_before_acting() -> None:
@@ -916,10 +934,10 @@ async def test_temporal_condition_checks_telemetry_window_before_acting() -> Non
 		)
 		is None
 	)
-	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
 
 
-async def test_temporal_conditional_device_request_bypasses_bad_router() -> None:
+
+async def test_temporal_conditional_device_request_uses_router_and_runtime() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
 	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
@@ -945,7 +963,7 @@ async def test_temporal_conditional_device_request_bypasses_bad_router() -> None
 		)
 	)
 
-	assert fake_llm.route_call_count == 0, fake_llm.route_call_count
+
 	assert telemetry.calls and telemetry.calls[0]["window_seconds"] == 300
 	assert fake_mqtt.published == [("setValueMiniFan", True)], fake_mqtt.published
 	assert response.metadata["intent"] == "device_control", response.metadata
@@ -985,7 +1003,7 @@ async def test_conditional_noop_response_stays_vietnamese() -> None:
 	assert fake_mqtt.published == [], fake_mqtt.published
 	assert "quạt đang bật sẵn" in response.text.lower(), response.text
 	assert "requested device state" not in response.text.lower(), response.text
-	assert fake_llm.device_call_count == 1, fake_llm.device_call_count
+
 
 
 async def test_conditional_command_prefers_explicit_target_over_recent_actions() -> (
@@ -1126,8 +1144,7 @@ async def test_web_search_pipeline_uses_search_service() -> None:
 	assert web_service.search_calls[0]["max_results"] == 5
 	assert "ollama" in web_service.search_calls[0]["query"].lower()
 	assert "nguồn" in response.text.lower(), response.text
-	assert fake_llm.route_call_count == 1, fake_llm.route_call_count
-	assert fake_llm.general_call_count == 1, fake_llm.general_call_count
+
 
 
 async def test_weather_web_query_is_grounded_with_date_and_location() -> None:
@@ -1358,16 +1375,16 @@ async def main() -> None:
 	await test_target_resolution_from_clarification()
 	await test_fast_confirmation_and_direct_device_rendering()
 	await test_device_clarification_payload_is_serializable()
-	await test_fast_device_intent_routing()
-	await test_fast_read_only_routing_and_rendering()
+	await test_device_intent_routing()
+	await test_read_only_routing_and_rendering()
 	await test_identity_questions_do_not_use_router_direct_response()
 	await test_answer_previous_followup_uses_conversation_context()
-	await test_fast_device_pipeline_skips_memory_and_parser_llm()
-	await test_simple_general_pipeline_skips_memory_retrieval()
+	await test_ambiguous_light_request_asks_for_clarification()
+	await test_simple_general_short_path_returns_direct_response()
 	await test_action_memory_question_is_not_device_control()
 	await test_conditional_device_request_checks_sensor_before_acting()
 	await test_temporal_condition_checks_telemetry_window_before_acting()
-	await test_temporal_conditional_device_request_bypasses_bad_router()
+	await test_temporal_conditional_device_request_uses_router_and_runtime()
 	await test_conditional_noop_response_stays_vietnamese()
 	await test_conditional_command_prefers_explicit_target_over_recent_actions()
 	await test_multi_action_keeps_condition_scoped_per_action()

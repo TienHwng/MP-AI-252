@@ -12,6 +12,7 @@ from domain.devices import (
 )
 from domain.devices.device_catalog import normalize_color_value
 from schemas import CapabilitySpec, PolicyDecision, ToolProposal
+from telemetry.schema import device_status
 
 
 class PolicyEngine:
@@ -165,11 +166,7 @@ class PolicyEngine:
 
 		current_states = []
 		for _, device_key, _ in DEVICE_TARGETS[target]:
-			device = devices.get(device_key)
-			if isinstance(device, dict):
-				current_states.append(device.get("status"))
-			else:
-				current_states.append(device)
+			current_states.append(device_status({"devices": devices}, device_key))
 		return bool(current_states) and all(
 			current_state is requested_state for current_state in current_states
 		)

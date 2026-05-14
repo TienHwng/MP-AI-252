@@ -51,15 +51,9 @@ from schemas import IncomingRequest, MemoryContext, RouteDecision, ToolProposal
 from agents.base import AgentLike
 from agents.device_agent import (
 	explicit_target_from_text,
-	looks_like_conditional_device_request,
-	looks_like_contextual_device_request,
-	looks_like_standalone_device_request,
-	needs_recent_action_memory,
-	normalize_text,
 )
 from agents.orchestrator_helpers import (
 	clean_user_visible_text,
-	fast_general_response,
 	format_timestamp,
 	looks_vietnamese,
 	render_anomaly_text,
@@ -117,8 +111,216 @@ class Orchestrator:
 				"Pipeline start",
 				detail=f"user: {message.text[:80]}{'…' if len(message.text) > 80 else ''}",
 			)
+			short_response = await self.try_short_path(message)
+			if short_response is not None:
+				return short_response
 			state = await self.graph.run(message)
 			return state["response"]
+
+	async def try_short_path(self, message: UserMessage) -> AgentResponse | None:
+		"""Handle simple non-effectful requests without running the full graph.
+
+		Uses the LLM router to classify intent. For general intents where the
+		router provides a direct_response, returns immediately. For sensor/anomaly
+		queries with memory_scope=none, uses the specialist agent + LLM composer
+		but skips the full graph. Device control always uses the full graph.
+		"""
+		thread_state = self.graph.get_thread_state(str(message.chat_id))
+		if thread_state.get("pending_confirmation") or thread_state.get(
+			"pending_device_clarification"
+		):
+			return None
+
+		# Use LLM router to classify — no keyword shortcuts
+		chat_history = list(thread_state.get("chat_history") or [])
+		focus_target = self.focus_target_from_state(thread_state)
+		route_plan = await self.classify_route(
+			message.text,
+			history=chat_history,
+			focus_target=focus_target,
+		)
+		intent = str(route_plan["intent"])
+		memory_scope = str(route_plan.get("memory_scope") or "none")
+
+		# Only short-path for simple cases that need no memory and no execution
+		if intent == "device_control" or memory_scope not in {"none"}:
+			return None
+
+		request = IncomingRequest.from_user_message(message)
+		route_decision = RouteDecision.from_intent(
+			intent,
+			max_tool_steps=MAX_TOOL_ITERATIONS,
+		)
+		memory_context = MemoryContext(
+			available=self.memory_available(),
+			reason="short_path_no_retrieval",
+		)
+
+		if intent == "general":
+			# If router provided a direct_response, use it
+			direct_response = route_plan.get("direct_response")
+			if isinstance(direct_response, str) and direct_response.strip():
+				response = AgentResponse(
+					text=clean_user_visible_text(direct_response),
+					agent_name="orchestrator",
+					metadata={"route_direct_response": True},
+				)
+			else:
+				# Safety guard: when the router has no direct_response,
+				# cross-check with the device agent to catch misclassified
+				# device commands. This prevents the general handler from
+				# hallucinating device-action confirmations.
+				if await self._looks_like_device_command(message, focus_target):
+					log_graph(
+						"Safety guard triggered",
+						detail="Router said general, but device agent recognises a command. Forcing full graph.",
+					)
+					return None  # Force full graph execution
+
+				# Use LLM general handler for richer responses
+				response = await self.handle_general(
+					message,
+					memory_context,
+					history=chat_history,
+				)
+		elif intent == "sensor_query":
+			response = await self.build_short_sensor_response(message, request)
+		elif intent == "anomaly_query":
+			response = await self.build_short_anomaly_response(message, request)
+		else:
+			return None
+
+		response.metadata["intent"] = intent
+		response.metadata["request"] = request.model_dump(mode="json")
+		response.metadata["route_decision"] = route_decision.model_dump(mode="json")
+		response.metadata["memory_context"] = memory_context.model_dump(mode="json")
+		response.metadata["short_path"] = True
+		response.metadata["memory_write"] = self.record_memory_turn(
+			request,
+			response,
+			intent,
+		)
+		self.update_short_path_thread_state(message, response, thread_state)
+		log_graph(
+			"Short path response",
+			data={"intent": intent, "agent": response.agent_name},
+			detail=f"Reply: {response.text[:100]}{'…' if len(response.text) > 100 else ''}",
+		)
+		return response
+
+	def update_short_path_thread_state(
+		self,
+		message: UserMessage,
+		response: AgentResponse,
+		thread_state: dict,
+	) -> None:
+		chat_history = list(thread_state.get("chat_history") or [])
+		chat_history.append({"role": "user", "content": message.text})
+		chat_history.append({"role": "assistant", "content": response.text})
+		if len(chat_history) > MAX_HISTORY:
+			chat_history = chat_history[-MAX_HISTORY:]
+		self.graph.update_thread_state(
+			str(message.chat_id),
+			{
+				"chat_history": chat_history,
+				"active_focus": thread_state.get("active_focus"),
+				"pending_confirmation": thread_state.get("pending_confirmation"),
+				"pending_device_clarification": thread_state.get(
+					"pending_device_clarification"
+				),
+				"last_tool_results": thread_state.get("last_tool_results") or [],
+			},
+		)
+
+	async def build_short_sensor_response(
+		self,
+		message: UserMessage,
+		request: IncomingRequest,
+	) -> AgentResponse:
+		agent = self.agents.get("sensor_analysis")
+		if agent is not None:
+			specialist_response = await agent.process(
+				message,
+				{
+					"incoming_request": request,
+					"current_time_context": self.build_time_context(),
+					"sensor_snapshot": self.mqtt.get_sensor_snapshot(),
+				},
+			)
+		else:
+			snapshot = self.mqtt.get_sensor_snapshot()
+			specialist_response = AgentResponse(
+				text="",
+				agent_name="sensor_analysis",
+				metadata={
+					"specialist_report": {
+						"summary": "sensor_snapshot_report",
+						"analysis_payload": {"snapshot": snapshot},
+					}
+				},
+			)
+		return AgentResponse(
+			text=self.render_sensor_text(message.text, specialist_response),
+			agent_name="orchestrator",
+			metadata={
+				"specialist_agent": specialist_response.agent_name,
+				"specialist_report": specialist_response.metadata.get(
+					"specialist_report",
+					{},
+				),
+			},
+		)
+
+	async def build_short_anomaly_response(
+		self,
+		message: UserMessage,
+		request: IncomingRequest,
+	) -> AgentResponse:
+		agent = self.agents.get("anomaly_expert")
+		if agent is not None:
+			specialist_response = await agent.process(
+				message,
+				{
+					"incoming_request": request,
+					"current_time_context": self.build_time_context(),
+					"sensor_snapshot": self.mqtt.get_sensor_snapshot(),
+				},
+			)
+		else:
+			from agents.anomaly_agent import (
+				classify_anomaly,
+				compute_telemetry_freshness,
+			)
+
+			snapshot = self.mqtt.get_sensor_snapshot()
+			freshness = compute_telemetry_freshness(snapshot)
+			classification = classify_anomaly(snapshot, freshness)
+			specialist_response = AgentResponse(
+				text="",
+				agent_name="anomaly_expert",
+				metadata={
+					"specialist_report": {
+						"summary": "anomaly_snapshot_report",
+						"analysis_payload": {
+							"snapshot": snapshot,
+							"freshness": freshness,
+							"classification": classification,
+							"telemetry_window": {},
+						},
+					}
+				},
+			)
+		return AgentResponse(
+			text=self.render_anomaly_text(message.text, specialist_response),
+			agent_name="orchestrator",
+			metadata={
+				"specialist_agent": specialist_response.agent_name,
+				"specialist_report": specialist_response.metadata.get(
+					"specialist_report",
+					{},
+				),
+			},
+		)
 
 	def graph_intake(self, state: OrchestrationState) -> OrchestrationState:
 		message = state["message"]
@@ -297,7 +499,6 @@ class Orchestrator:
 			if (
 				isinstance(direct_response, str)
 				and direct_response.strip()
-				and self.can_use_route_direct_response(state["message"].text)
 			):
 				return {
 					"response": AgentResponse(
@@ -843,39 +1044,7 @@ class Orchestrator:
 			marker in query for marker in ("weather", "thời tiết", "mưa", "rain")
 		)
 
-	def fast_general_response(self, user_text: str) -> str | None:
-		return fast_general_response(user_text)
 
-	@staticmethod
-	def can_use_route_direct_response(user_text: str) -> bool:
-		text = normalize_text(user_text)
-		if not text:
-			return False
-		identity_markers = (
-			"bạn là ai",
-			"ban la ai",
-			"mày là ai",
-			"may la ai",
-			"who are you",
-			"what are you",
-			"tự giới thiệu",
-			"tu gioi thieu",
-			"giới thiệu",
-			"gioi thieu",
-		)
-		followup_markers = (
-			"câu trước",
-			"cau truoc",
-			"trả lời",
-			"tra loi",
-			"vừa hỏi",
-			"vua hoi",
-			"answer that",
-			"previous question",
-		)
-		if any(marker in text for marker in identity_markers + followup_markers):
-			return False
-		return text in {"xin chào", "chào", "hello", "hi", "hey"}
 
 	def build_pending_device_clarification(
 		self,
@@ -1282,27 +1451,10 @@ class Orchestrator:
 		}
 
 	async def classify_pending_confirmation(self, text: str) -> str:
-		normalized = " ".join(text.strip().lower().split())
-		if any(
-			token in normalized
-			for token in (
-				"xác nhận",
-				"confirm",
-				"dong y",
-				"đồng ý",
-				"ok",
-				"okay",
-				"yes",
-			)
-		) or normalized in {"ừ", "uh", "um", "ừm"}:
-			return "confirm"
-		if any(
-			token in normalized
-			for token in ("hủy", "huỷ", "cancel", "thôi", "bỏ đi", "không")
-		):
-			return "cancel"
-		if looks_like_standalone_device_request(text):
-			return "new_request"
+		"""Classify whether user confirms, cancels, or gives a new request.
+
+		Uses the LLM exclusively — no keyword shortcuts.
+		"""
 		messages = [
 			{"role": "system", "content": PENDING_CONFIRMATION_SYSTEM},
 			{"role": "user", "content": text},
@@ -1336,57 +1488,6 @@ class Orchestrator:
 		pending_device_clarification: dict | None = None,
 	) -> dict:
 		"""Return a structured route and memory policy."""
-		if (
-			pending_device_clarification is None
-			and looks_like_standalone_device_request(text)
-			and not needs_recent_action_memory(text)
-		):
-			log_route(
-				"Fast route: 'device_control'",
-				data={"method": "device_parser"},
-			)
-			return {
-				"intent": "device_control",
-				"memory_scope": "none",
-				"direct_response": None,
-				"web_query": None,
-				"pending_mode": "none",
-				"confidence": 1.0,
-			}
-		if (
-			pending_device_clarification is None
-			and looks_like_conditional_device_request(text, focus_target)
-			and not needs_recent_action_memory(text)
-		):
-			log_route(
-				"Fast route: 'device_control'",
-				data={"method": "conditional_device_parser"},
-			)
-			return {
-				"intent": "device_control",
-				"memory_scope": "none",
-				"direct_response": None,
-				"web_query": None,
-				"pending_mode": "none",
-				"confidence": 0.98,
-			}
-		if (
-			pending_device_clarification is None
-			and looks_like_contextual_device_request(text, focus_target)
-		):
-			log_route(
-				"Fast route: 'device_control'",
-				data={"method": "device_focus", "focus": focus_target},
-			)
-			return {
-				"intent": "device_control",
-				"memory_scope": "none",
-				"direct_response": None,
-				"web_query": None,
-				"pending_mode": "none",
-				"confidence": 0.95,
-			}
-
 		history = list(history or [])
 		router_payload = {
 			"current_message": text,
@@ -1415,12 +1516,7 @@ class Orchestrator:
 			None,
 			orchestrator_model,
 		)
-		route_plan = self.normalise_route_plan(result.get("content"))
-		if route_plan.get(
-			"intent"
-		) == "device_control" and not needs_recent_action_memory(text):
-			route_plan["memory_scope"] = "none"
-		return route_plan
+		return self.normalise_route_plan(result.get("content"))
 
 	async def classify_intent(self, text: str, *, chat_id: str | None = None) -> str:
 		"""Compatibility wrapper for tests and callers needing only intent."""
@@ -1477,6 +1573,38 @@ class Orchestrator:
 			"confidence": max(0.0, min(float(confidence), 1.0)),
 		}
 
+	async def _looks_like_device_command(
+		self,
+		message: UserMessage,
+		focus_target: str | None = None,
+	) -> bool:
+		"""Semantic cross-check: ask the device agent if this is a real command.
+
+		Used as a safety guard when the router says 'general' but gives no
+		direct_response. If the device agent parses a valid action, the
+		router probably misclassified and we should force the full graph.
+
+		This is NOT a keyword check — it uses the same LLM-based device
+		command interpreter that the full pipeline uses.
+		"""
+		device_agent = self.agents.get("device_control")
+		if device_agent is None or not hasattr(device_agent, "parse_command"):
+			return False
+		try:
+			probe_context = {
+				"memory_context": {},
+				"conversation_focus_target": focus_target,
+			}
+			command = await asyncio.wait_for(
+				device_agent.parse_command(message, probe_context),
+				timeout=15.0,
+			)
+			action = command.get("action")
+			return action is not None and action != "unknown"
+		except Exception:
+			# On any failure, don't block — let the general handler proceed
+			return False
+
 	async def handle_general(
 		self,
 		message: UserMessage,
@@ -1485,12 +1613,6 @@ class Orchestrator:
 		history: list[dict] | None = None,
 	) -> AgentResponse:
 		"""Use the orchestrator model directly for general conversation."""
-		fast_response = self.fast_general_response(message.text)
-		if fast_response is not None:
-			return AgentResponse(
-				text=clean_user_visible_text(fast_response),
-				agent_name="orchestrator",
-			)
 		history = list(history or [])
 		sensor_context = json.dumps(self.mqtt.get_sensor_snapshot(), indent=2)
 		memory_payload = (
@@ -1813,6 +1935,15 @@ class Orchestrator:
 			"tool_result_facts": specialist_response.metadata.get(
 				"tool_result_facts", {}
 			),
+			"device_labels": {
+				"main_led": "Main LED",
+				"neo_led": "NeoPixel LED",
+				"ws2812": "WS2812 LED strip",
+				"relay": "Relay",
+				"mini_fan": "Mini fan",
+				"all_lights": "All lights",
+				"all_devices": "All devices",
+			},
 		}
 
 	async def compose_device_control_user_text(

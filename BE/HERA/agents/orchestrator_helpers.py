@@ -329,7 +329,9 @@ def render_device_specialist_fallback_text(
 	)
 
 
+
 def render_sensor_text(user_text: str, specialist_response: AgentResponse) -> str:
+	"""Render sensor data as a deterministic fallback (used only on LLM timeout)."""
 	prefer_vietnamese = looks_vietnamese(user_text)
 	raw_report = specialist_response.metadata.get("specialist_report")
 	report = raw_report if isinstance(raw_report, dict) else {}
@@ -345,82 +347,33 @@ def render_sensor_text(user_text: str, specialist_response: AgentResponse) -> st
 	devices = snapshot.get("devices", {})
 	if not isinstance(devices, dict):
 		devices = {}
-	normalized = " ".join(user_text.strip().lower().split())
 	temp = sensor_value(sensors, "temperature")
 	humi = sensor_value(sensors, "humidity")
 	light = sensor_value(sensors, "light")
 	anomaly = sensor_value(sensors, "anomaly")
 
-	if any(
-		marker in normalized for marker in ("nhiệt độ", "nhiet do", "temperature")
-	) and isinstance(temp, (int, float)):
-		return (
-			f"Nhiệt độ hiện tại là {temp:.1f}°C."
-			if prefer_vietnamese
-			else f"The current temperature is {temp:.1f}°C."
-		)
-	if any(
-		marker in normalized for marker in ("độ ẩm", "do am", "humidity")
-	) and isinstance(humi, (int, float)):
-		return (
-			f"Độ ẩm hiện tại là {humi:.1f}%."
-			if prefer_vietnamese
-			else f"The current humidity is {humi:.1f}%."
-		)
-	if any(
-		marker in normalized for marker in ("ánh sáng", "anh sang", "light")
-	) and isinstance(light, (int, float)):
-		return (
-			f"Mức ánh sáng hiện tại là {light:.1f}."
-			if prefer_vietnamese
-			else f"The current light level is {light:.1f}."
-		)
-	if any(
-		marker in normalized for marker in ("anomaly", "bất thường", "bat thuong")
-	) and isinstance(anomaly, (int, float)):
-		return (
-			f"Điểm bất thường hiện tại là {anomaly:.2f}."
-			if prefer_vietnamese
-			else f"The current anomaly score is {anomaly:.2f}."
-		)
-	if isinstance(temp, (int, float)) and isinstance(humi, (int, float)):
-		parts = (
-			[
-				f"Nhiệt độ {temp:.1f}°C",
-				f"độ ẩm {humi:.1f}%",
-			]
-			if prefer_vietnamese
-			else [
-				f"temperature {temp:.1f}°C",
-				f"humidity {humi:.1f}%",
-			]
-		)
-		if isinstance(light, (int, float)):
-			parts.append(
-				f"ánh sáng {light:.1f}" if prefer_vietnamese else f"light {light:.1f}"
-			)
-		if isinstance(anomaly, (int, float)):
-			parts.append(
-				f"điểm bất thường {anomaly:.2f}"
-				if prefer_vietnamese
-				else f"anomaly score {anomaly:.2f}"
-			)
-		prefix = "Hiện tại " if prefer_vietnamese else "Currently, "
+	parts: list[str] = []
+	if isinstance(temp, (int, float)):
+		parts.append(f"temperature {temp:.1f}\u00b0C")
+	if isinstance(humi, (int, float)):
+		parts.append(f"humidity {humi:.1f}%")
+	if isinstance(light, (int, float)):
+		parts.append(f"light {light:.1f}")
+	if isinstance(anomaly, (int, float)):
+		parts.append(f"anomaly score {anomaly:.2f}")
+	if parts:
+		prefix = "Currently, "
 		return prefix + ", ".join(parts) + "."
 	if devices:
 		device_names = ("main_led", "neo_led", "ws2812", "relay", "mini_fan")
 		on_devices = [name for name in device_names if device_status(devices, name) is True]
 		off_devices = [name for name in device_names if device_status(devices, name) is False]
 		return (
-			f"Đang bật: {format_entity_list(on_devices, True) or 'không có'}. Đang tắt: {format_entity_list(off_devices, True) or 'không có'}."
-			if prefer_vietnamese
-			else f"On: {format_entity_list(on_devices, False) or 'none'}. Off: {format_entity_list(off_devices, False) or 'none'}."
+			f"On: {format_entity_list(on_devices, False) or 'none'}. "
+			f"Off: {format_entity_list(off_devices, False) or 'none'}."
 		)
-	return (
-		"Tôi chưa có đủ dữ liệu cảm biến mới nhất."
-		if prefer_vietnamese
-		else "I do not have enough current sensor data yet."
-	)
+	return "I do not have enough current sensor data yet."
+
 
 
 def render_anomaly_text(user_text: str, specialist_response: AgentResponse) -> str:
@@ -492,5 +445,4 @@ def render_anomaly_text(user_text: str, specialist_response: AgentResponse) -> s
 	return " ".join(parts)
 
 
-def fast_general_response(user_text: str) -> str | None:
-	return None
+

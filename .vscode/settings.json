@@ -4,5 +4,6 @@
   "platformio-ide.showHomeOnStartup": false,
   "platformio-ide.showPIOHomeOnStartup": false,
   "platformio-ide.autoPreviewSerialMonitor": false,
-  "platformio-ide.showOnStartup": false
+  "platformio-ide.showOnStartup": false,
+  "C_Cpp.default.configurationProvider": "platformio.platformio-ide"
 }

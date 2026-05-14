@@ -110,7 +110,7 @@ tmp/
 # Repository-specific
 docs/report/
 .ruff_cache/
-
+.zshrc
 todo.md
 
 # Ignore all files in docs/ folder
