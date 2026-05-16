@@ -60,7 +60,8 @@ class CapabilityRegistry:
 					name="turn_on_device",
 					description=(
 						"Turn ON a device only when needed. If already ON, "
-						"the executor will not send a duplicate command."
+						"the executor will not send a duplicate command. "
+						"mini_fan starts at full PWM (1023) so the motor can spin up."
 					),
 					parameters=DEVICE_TOOL_PARAMS,
 					effect_type="write",

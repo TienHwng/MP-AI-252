@@ -6,6 +6,7 @@ from typing import Any
 
 from domain.devices import (
 	DEVICE_TARGETS,
+	FAN_START_SPEED,
 	coerce_device_value,
 	coerce_sensor_value,
 	normalize_device_target,
@@ -167,6 +168,10 @@ class PolicyEngine:
 		current_states = []
 		for _, device_key, _ in DEVICE_TARGETS[target]:
 			current_states.append(device_status({"devices": devices}, device_key))
+			if requested_state and device_key == "mini_fan":
+				speed = PolicyEngine._device_field_value(devices, "mini_fan", "speed")
+				if not isinstance(speed, int | float) or speed < FAN_START_SPEED:
+					return False
 		return bool(current_states) and all(
 			current_state is requested_state for current_state in current_states
 		)
@@ -194,6 +199,19 @@ class PolicyEngine:
 			}
 			current = devices.get(flat_fields.get((device_key, field), ""))
 		return PolicyEngine._same_value(current, coerced.get("value"))
+
+	@staticmethod
+	def _device_field_value(devices: dict, device_key: str, field: str) -> Any:
+		device = devices.get(device_key)
+		if isinstance(device, dict):
+			return device.get(field)
+		flat_fields = {
+			("neo_led", "brightness"): "strip_brightness",
+			("ws2812", "brightness"): "ws2812_brightness",
+			("ws2812", "color"): "ws2812_color",
+			("mini_fan", "speed"): "fan_speed",
+		}
+		return devices.get(flat_fields.get((device_key, field), ""))
 
 	@staticmethod
 	def _already_in_requested_sensor_value(

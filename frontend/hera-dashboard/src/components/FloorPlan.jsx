@@ -22,6 +22,8 @@ import {
 
 const TELEMETRY_STALE_MS = 30_000;
 const COMMAND_CONFIRM_TIMEOUT_MS = 8_000;
+const DEFAULT_DIMMABLE_ON_PERCENT = 50;
+const FAN_ON_PERCENT = 100;
 
 const markerDefinitions = [
   {
@@ -119,6 +121,27 @@ const boolLabel = (value) => {
 const formatNumber = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return 'UNKNOWN';
   return Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1);
+};
+
+const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)));
+
+const getDimmablePercent = (telemetry, marker) => {
+  if (!marker?.target) return 0;
+  if (marker.status === false) return 0;
+  const device = telemetry?.devices?.[marker.target] ?? {};
+  const speed = Number(device.speed);
+  const brightness = Number(device.brightness);
+
+  if (marker.target === 'mini_fan' && Number.isFinite(speed)) {
+    return clampPercent((speed / 1023) * 100);
+  }
+  if (['neo_led', 'ws2812'].includes(marker.target) && Number.isFinite(brightness)) {
+    return clampPercent((brightness / 255) * 100);
+  }
+  if (marker.status === true) {
+    return marker.target === 'mini_fan' ? FAN_ON_PERCENT : DEFAULT_DIMMABLE_ON_PERCENT;
+  }
+  return 0;
 };
 
 const toTimeMs = (value) => {
@@ -237,15 +260,11 @@ function DevicePanel({
   onSliderChange,
   onChangeIntensity,
 }) {
-  const [sliderValue, setSliderValue] = useState(50);
+  const [sliderValue, setSliderValue] = useState(0);
 
   useEffect(() => {
-    if (marker?.status === false) {
-      setSliderValue(0);
-    } else if (marker?.status === true) {
-      setSliderValue(50);
-    }
-  }, [marker?.status]);
+    setSliderValue(getDimmablePercent(telemetry, marker));
+  }, [marker, telemetry]);
   
   if (!telemetry) {
     return (
@@ -570,7 +589,9 @@ export default function FloorPlan() {
       
       // Set intensity if turning on
       if (expectedState) {
-        const intensityPercent = 50;
+        const intensityPercent = marker.target === 'mini_fan'
+          ? FAN_ON_PERCENT
+          : DEFAULT_DIMMABLE_ON_PERCENT;
         let rpcMethod = '';
         let pwmValue = 0;
         

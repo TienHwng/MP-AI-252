@@ -1026,7 +1026,7 @@ async def test_temporal_conditional_device_request_uses_router_and_runtime() -> 
 
 
 	assert telemetry.calls and telemetry.calls[0]["window_seconds"] == 300
-	assert fake_mqtt.published == [("setValueMiniFan", True)], fake_mqtt.published
+	assert fake_mqtt.published == [("setFanSpeed", 1023)], fake_mqtt.published
 	assert response.metadata["intent"] == "device_control", response.metadata
 	parsed = response.metadata["specialist_report"]["analysis_payload"][
 		"parsed_command"
@@ -1044,6 +1044,7 @@ async def test_conditional_noop_response_stays_vietnamese() -> None:
 	fake_mqtt = FakeMQTT()
 	fake_mqtt.sensor_state["sensors"]["temperature"] = 31.2
 	fake_mqtt.sensor_state["devices"]["mini_fan_status"] = True
+	fake_mqtt.sensor_state["devices"]["fan_speed"] = 1023
 	runner = ToolRunner(
 		CapabilityRegistry(),
 		DeviceExecutor(fake_mqtt),
@@ -1100,7 +1101,7 @@ async def test_conditional_command_prefers_explicit_target_over_recent_actions()
 		)
 	)
 
-	assert fake_mqtt.published == [("setValueMiniFan", True)], fake_mqtt.published
+	assert fake_mqtt.published == [("setFanSpeed", 1023)], fake_mqtt.published
 	parsed = response.metadata["specialist_report"]["analysis_payload"][
 		"parsed_command"
 	]

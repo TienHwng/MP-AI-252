@@ -17,7 +17,7 @@ static inline uint16_t clamp_pwm_10bit_abs(int16_t speed) {
     int32_t val = speed;
 
     if (val < 0) val = -val;
-    if (val > 1023) val = 1023;
+    if (val > FAN_PWM_MAX) val = FAN_PWM_MAX;
 
     return (uint16_t)val;
 }
@@ -41,7 +41,7 @@ void setup_digital_manager() {
     analogWriteResolution(10);     // 0..1023
     analogWriteFrequency(20000);   // 20 kHz
 
-    analogWrite(MINI_FAN_PIN, 100);
+    analogWrite(MINI_FAN_PIN, 0);
     // analogWrite(DIGITAL_PORT_3_SUB_PIN, 0);
 }
 
@@ -57,7 +57,7 @@ void fan_set_speed(int16_t speed) {
         analogWrite(MINI_FAN_PIN, pwm);
 
         if (IS_DEBUG_MODE || IS_SHOW_DIGITAL_STATUS) {
-            Serial.printf("[FAN] Forward | Speed = %d | PWM = %u / 1023\n", speed, pwm);
+            Serial.printf("[FAN] Forward | Speed = %d | PWM = %u / %d\n", speed, pwm, FAN_PWM_MAX);
         }
     }
     else if (speed < 0) {
@@ -66,7 +66,7 @@ void fan_set_speed(int16_t speed) {
         // analogWrite(DIGITAL_PORT_3_SUB_PIN, pwm);
 
         if (IS_DEBUG_MODE || IS_SHOW_DIGITAL_STATUS) {
-            Serial.printf("[FAN] Reverse | Speed = %d | PWM = %u / 1023\n", speed, pwm);
+            Serial.printf("[FAN] Reverse | Speed = %d | PWM = %u / %d\n", speed, pwm, FAN_PWM_MAX);
         }
     }
     else {

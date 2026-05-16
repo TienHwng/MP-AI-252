@@ -11,6 +11,7 @@ from domain.devices.device_catalog import (
 	DEVICE_STATUS_KEYS,
 	DEVICE_TARGETS,
 	DEVICE_VALUE_SPECS,
+	FAN_START_SPEED,
 	SENSOR_VALUE_SPECS,
 	coerce_device_value,
 	coerce_sensor_value,
@@ -154,15 +155,17 @@ class DeviceExecutor:
 		for method, device_key, label in DEVICE_TARGETS[target]:
 			current_state = self._device_status(devices, device_key)
 			states_before[device_key] = current_state
-			if current_state is state:
+			if self._state_already_satisfied(devices, device_key, state):
 				unchanged.append(label)
 				continue
-			self.mqtt.publish_rpc(method, state)
+			rpc_method, rpc_params = self._state_rpc_payload(method, device_key, state)
+			self.mqtt.publish_rpc(rpc_method, rpc_params)
 			changed.append(label)
 			commands_sent.append(
 				{
-					"method": method,
-					"params": state,
+					"method": rpc_method,
+					"params": rpc_params,
+					"expected_state": state,
 					"device_key": device_key,
 					"label": label,
 				}
@@ -304,6 +307,27 @@ class DeviceExecutor:
 		if device_key is None:
 			return None
 		return cls._device_payload(devices, device_key).get(field)
+
+	@classmethod
+	def _state_already_satisfied(
+		cls,
+		devices: dict,
+		device_key: str,
+		state: bool,
+	) -> bool:
+		current_state = cls._device_status(devices, device_key)
+		if current_state is not state:
+			return False
+		if device_key == "mini_fan" and state:
+			speed = cls._device_payload(devices, device_key).get("speed")
+			return isinstance(speed, int | float) and speed >= FAN_START_SPEED
+		return True
+
+	@staticmethod
+	def _state_rpc_payload(method: str, device_key: str, state: bool) -> tuple[str, Any]:
+		if device_key == "mini_fan":
+			return "setFanSpeed", FAN_START_SPEED if state else 0
+		return method, state
 
 	def _sensor_value(self, sensor: str) -> Any:
 		get_sensor_readings = getattr(self.mqtt, "get_sensor_readings_snapshot", None)

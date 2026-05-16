@@ -138,7 +138,7 @@ class VerificationService:
 				)
 				continue
 
-			expected = command.get("params")
+			expected = command.get("expected_state", command.get("params"))
 			observed = after_state.get(device_name)
 			if observed is not expected:
 				mismatches.append(

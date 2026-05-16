@@ -16,12 +16,29 @@ const stateLabel = (value) => {
 	return 'Unknown';
 };
 
+const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)));
+
+const getServerIntensity = (data, control, active) => {
+	const device = data?.devices?.[control.id] ?? data?.[control.id] ?? {};
+	const speed = Number(device.speed);
+	const brightness = Number(device.brightness ?? device.intensity);
+
+	if (control.id === 'mini_fan' && Number.isFinite(speed)) {
+		return clampPercent((speed / 1023) * 100);
+	}
+	if (['neo_led', 'ws2812'].includes(control.id) && Number.isFinite(brightness)) {
+		return clampPercent((brightness / 255) * 100);
+	}
+	if (active) return control.id === 'mini_fan' ? 100 : 50;
+	return control.id === 'mini_fan' ? 100 : 50;
+};
+
 const DeviceItem = ({ control, data, isSubmitting, disabled, onToggleDevice, onChangeIntensity }) => {
 	const Icon = control.Icon;
 	const status = getDeviceStatus(data, control.id);
 	const active = status === true;
 
-	const serverIntensity = data?.[control.id]?.intensity || 50;
+	const serverIntensity = getServerIntensity(data, control, active);
 	const [localVal, setLocalVal] = useState(serverIntensity);
 	const prevIntensityRef = useRef(serverIntensity);
 

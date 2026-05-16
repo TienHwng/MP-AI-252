@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from config import DEVICE_VERIFICATION_POLL_SECONDS, DEVICE_VERIFICATION_TIMEOUT_SECONDS
-from domain.devices.device_catalog import normalize_color_value
+from domain.devices.device_catalog import FAN_START_SPEED, normalize_color_value
 from domain.devices.device_executor import DeviceExecutor
 from schemas import (
 	PolicyDecision,
@@ -207,7 +207,7 @@ class ToolRunner:
 				continue
 
 			device_key = command.get("device_key")
-			expected_value = command.get("params")
+			expected_value = command.get("expected_state", command.get("params"))
 			device_name = name_by_status_key.get(device_key)
 			if device_name is None or status.get(device_name) is not expected_value:
 				return False
@@ -251,6 +251,12 @@ class ToolRunner:
 				"requested_state": requested_state,
 				"commands_sent": [],
 			}
+		if target == "mini_fan":
+			return self.device_executor.control_device_value(
+				"mini_fan",
+				"speed",
+				FAN_START_SPEED if requested_state else 0,
+			)
 		return self.device_executor.control_device_state(target, requested_state)
 
 	@staticmethod

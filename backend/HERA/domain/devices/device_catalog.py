@@ -6,6 +6,9 @@ import re
 import unicodedata
 from typing import Any
 
+FAN_PWM_MAX = 1023
+FAN_START_SPEED = FAN_PWM_MAX
+
 DEVICE_TARGETS = {
 	"main_led": [
 		("setValueLedBlinky", "led", "Main LED"),
@@ -205,7 +208,7 @@ DEVICE_VALUE_SPECS = {
 			"label": "Mini fan speed",
 			"type": "int",
 			"minimum": 0,
-			"maximum": 1023,
+			"maximum": FAN_PWM_MAX,
 		},
 	},
 }

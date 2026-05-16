@@ -17,6 +17,8 @@ typedef struct {
     float gas;
 } SensorData;
 
+#define FAN_PWM_MAX 1023
+
 enum LcdScreen {
     SCREEN_ENV = 0,
     SCREEN_ACTUATORS,
@@ -63,7 +65,7 @@ extern uint8_t ws2812_brightness;   // 0..255, 0 = off
 extern boolean is_relay_on;
 
 extern boolean is_mini_fan_on;
-extern int16_t fan_speed;           // 0..4095, 0 = off (PWM duty)
+extern int16_t fan_speed;           // 0..FAN_PWM_MAX, 0 = off (PWM duty)
 
 extern float glob_inference_result;
 

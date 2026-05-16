@@ -47,6 +47,8 @@ Rules:
 - For follow-ups, use Current discourse focus when provided. Otherwise keep
   target=null and let the runtime clarify.
 - For set_device_value, include property and value.
+- For a plain request to turn on mini_fan, use action=turn_on and target=mini_fan;
+  the runtime starts the physical fan at full PWM (1023), not a default 50%.
 - For set_sensor_value (simulator only), include sensor and value.
   Supported sensors: temperature, humidity, light, gas, gas_detected.
 - For conditional requests, include a condition object with sensor, operator,
