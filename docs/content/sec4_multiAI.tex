@@ -5,311 +5,446 @@
 \section{Multi-Agent AI Pipeline Architecture}
 \label{sec:multi-agent}
 
-The \texttt{backend/HERA} subsystem implements the conversational
-intelligence of H.E.R.A as a hierarchical multi-agent pipeline. Rather
-than using a single model for every task, the backend separates
-\emph{routing}, \emph{tool-centric control}, \emph{sensor analysis},
-\emph{anomaly explanation}, and \emph{general conversation} into
-specialized components. This choice is not only architectural; it is an
-explicit latency and maintainability optimization for a resource-limited
-student project.
+This section presents the conversational intelligence architecture of H.E.R.A. The current implementation is not a single chatbot placed in front of the IoT system. Instead, it is a graph-based multi-agent runtime that separates routing, device planning, telemetry reporting, anomaly analysis, web research, memory handling, policy checking, and final response composition. This separation is important because H.E.R.A must both communicate naturally with users and safely control physical devices. A natural-language error in a casual response is tolerable; an incorrect actuator command is not. Therefore, the architecture is designed around explicit contracts, bounded tool capabilities, deterministic guards, and auditable execution results.
 
-\subsection{Why a Multi-Agent Backend}
+\subsection{Design Gap and Architectural Motivation}
 
-The backend currently needs to solve four very different tasks:
-\begin{itemize}
-    \item map a short user utterance to one of four intents;
-    \item execute a small number of deterministic device-control tools;
-    \item explain live sensor readings in natural language;
-    \item handle open-ended fallback conversation.
+The core technical gap addressed by this architecture is the mismatch between open-ended language generation and safety-critical IoT control. Large language models are effective at interpreting natural language, but they are probabilistic systems. If an LLM is allowed to directly generate MQTT commands or directly decide whether an environmental condition is dangerous, the system becomes difficult to verify. In a smart-home context, this creates three risks:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \textbf{Tool ambiguity:} user phrases such as ``turn it off'' or ``make the room darker'' require grounding to a concrete device, property, and value.
+    \item \textbf{State inconsistency:} an LLM may claim a device was controlled even when the hardware is offline or already in the requested state.
+    \item \textbf{Evaluation difficulty:} if routing, reasoning, tool execution, and response generation are mixed in one prompt, failures cannot be attributed to a specific layer.
 \end{itemize}
 
-Placing all four tasks into one prompt creates three practical problems.
-First, low-value requests such as ``turn on the LED'' would pay the full
-latency cost of a larger model. Second, tool descriptions, sensor
-context, and conversation rules would compete for the same prompt budget.
-Third, debugging becomes difficult because reasoning errors, tool-call
-errors, and conversational failures are coupled together.
+H.E.R.A addresses this gap using an orchestrator-specialist architecture implemented as a LangGraph state machine. The LLM is used where semantic interpretation is valuable, while deterministic software is used for policy, validation, telemetry freshness, anomaly classification, and execution verification. This division is the central design principle of the AI subsystem.
 
-The implemented solution is an \emph{orchestrator-specialist} topology:
-a lightweight router classifies intent, then forwards the message to a
-specialist agent that owns a much narrower system prompt and, when
-needed, a constrained tool set. This is a pragmatic form of hierarchical
-multi-agent design: it is simpler than peer-to-peer agent cooperation,
-but it captures most of the latency and modularity benefits.
+\subsection{Current H.E.R.A AI Architecture}
 
-\subsection{Implementation Mapping to the Codebase}
+Figure~\ref{fig:hera-ai-overall-architecture} shows the current architecture. The user interacts with H.E.R.A through the dashboard REST API and chat interface. Messages are normalized into a common request format and then passed to the orchestrator. The orchestrator classifies intent, decides whether memory is needed, selects a specialist, and either uses a fast read-only path or runs the full graph.
 
-The main execution path starts in
-\texttt{backend/HERA/main.py}. The runtime wires together the
-\texttt{LLMService}, \texttt{MQTTService}, \texttt{ToolRegistry},
-four specialist agents, and the Telegram adapter. The orchestrator then
-routes each \texttt{UserMessage} to one of four intent categories:
-\texttt{device\_control}, \texttt{sensor\_query},
-\texttt{anomaly\_query}, or \texttt{general}.
+\begin{figure}[H]
+    \centering
+    \resizebox{0.98\textwidth}{!}{%
+    \begin{tikzpicture}[
+            layer/.style 2 args={draw=black!18, rounded corners=2pt, fill=#1, minimum width=15.2cm,
+                minimum height=#2, align=left},
+            title/.style={font=\scriptsize\bfseries, text=black!72, anchor=west},
+            box/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=3.00cm,
+                minimum height=0.74cm, align=center, font=\scriptsize},
+            widebox/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=4.10cm,
+                minimum height=0.74cm, align=center, font=\scriptsize},
+            bandbox/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=12.45cm,
+                minimum height=0.82cm, align=center, font=\scriptsize},
+            store/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=2.55cm,
+                minimum height=0.64cm, align=center, font=\scriptsize},
+            flow/.style={->, >=stealth, line width=0.82pt, draw=black!64},
+            every node/.style={font=\scriptsize}
+        ]
+        \node[layer={blue!4}{1.18cm}] at (0,0) {};
+        \node[title] at (-7.34,0.38) {1. User interaction and API boundary};
+        \node[widebox=blue!12] (dashboard) at (-4.95,-0.12) {H.E.R.A Dashboard\\chat, house map, settings};
+        \node[box=blue!12] (rest) at (0,-0.12) {FastAPI REST\\assistant endpoint};
+        \node[widebox=blue!12] (contract) at (4.95,-0.12) {Unified message contract\\session, language, user text};
+
+        \node[layer={orange!5}{1.42cm}] at (0,-1.65) {};
+        \node[title] at (-7.34,-1.12) {2. LangGraph orchestration core};
+        \node[bandbox=orange!16] (orchestrator) at (0,-1.76)
+        {Intent routing + session memory + specialist dispatch + response composition};
+
+        \node[layer={green!5}{1.34cm}] at (0,-3.45) {};
+        \node[title] at (-7.34,-2.97) {3. Specialist services};
+        \node[box=green!14] (dev) at (-5.55,-3.52) {Device Control\\Agent};
+        \node[box=green!14] (tel) at (-1.85,-3.52) {Telemetry Report\\Service};
+        \node[box=green!14] (ano) at (1.85,-3.52) {Anomaly Analyzer\\Service};
+        \node[box=green!14] (web) at (5.55,-3.52) {Web Research\\Service};
+
+        \node[layer={gray!7}{1.34cm}] at (0,-5.10) {};
+        \node[title] at (-7.34,-4.62) {4. Deterministic runtime and tool boundary};
+        \node[bandbox=gray!18] (runtime) at (0,-5.17)
+        {Capability registry + policy validation + tool execution + effect verification};
+
+        \node[layer={yellow!6}{1.18cm}] at (0,-6.75) {};
+        \node[title] at (-7.34,-6.33) {5. Infrastructure and physical environment};
+        \node[store=yellow!18] (llm) at (-5.80,-6.87) {Ollama /\\OpenRouter};
+        \node[store=yellow!18] (mongo) at (-2.90,-6.87) {MongoDB\\settings, memory};
+        \node[store=yellow!18] (mqtt) at (0,-6.87) {MQTT Broker\\telemetry, RPC};
+        \node[store=yellow!18] (search) at (2.90,-6.87) {External search\\weather, news};
+        \node[store=yellow!18] (esp) at (5.80,-6.87) {ESP32 edge\\sensors, actuators};
+
+        \draw[flow] (dashboard) -- (rest);
+        \draw[flow] (rest) -- (contract);
+        \draw[flow] (contract.south) -- ++(0,-0.32) -| (orchestrator.north);
+
+        \draw[flow] (orchestrator.south) -- (0,-2.62);
+        \draw[draw=black!64, line width=0.82pt] (-5.55,-2.62) -- (5.55,-2.62);
+        \draw[flow] (-5.55,-2.62) -- (dev.north);
+        \draw[flow] (-1.85,-2.62) -- (tel.north);
+        \draw[flow] (1.85,-2.62) -- (ano.north);
+        \draw[flow] (5.55,-2.62) -- (web.north);
+
+        \draw[flow] (dev.south) -- (-5.55,-4.18);
+        \draw[flow] (tel.south) -- (-1.85,-4.18);
+        \draw[flow] (ano.south) -- (1.85,-4.18);
+        \draw[flow] (web.south) -- (5.55,-4.18);
+        \draw[draw=black!64, line width=0.82pt] (-5.55,-4.18) -- (5.55,-4.18);
+        \draw[flow] (0,-4.18) -- (runtime.north);
+
+        \draw[flow] (runtime.south) -- (0,-6.28);
+        \draw[draw=black!64, line width=0.82pt] (-5.80,-6.28) -- (2.90,-6.28);
+        \draw[flow] (-5.80,-6.28) -- (llm.north);
+        \draw[flow] (-2.90,-6.28) -- (mongo.north);
+        \draw[flow] (0,-6.28) -- (mqtt.north);
+        \draw[flow] (2.90,-6.28) -- (search.north);
+        \draw[flow] (mqtt) -- (esp);
+    \end{tikzpicture}}
+    \caption{Current layered architecture of the H.E.R.A multi-agent AI subsystem.}
+    \label{fig:hera-ai-overall-architecture}
+\end{figure}
+
+The architecture contains five main functional layers:
+
+\begin{table}[H]
+    \centering
+    \caption{Functional layers of the H.E.R.A AI subsystem}
+    \label{tab:hera-ai-layers}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{@{}p{3.1cm}X@{}}
+        \toprule
+        \textbf{Layer} & \textbf{Responsibility} \\
+        \midrule
+        Interface layer & Receives user input from REST/dashboard or other adapters and converts it into a unified \texttt{UserMessage}. \\
+        Orchestration layer & Classifies intent, selects memory scope, handles pending confirmations, routes to specialists, and composes the final user-facing response. \\
+        Specialist layer & Performs domain-specific planning or reporting: device control, telemetry reporting, anomaly analysis, and web research. \\
+        Runtime layer & Converts plans into capability proposals, checks policy, executes read/write tools, verifies effects, and records structured results. \\
+        Infrastructure layer & Provides LLM inference, MQTT communication, MongoDB memory/telemetry storage, and external search services. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{LangGraph Execution Model}
+
+The current H.E.R.A orchestrator is implemented as a LangGraph state machine rather than a simple sequential function. The graph is compiled with an in-memory checkpointer keyed by the user session, allowing the runtime to preserve thread state such as chat history, active device focus, pending confirmation, pending device clarification, and previous tool results. Figure~\ref{fig:hera-langgraph-flow} summarizes the graph.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.82\textwidth}{!}{%
+    \begin{tikzpicture}[
+            node/.style={draw=black!45, rounded corners=2pt, minimum width=3.35cm,
+                    minimum height=0.74cm, align=center, font=\scriptsize},
+            wide/.style={draw=black!45, rounded corners=2pt, minimum width=5.20cm,
+                    minimum height=0.74cm, align=center, font=\scriptsize},
+            arrow/.style={->, >=stealth, line width=0.78pt, draw=black!65},
+            every node/.style={font=\scriptsize}
+        ]
+        \node[node, fill=blue!10] (intake) at (0,0) {intake\\normalize request};
+        \node[node, fill=orange!15] (route) at (0,-1.05) {route\\classify intent};
+        \node[wide, fill=yellow!12] (state) at (0,-2.10)
+        {state gate\\pending confirmation + memory scope};
+        \node[node, fill=green!12] (general) at (-2.85,-3.45)
+        {general/read-only\\answer path};
+        \node[node, fill=green!12] (specialist) at (2.85,-3.45)
+        {specialist\\domain planner};
+        \node[node, fill=gray!12] (ground) at (2.85,-4.70) {ground tool plan};
+        \node[node, fill=gray!12] (execute) at (2.85,-5.95) {execute tools};
+        \node[node, fill=gray!12] (eval) at (2.85,-7.20) {evaluate results};
+        \node[wide, fill=purple!10] (compose) at (0,-8.45) {compose response\\with verified state};
+        \node[node, fill=blue!8] (final) at (0,-9.60) {finalize};
+
+        \draw[arrow] (intake) -- (route);
+        \draw[arrow] (route) -- (state);
+        \draw[arrow] (state.south) -- ++(0,-0.30) -| (general.north);
+        \draw[arrow] (state.south) -- ++(0,-0.30) -| (specialist.north);
+        \draw[arrow] (general.south) -- ++(0,-4.20) -| (compose.west);
+        \draw[arrow] (specialist) -- (ground);
+        \draw[arrow] (ground) -- (execute);
+        \draw[arrow] (execute) -- (eval);
+        \draw[arrow] (eval.south) -- ++(0,-0.36) -| (compose.east);
+        \draw[arrow] (compose) -- (final);
+    \end{tikzpicture}}
+    \caption{LangGraph execution topology of the H.E.R.A orchestrator.}
+    \label{fig:hera-langgraph-flow}
+\end{figure}
+
+The graph separates planning from execution. A specialist does not directly control hardware. It returns a structured report or a set of tool proposals. The runtime tool node then executes those proposals through the central tool runner. This allows policy enforcement and verification to be applied uniformly, whether the request originates from the chat interface or the dashboard.
+
+\subsection{Intent Taxonomy and Routing}
+
+The orchestrator recognizes five intent categories:
+
+\begin{table}[H]
+    \centering
+    \caption{Intent taxonomy used by the orchestrator}
+    \label{tab:hera-intent-taxonomy}
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabularx}{\textwidth}{@{}p{3.0cm}p{3.1cm}X@{}}
+        \toprule
+        \textbf{Intent} & \textbf{Specialist} & \textbf{Purpose} \\
+        \midrule
+        \texttt{device\_control} & \texttt{device\_control} & Parse actuator requests, generate capability proposals, and route write operations through policy and verification. \\
+        \texttt{sensor\_query} & \texttt{telemetry\_report} & Report current temperature, humidity, light, anomaly score, device state, and network state. \\
+        \texttt{anomaly\_query} & \texttt{anomaly\_analyzer} & Explain abnormal telemetry based on freshness, thresholds, anomaly score, and recent telemetry windows. \\
+        \texttt{web\_search} & \texttt{web\_research} & Retrieve current external information using bounded search/fetch services. \\
+        \texttt{general} & \texttt{orchestrator} & Handle greetings, help requests, and non-effectful conversation. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+The routing prompt returns not only an intent but also a memory policy. The memory scope can be \texttt{none}, \texttt{session}, \texttt{actions}, \texttt{profile}, or \texttt{all}. This distinction prevents unnecessary memory retrieval for simple current-state questions while allowing contextual commands such as ``turn it off'' to use recent actions or active focus. The router also has a safety correction step: if a message is classified as a sensor or general request but the device planner semantically recognizes a valid actuator command, the orchestrator forces the full device-control graph.
+
+\subsection{Short-Path Optimization for Read-Only Requests}
+
+H.E.R.A includes an optimized short path for simple non-effectful requests. If the intent is \texttt{sensor\_query}, \texttt{anomaly\_query}, or trusted \texttt{general}, and the router declares that no memory is needed, the orchestrator can respond without executing the full graph. This is shown in Figure~\ref{fig:hera-shortpath}.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            box/.style={draw, rounded corners, minimum width=10.8cm,
+                    minimum height=0.82cm, align=center, font=\small},
+            arrow/.style={->, >=stealth, thick}
+        ]
+        \node[box, fill=blue!10] (msg) at (0,0) {Incoming \texttt{UserMessage}};
+        \node[box, fill=orange!14] (router) at (0,-1.2) {Router: intent + memory scope};
+        \node[box, fill=yellow!12] (gate) at (0,-2.4) {Short-path gate: no pending confirmation, no write action, memory scope = none};
+        \node[box, fill=green!12] (report) at (0,-3.6) {Deterministic specialist report: telemetry or anomaly};
+        \node[box, fill=purple!10] (reply) at (0,-4.8) {Response composer: concise user-facing answer};
+        \node[box, fill=gray!12] (full) at (0,-6.3) {Otherwise: full LangGraph path with memory, tools, policy, and verification};
+
+        \draw[arrow] (msg) -- (router);
+        \draw[arrow] (router) -- (gate);
+        \draw[arrow] (gate) -- node[right, font=\scriptsize] {read-only} (report);
+        \draw[arrow] (report) -- (reply);
+        \draw[arrow] (gate.east) -- ++(1.2,0) |- node[pos=0.27, right, font=\scriptsize] {device or memory} (full.east);
+    \end{tikzpicture}
+    \caption{Short-path optimization for read-only AI requests.}
+    \label{fig:hera-shortpath}
+\end{figure}
+
+This design reduces latency and cost because routine status questions do not require a full agent graph or a tool-execution cycle. More importantly, it preserves safety because device-control requests are explicitly excluded from the short path.
+
+\subsection{Specialist Components}
+
+\subsubsection{Device Control Agent}
+
+The Device Control Agent converts natural language actuator requests into structured capability proposals. It uses the configured device-control model to parse a command into an action, target, optional property, optional value, optional condition, and confidence score. Supported actions include:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \texttt{turn\_on} and \texttt{turn\_off} for binary device control.
+    \item \texttt{status} for reading current device state.
+    \item \texttt{set\_device\_value} for brightness, color, and fan-speed control.
+    \item \texttt{set\_sensor\_value} for simulator-only sensor overrides.
+\end{itemize}
+
+The agent grounds natural language targets using a physical placement catalog. This allows the user to speak in room-level terms rather than internal device identifiers. Table~\ref{tab:hera-device-placement-map} shows the current mapping between runtime device targets, physical locations, and user-facing names.
+
+\begin{table}[H]
+    \centering
+    \caption{Device placement mapping used by the H.E.R.A AI and digital-twin layers}
+    \label{tab:hera-device-placement-map}
+    \renewcommand{\arraystretch}{1.16}
+    \small
+    \begin{tabularx}{\textwidth}{@{}p{2.6cm}p{2.8cm}p{2.5cm}X@{}}
+        \toprule
+        \textbf{Runtime target} & \textbf{User-facing device} & \textbf{Room} & \textbf{Supported control semantics} \\
+        \midrule
+        \texttt{main\_led} & Living room light & Living Room & On/off control for the main indicator LED. \\
+        \texttt{neo\_led} & Bedroom light & Bedroom & On/off control and brightness adjustment for the NeoPixel strip. \\
+        \texttt{ws2812} & Toilet light & Toilet & On/off control, brightness adjustment, and RGB color control. \\
+        \texttt{mini\_fan} & Living room fan & Living Room & On/off control and fan-speed adjustment. \\
+        \texttt{relay} & Living room TV & Living Room & On/off relay control for the TV load. \\
+        \texttt{all\_lights} & All lights & Multiple rooms & Group target for all lighting devices. \\
+        \texttt{all\_devices} & All devices & Whole house & Broad group target; requires confirmation before execution. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+The agent also supports conditional commands. For example, a request such as ``turn on the fan if the temperature is above 35 degrees'' is parsed as a device action plus a sensor threshold. The condition is then grounded against the current telemetry snapshot or a telemetry window before any write tool is produced. This prevents the model from executing a conditional command without validating the condition against data.
+
+\subsubsection{Telemetry Report Service}
+
+The Telemetry Report Service is deterministic. It does not ask an LLM to infer current sensor values. Instead, it reads the current MQTT snapshot through the read-tool boundary and returns a structured specialist report. The report includes the current snapshot, data-source metadata, availability flags, and reference thresholds for temperature, humidity, and anomaly score. The final response may be natural-language text, but the facts come from runtime telemetry.
+
+\subsubsection{Anomaly Analyzer Service}
+
+The Anomaly Analyzer Service is also deterministic. It first checks telemetry freshness using the configured stale threshold. If telemetry is stale or missing, the service reports an unknown current-state severity rather than making an unsupported conclusion. If telemetry is fresh, it classifies anomaly status using rule-based checks over temperature, humidity, and anomaly score. It also reads a recent telemetry window from MongoDB when available. The LLM is used only to explain the structured result, not to decide whether an anomaly exists.
+
+\subsubsection{Web Research Service}
+
+The Web Research Service handles external and time-sensitive information. It supports generic DuckDuckGo search, direct URL fetching, and specialized weather/news paths when the corresponding API keys are configured. Search results are trimmed before entering the final response composer, which bounds prompt size and reduces the risk of ungrounded answers. This specialist is separated from device control so external web content cannot directly trigger actuator commands.
+
+\subsection{Runtime Capability Model}
+
+The runtime layer exposes a small set of declared capabilities instead of allowing arbitrary generated code or arbitrary MQTT payloads. Table~\ref{tab:hera-capabilities} summarizes the implemented capability registry.
+
+\begin{table}[H]
+    \centering
+    \caption{Runtime capabilities exposed to the H.E.R.A AI layer}
+    \label{tab:hera-capabilities}
+    \renewcommand{\arraystretch}{1.16}
+    \small
+    \begin{tabularx}{\textwidth}{@{}p{3.2cm}p{1.7cm}p{1.7cm}X@{}}
+        \toprule
+        \textbf{Capability} & \textbf{Effect} & \textbf{Risk} & \textbf{Description} \\
+        \midrule
+        \texttt{get\_device\_status} & read & low & Reads current state of main LED, NeoPixel LED, WS2812 LED, relay, and mini fan. \\
+        \texttt{get\_current\_telemetry} & read & low & Reads current temperature, humidity, light, anomaly score, device states, and network state. \\
+        \texttt{get\_telemetry\_window} & read & low & Reads a recent telemetry summary window for threshold checks and anomaly diagnostics. \\
+        \texttt{turn\_on\_device} & write & medium & Turns on a selected device or group if the requested state differs from the current state. \\
+        \texttt{turn\_off\_device} & write & medium & Turns off a selected device or group if the requested state differs from the current state. \\
+        \texttt{set\_device\_value} & write & medium & Sets supported adjustable values such as LED brightness, WS2812 color, or fan speed. \\
+        \texttt{set\_sensor\_value} & write & medium & Overrides simulator sensor values for test and demonstration mode. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+This capability design is intentionally parameterized. Instead of defining one function for each individual device action, the model produces a capability name and structured arguments. The benefit is twofold. First, the model chooses among fewer tool types, reducing selection ambiguity. Second, new devices can be added by extending the target catalog and validation rules instead of rewriting the orchestration logic.
+
+\subsection{Policy, Verification, and Safety}
+
+The policy engine evaluates every write proposal before execution. Read-only tools are allowed by default, but write tools are checked against runtime state and target validity. The implemented policies include:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item reject or ask for clarification when the target is missing or invalid;
+    \item deny execution when the device reports MQTT offline;
+    \item require confirmation before controlling \texttt{all\_devices};
+    \item return \texttt{noop} when the requested state or value is already satisfied;
+    \item coerce and validate brightness, fan speed, color, and simulator sensor values before execution.
+\end{itemize}
+
+After execution, the tool runner performs readback verification. For state changes, it polls the device status snapshot until the expected state is observed or the verification timeout expires. For value changes, it checks the appropriate value field. The final response is then grounded in execution results such as changed entities, unchanged entities, failed entities, policy reason, and verification status. This prevents the assistant from claiming success solely because the LLM generated a tool call.
 
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[
             box/.style={draw, rounded corners, minimum width=3.1cm,
-                    minimum height=0.9cm, align=center, font=\small},
-            arrow/.style={->, >=stealth, thick},
-            every node/.style={font=\small}
+                    minimum height=0.78cm, align=center, font=\scriptsize},
+            arrow/.style={->, >=stealth, thick}
         ]
-        \node[box, fill=blue!12] (tg) at (0,6) {Telegram\\Adapter};
-        \node[box, fill=blue!12] (vc) at (4,6) {Voice\\Adapter (stub)};
-        \node[box, fill=blue!12] (rs) at (8,6) {REST\\Adapter (future)};
+        \node[box, fill=green!12] (plan) at (0,0) {Specialist\\Tool Proposal};
+        \node[box, fill=yellow!12] (cap) at (3.3,0) {Capability\\Registry};
+        \node[box, fill=orange!14] (policy) at (6.6,0) {Policy\\Engine};
+        \node[box, fill=blue!10] (exec) at (9.9,0) {Device\\Executor};
+        \node[box, fill=gray!12] (verify) at (6.6,-1.4) {Readback\\Verification};
+        \node[box, fill=purple!10] (result) at (3.3,-1.4) {Structured\\Result};
+        \node[box, fill=blue!8] (reply) at (0,-1.4) {Grounded\\Reply};
 
-        \node[box, fill=orange!18, minimum width=9.6cm] (orch) at (4,4.4)
-        {Orchestrator - Intent Classification and Routing};
-
-        \node[box, fill=green!14] (dev) at (-0.5,2.8) {Device\\Agent};
-        \node[box, fill=green!14] (sen) at (2.7,2.8) {Sensor\\Agent};
-        \node[box, fill=green!14] (ano) at (5.5,2.8) {Anomaly\\Agent};
-        \node[box, fill=green!14] (cha) at (8.5,2.8) {Chat\\Agent};
-
-        \node[box, fill=gray!14, minimum width=9.6cm] (core) at (4,1.2)
-        {Core Services: LLM | MQTT | Tools | Language Policy};
-
-        \foreach \a in {tg,vc,rs} { \draw[arrow] (\a) -- (orch); }
-        \foreach \a in {dev,sen,ano,cha} {
-                \draw[arrow] (orch) -- (\a);
-                \draw[arrow] (\a) -- (core);
-            }
+        \draw[arrow] (plan) -- (cap);
+        \draw[arrow] (cap) -- (policy);
+        \draw[arrow] (policy) -- (exec);
+        \draw[arrow] (exec) |- (verify);
+        \draw[arrow] (verify) -- (result);
+        \draw[arrow] (result) -- (reply);
     \end{tikzpicture}
-    \caption{Layered view of the H.E.R.A backend.}
-    \label{fig:mas-arch}
+    \caption{Safe tool execution path for effectful device-control requests.}
+    \label{fig:hera-safe-tool-path}
 \end{figure}
 
-\begin{table}[H]
-    \centering
-    \caption{Backend package decomposition in \texttt{backend/HERA}.}
-    \label{tab:packages}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{4.8cm} X @{}}
-        \toprule
-        \textbf{Package} & \textbf{Key files} & \textbf{Responsibility} \\
-        \midrule
-        \texttt{config} &
-        \texttt{config.py} &
-        Centralized environment and model configuration. \\
-        \texttt{core} &
-        \texttt{llm\_service.py}, \texttt{mqtt\_service.py}, \texttt{tool\_registry.py}, \texttt{language\_policy.py}, \texttt{message.py} &
-        Provider-agnostic LLM calls, MQTT state management, tool schemas and execution, language constraints, and shared message objects. \\
-        \texttt{agents} &
-        \texttt{orchestrator.py}, \texttt{device\_agent.py}, \texttt{sensor\_agent.py}, \texttt{anomaly\_agent.py}, \texttt{chat\_agent.py} &
-        Routing plus domain-specialized reasoning. \\
-        \texttt{adapters} &
-        \texttt{telegram\_adapter.py}, \texttt{voice\_adapter.py} &
-        Conversion between external I/O channels and the internal message protocol. \\
-        \bottomrule
-    \end{tabularx}
-\end{table}
+\subsection{Memory and Discourse Grounding}
 
-\subsection{Benchmark-Based Model Selection}
-\label{sec:llm-benchmark-selection}
+The graph maintains session state through a LangGraph checkpointer and optionally persists memory through MongoDB. H.E.R.A uses memory selectively rather than attaching all history to every request. This design avoids unnecessary context growth and reduces the chance that old conversation turns influence unrelated device commands. The system uses three practical memory concepts:
 
-The codebase currently uses the Qwen2.5 family as the default local
-stack: \texttt{qwen2.5:1.5b} for routing and cheap tool-centric tasks,
-and \texttt{qwen2.5:7b} for the more explanation-heavy specialists.
-This decision is supported by two engineering constraints:
-\begin{enumerate}
-    \item the project needs reliable local inference through Ollama;
-    \item the system depends on structured output and tool/function
-    calling rather than pure open-ended chat quality.
-\end{enumerate}
-
-\subsubsection{Candidate SLMs for the Orchestrator and Low-Cost Tool Agents}
-
-Table~\ref{tab:router-slm-benchmark} compares realistic open-weight
-candidates for the router and compact specialist agents. The benchmark
-numbers are taken from official model cards and vendor documentation
-\cite{qwen25_llm_2024,qwen25_blog_2024,llama32_model_card_2024,gemma3_model_card_2025,gemma_function_calling_2025,phi35_model_card_2024,azure_foundry_models_2026}.
-
-\begin{table}[H]
-    \centering
-    \caption{Candidate small models for routing and low-cost tool-centric agents.}
-    \label{tab:router-slm-benchmark}
-    \renewcommand{\arraystretch}{1.15}
-    \small
-    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.8cm} >{\centering\arraybackslash}p{0.9cm} >{\centering\arraybackslash}p{1.0cm} X >{\raggedright\arraybackslash}p{3.2cm} @{}}
-        \toprule
-        \textbf{Model} & \textbf{Params} & \textbf{Ctx} & \textbf{Official benchmark and tool evidence} & \textbf{Project decision} \\
-        \midrule
-        Qwen2.5-1.5B-Instruct &
-        1.54B &
-        32K &
-        MMLU-Pro 32.4, IFEval 42.5, HumanEval 61.6. Official tool calling support is documented for vLLM, Ollama, and Transformers. &
-        Selected for the orchestrator and default device-control path because routing is only a 4-way classification task and this model gives the lowest memory and latency cost while preserving structured output support. \\
-        Qwen2.5-3B-Instruct &
-        3.09B &
-        32K &
-        MMLU-Pro 43.7, IFEval 58.2, HumanEval 74.4. Same tool-calling stack as the 1.5B model. &
-        Best upgrade path if the 1.5B router underperforms on multilingual or noisy commands. \\
-        Llama-3.2-3B-Instruct &
-        3.21B &
-        128K &
-        MMLU 63.4, IFEval 77.4, BFCL V2 67.0. The model card explicitly positions it for agentic retrieval and summarization use cases. &
-        Strong alternative, but heavier than Qwen2.5-1.5B and less attractive for this project's Vietnamese-first local workflow. This conclusion is an engineering inference from the official benchmarks and supported-language list. \\
-        Gemma 3 4B IT &
-        4B &
-        128K &
-        MMLU-Pro 43.6, IFEval 90.2, HumanEval 71.3. Google documents function calling support, but recommends larger Gemma 3 sizes for better balanced performance. &
-        Capable candidate, but the function-calling workflow is less turnkey for this stack than Qwen under Ollama. \\
-        Phi-3.5-mini-instruct &
-        3.8B &
-        128K &
-        MMLU 69.0, MMLU-Pro 47.4. Azure's model catalog lists tool calling as unavailable for this model family. &
-        Rejected for tool-centric local agents despite strong reasoning benchmarks. \\
-        \bottomrule
-    \end{tabularx}
-\end{table}
-
-The central argument is therefore not that Qwen2.5-1.5B is the strongest
-small model on every benchmark. It is not. The argument is that the
-router task is simpler than the benchmark suite, and the deployment
-stack benefits more from low latency, stable structured output, and
-shared prompting conventions across router and specialist agents than
-from maximizing open-ended reasoning scores.
-
-\subsubsection{Why \texttt{qwen2.5:7b} Remains the Best Local Specialist Default}
-
-For the explanation-heavy specialists, the current configuration keeps a
-larger local model. Table~\ref{tab:specialist-model-benchmark} compares
-the current \texttt{qwen2.5:7b} default with nearby open-weight
-alternatives using official Qwen benchmarks \cite{qwen25_llm_2024}.
-
-\begin{table}[H]
-    \centering
-    \caption{Mid-size candidates for explanation-heavy specialist agents.}
-    \label{tab:specialist-model-benchmark}
-    \renewcommand{\arraystretch}{1.15}
-    \small
-    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{3.1cm} >{\centering\arraybackslash}p{1.5cm} >{\centering\arraybackslash}p{1.5cm} >{\centering\arraybackslash}p{1.4cm} X @{}}
-        \toprule
-        \textbf{Model} & \textbf{MMLU-Pro} & \textbf{HumanEval} & \textbf{IFEval} & \textbf{Interpretation} \\
-        \midrule
-        Qwen2.5-7B-Instruct & 56.3 & 84.8 & 71.2 & Selected default. It leads this comparison on reasoning and code-oriented benchmarks while also belonging to the same tool-calling family used by the router. \\
-        Gemma2-9B-IT & 52.1 & 68.9 & 70.1 & Competitive on instruction following, but notably weaker on code-oriented and structured reasoning tasks. \\
-        Llama-3.1-8B-Instruct & 48.3 & 72.6 & 75.9 & Strong on instruction following, but weaker than Qwen2.5-7B on reasoning and coding benchmarks relevant to tool-rich agent behavior. \\
-        \bottomrule
-    \end{tabularx}
-\end{table}
-
-From an engineering perspective, the most important result is family
-coherence. Standardizing on Qwen2.5 for both the small router and the
-larger local specialist avoids prompt-template drift, tool-format drift,
-and provider-specific behavior changes between agents.
-
-\subsection{Specialist Responsibilities}
-
-\paragraph{Orchestrator.}
-The orchestrator is implemented in
-\texttt{agents/orchestrator.py}. It classifies intent, delegates to
-specialist agents for device, sensor, and anomaly requests, and handles
-general conversation directly. For specialist requests, it also receives the
-specialist report and composes the final user-facing response, so all outward
-answers pass through the orchestrator.
-
-\paragraph{Device Control Agent.}
-The device-control specialist is implemented in
-\texttt{device\_agent.py}. It is the most tool-centric agent in
-the backend and therefore benefits most from a reduced action space and
-a parameterized tool schema.
-
-\paragraph{Sensor Analysis Agent.}
-The sensor specialist combines live MQTT state with concise natural
-language interpretation by preparing a structured sensor report for the
-orchestrator. The orchestrator performs the final user-facing explanation.
-
-\paragraph{Anomaly Expert Agent.}
-The anomaly specialist currently mixes a deterministic rule layer with
-structured reporting. This is reasonable because thresholding remains
-deterministic, while the orchestrator performs the final natural-language
-explanation.
-
-\paragraph{General Conversation.}
-Greetings, help messages, and non-actionable requests are handled
-directly by the orchestrator instead of a separate chat agent.
-
-\subsection{Tool Schema Optimization}
-\label{sec:tool-schema-opt}
-
-The original backend exposed six device-control tools for only two
-physical lights:
-\begin{center}
-    \small
-    \texttt{turn\_on\_led}, \texttt{turn\_off\_led},
-    \texttt{turn\_on\_neo\_led}, \texttt{turn\_off\_neo\_led}, \\
-    \texttt{turn\_on\_all\_lights}, \texttt{turn\_off\_all\_lights}
-\end{center}
-This works, but it enlarges the tool vocabulary without increasing
-capability.
-
-The refactored design used in the backend collapses those tools into two
-parameterized actions:
-\begin{center}
-    \small
-    \texttt{turn\_on\_light(light\_target)} \\
-    \texttt{turn\_off\_light(light\_target)}
-\end{center}
-where
-\texttt{light\_target} is one of
-\texttt{main\_led}, \texttt{neo\_led}, or
-\texttt{all\_lights}.
-
-\begin{table}[H]
-    \centering
-    \caption{Tool-schema simplification for device control.}
-    \label{tab:tool-schema}
-    \renewcommand{\arraystretch}{1.2}
-    \small
-    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.4cm} X X @{}}
-        \toprule
-        \textbf{Aspect} & \textbf{Before} & \textbf{After} \\
-        \midrule
-        Tool count &
-        6 separate light-control tools &
-        2 tools + 1 parameter \\
-        LLM search space &
-        Larger; the model must choose both action and hardware variant from the function name &
-        Smaller; the action and hardware target are separated cleanly \\
-        Extensibility &
-        New device means new verb-like tool names &
-        New device means extending an enum or adding a new target family \\
-        Prompt cost &
-        Repeated descriptions for near-identical tools &
-        Shorter tool list and less duplicated description text \\
-        \bottomrule
-    \end{tabularx}
-\end{table}
-
-This optimization is small in code size but important in system design.
-It reduces prompt entropy, lowers the chance of wrong tool selection, and
-makes future expansion to fans, relays, or indexed devices much cleaner.
-
-\subsection{Practical Boundary Between LLM Logic and Deterministic Logic}
-
-Reading the backend reveals an important design boundary. Some decisions
-are naturally probabilistic and language-driven, while others should stay
-deterministic:
-\begin{itemize}
-    \item Intent routing and user-facing explanation are good LLM tasks.
-    \item Reading configurable safety thresholds from a JSON or config
-    file is not an LLM task.
-    \item Simple actuator execution is a tool task, not a reasoning task.
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \textbf{Chat history} for coherent multi-turn conversation.
+    \item \textbf{Recent actions} for resolving follow-up commands such as ``turn it off''.
+    \item \textbf{Active focus} for carrying a currently discussed device target across turns.
 \end{itemize}
 
-This distinction matters for the next chapter. Once customer-specific
-temperature and humidity limits become configurable, threshold alerts
-should be handled by deterministic rules. The TinyML model should be
-moved to a different problem where learning genuinely adds value.
+The router chooses whether memory is needed. If memory scope is \texttt{none}, read-only requests can use the short path. If the request depends on prior context, the graph retrieves memory before selecting the specialist. This gives H.E.R.A contextual ability without making every request expensive or unpredictable.
 
-\subsection{Summary}
+\subsection{Model Provider and Current Configuration}
 
-The H.E.R.A backend is strongest when treated as a layered system:
-lightweight routing, constrained tool execution, larger-model
-explanation, and deterministic rule handling where appropriate. The
-benchmark tables justify the current choice of the Qwen2.5 family, while
-the parameterized tool schema shows how the backend can be simplified
-without weakening functionality.
+The LLM layer is provider-agnostic through LiteLLM. H.E.R.A currently supports two providers:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \textbf{Ollama:} local inference through \texttt{http://localhost:11434}, suitable for offline and privacy-sensitive operation.
+    \item \textbf{OpenRouter:} cloud inference through the configured OpenRouter API base URL, suitable for flexible model access and easier deployment on machines without sufficient local GPU capacity.
+\end{itemize}
+
+The current runtime provider is \texttt{openrouter}. Model settings are loaded from MongoDB collection \texttt{model\_settings} using document id \texttt{hera\_model\_settings}; if that document is unavailable, H.E.R.A falls back to code-level defaults. In the current project run, the dashboard settings API reports the model assignments shown in Table~\ref{tab:hera-current-model-config}. The project environment file configures provider endpoints such as the Ollama API base URL and OpenRouter base URL, while model names are controlled by the runtime settings store.
+
+\begin{table}[H]
+    \centering
+    \caption{Current configured model assignment in the H.E.R.A runtime}
+    \label{tab:hera-current-model-config}
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabularx}{\textwidth}{@{}p{3.4cm}p{4.0cm}X@{}}
+        \toprule
+        \textbf{Role} & \textbf{Ollama configuration} & \textbf{OpenRouter configuration} \\
+        \midrule
+        Orchestrator router/composer & \path{gemma4:e4b} & \makecell[l]{\path{nvidia/nemotron-nano-}\\\path{9b-v2}} \\
+        Device Control Agent & \makecell[l]{\path{TechyShishy/}\\\path{ministral-3:3b}} & \makecell[l]{\path{qwen/qwen3-30b-a3b-}\\\path{instruct-2507}} \\
+        Sensor Analysis role & \makecell[l]{\path{TechyShishy/}\\\path{ministral-3:3b}} & \makecell[l]{\path{nvidia/nemotron-3-nano-}\\\path{omni-30b-a3b-reasoning:free}} \\
+        Anomaly Expert role & \makecell[l]{\path{TechyShishy/}\\\path{ministral-3:3b}} & \makecell[l]{\path{nvidia/nemotron-3-nano-}\\\path{omni-30b-a3b-reasoning:free}} \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Although the settings schema still contains sensor and anomaly model fields, the current telemetry and anomaly specialists are deterministic services. Their model fields remain useful for future LLM-based explanation upgrades, but the present implementation deliberately keeps core telemetry and anomaly classification outside the LLM.
+
+\subsection{Model Selection Rationale}
+
+The model configuration follows a cost-capability split. Routing benefits from a smaller model because the output space is bounded and latency matters. Device control uses a stronger instruction-following model because it must parse multilingual commands, room-level aliases, device values, conditional clauses, and clarification cases. The local Ollama configuration prioritizes offline availability with compact models, while the OpenRouter configuration assigns a larger Qwen model to device planning and Nemotron-family models to routing and explanatory roles. This split reflects the practical difference between low-cost local operation and cloud-assisted capability.
+
+\begin{table}[H]
+    \centering
+    \caption{Model role requirements for H.E.R.A}
+    \label{tab:hera-model-role-requirements}
+    \renewcommand{\arraystretch}{1.16}
+    \begin{tabularx}{\textwidth}{@{}p{3.1cm}p{3.3cm}X@{}}
+        \toprule
+        \textbf{Role} & \textbf{Main requirement} & \textbf{Reason for model choice} \\
+        \midrule
+        Router & Structured intent classification & Small bounded output space; lower latency is more valuable than broad reasoning. \\
+        Device planner & JSON command parsing and tool grounding & Requires stronger instruction following and robust handling of device aliases, values, and conditions. \\
+        General response composer & Concise natural language & Needs fluent bilingual response generation but no direct tool access. \\
+        Telemetry/anomaly services & Deterministic computation & Implemented without LLM decision-making to keep safety and evaluation auditable. \\
+        Web research composer & Grounded summarization & Uses retrieved evidence but remains separated from actuator execution. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{End-to-End Device-Control Flow}
+
+Figure~\ref{fig:hera-device-control-sequence} traces a representative command such as ``turn on the living room light''. The important point is that the LLM does not publish MQTT directly. It only proposes a structured action. The runtime validates and executes it.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            actor/.style={draw, rectangle, minimum width=1.8cm,
+                    minimum height=0.48cm, align=center, font=\scriptsize\bfseries},
+            msg/.style={->, >=stealth, thick},
+            ret/.style={->, >=stealth, thick, dotted},
+            lab/.style={font=\scriptsize, align=center}
+        ]
+        \def\u{0}
+        \def\o{2.2}
+        \def\d{4.4}
+        \def\r{6.8}
+        \def\m{9.0}
+        \def\e{11.0}
+
+        \node[actor] at (\u,0) {User};
+        \node[actor] at (\o,0) {Orchestrator};
+        \node[actor] at (\d,0) {Device Agent};
+        \node[actor] at (\r,0) {Runtime};
+        \node[actor] at (\m,0) {MQTT};
+        \node[actor] at (\e,0) {ESP32};
+
+        \foreach \x in {\u,\o,\d,\r,\m,\e} {
+            \draw[dashed, gray!55] (\x,-0.35) -- (\x,-7.7);
+        }
+
+        \draw[msg] (\u,-0.8) -- node[above, lab] {natural command} (\o,-0.8);
+        \draw[msg] (\o,-1.45) -- node[above, lab] {route: device\_control} (\d,-1.45);
+        \draw[ret] (\d,-2.1) -- node[above, lab] {tool proposal} (\o,-2.1);
+        \draw[msg] (\o,-2.75) -- node[above, lab] {ground plan} (\r,-2.75);
+        \draw[msg] (\r,-3.4) -- node[above, lab] {policy check} (\r,-4.0);
+        \draw[msg] (\r,-4.65) -- node[above, lab] {publish RPC} (\m,-4.65);
+        \draw[msg] (\m,-5.25) -- node[above, lab] {method + params} (\e,-5.25);
+        \draw[ret] (\e,-5.85) -- node[above, lab] {telemetry/readback} (\r,-5.85);
+        \draw[ret] (\r,-6.45) -- node[above, lab] {execution result} (\o,-6.45);
+        \draw[ret] (\o,-7.05) -- node[above, lab] {grounded reply} (\u,-7.05);
+    \end{tikzpicture}
+    \caption{End-to-end sequence for a device-control request.}
+    \label{fig:hera-device-control-sequence}
+\end{figure}

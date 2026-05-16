@@ -15,6 +15,27 @@ EMPTY_PARAMS = {
 	"required": [],
 }
 
+TELEMETRY_WINDOW_PARAMS = {
+	"type": "object",
+	"properties": {
+		"sensor": {
+			"type": "string",
+			"description": "Optional sensor name to focus on.",
+		},
+		"window_seconds": {
+			"type": "integer",
+			"description": "Lookback window in seconds.",
+			"minimum": 1,
+		},
+		"limit": {
+			"type": "integer",
+			"description": "Maximum telemetry points to inspect.",
+			"minimum": 1,
+		},
+	},
+	"required": ["window_seconds"],
+}
+
 
 class CapabilityRegistry:
 	"""Defines capabilities available to the central tool runtime."""
@@ -62,12 +83,24 @@ class CapabilityRegistry:
 					verifier_name="device_state_readback",
 				),
 				CapabilitySpec(
-					name="get_sensor_status",
+					name="get_current_telemetry",
 					description=(
 						"Get current sensor readings: temperature, humidity, "
 						"light, anomaly score, device states, and network state."
 					),
 					parameters=EMPTY_PARAMS,
+					effect_type="read",
+					risk_level="low",
+					supports_idempotency=True,
+					requires_confirmation=False,
+				),
+				CapabilitySpec(
+					name="get_telemetry_window",
+					description=(
+						"Read a recent telemetry summary window for threshold "
+						"checks and anomaly diagnostics."
+					),
+					parameters=TELEMETRY_WINDOW_PARAMS,
 					effect_type="read",
 					risk_level="low",
 					supports_idempotency=True,

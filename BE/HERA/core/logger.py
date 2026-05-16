@@ -43,7 +43,6 @@ LAYER_COLORS: dict[str, str] = {
 	"VERIFY": "green",
 	"COMPOSE": "magenta",
 	"MQTT": "cyan",
-	"TELEGRAM": "blue",
 	"TELEMETRY": "dim",
 	"ALERT": "red",
 	"ERROR": "red",
@@ -194,10 +193,6 @@ def log_compose(msg: str, **kw):
 
 def log_mqtt(msg: str, **kw):
 	hera_log("MQTT", msg, **kw)
-
-
-def log_telegram(msg: str, **kw):
-	hera_log("TELEGRAM", msg, **kw)
 
 
 def log_telemetry(msg: str, **kw):

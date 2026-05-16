@@ -6,6 +6,8 @@ from typing import Any
 
 DEVICE_TOOL_NAMES = {
 	"get_device_status",
+	# Compatibility input only. RuntimeToolNode normalizes this into
+	# turn_on_device or turn_off_device before write execution.
 	"set_device_state",
 	"set_device_value",
 	"set_sensor_value",

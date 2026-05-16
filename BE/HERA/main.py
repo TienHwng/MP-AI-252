@@ -1,13 +1,8 @@
-"""Entry point for HERA Telegram bot runtime."""
+"""Shared builders for the HERA web runtime."""
 
 import logging
 
-from adapters.telegram_adapter import TelegramAdapter
-from agents.anomaly_agent import AnomalyExpertAgent
 from agents.device_agent import DeviceControlAgent
-from agents.orchestrator import Orchestrator
-from agents.sensor_agent import SensorAnalysisAgent
-from agents.web_research_agent import WebResearchAgent
 from config import (
 	DUCKDUCKGO_SEARCH_REGION,
 	MODE,
@@ -22,7 +17,6 @@ from config import (
 	NEWSAPI_API_KEY,
 	OPENWEATHERMAP_API_KEY,
 	SPECIALIZED_SEARCH_ENABLED,
-	TELEGRAM_BOT_TOKEN,
 	WEATHER_CACHE_TTL_SECONDS,
 	WEATHER_SEARCH_ENABLED,
 	WEB_FETCH_TIMEOUT_SECONDS,
@@ -40,7 +34,14 @@ from core.runtime_settings import runtime_settings
 from core.tool_registry import ToolRegistry
 from domain.devices.device_executor import DeviceExecutor
 from memory import MemoryService, MongoMemoryClient
-from runtime import CapabilityRegistry, PolicyEngine, ToolRunner, VerificationService
+from runtime import (
+	CapabilityRegistry,
+	PolicyEngine,
+	ReadToolRunner,
+	ToolRunner,
+	VerificationService,
+)
+from services import AnomalyAnalyzerService, TelemetryReportService, WebResearchService
 from telemetry import TelemetryStore
 from web_search import (
 	DuckDuckGoSearchService,
@@ -51,8 +52,6 @@ from web_search import (
 
 NOISY_LOGGERS = (
 	"httpx",
-	"telegram",
-	"apscheduler",
 	"paho.mqtt",
 	"urllib3",
 	"openai",
@@ -72,7 +71,7 @@ def configure_logging() -> None:
 
 def print_banner() -> None:
 	print("=" * 50)
-	print("   HERA - Multi-Agent IoT Telegram Bot")
+	print("   HERA - Web IoT Assistant Runtime")
 	print("=" * 50)
 
 
@@ -183,17 +182,27 @@ def build_agents(
 	tool_runner: ToolRunner,
 	memory_service: MemoryService,
 ) -> dict:
+	_ = tool_reg
 	telemetry_store = TelemetryStore(
 		memory_service.mongo,
 		collection_name=MONGODB_COLLECTION,
+	)
+	read_tool_runner = ReadToolRunner(
+		mqtt_svc,
+		tool_runner.device_executor,
+		telemetry_store,
 	)
 	web_search_service = build_web_search_service()
 	intent_classifier, specialized_services = build_specialized_search_services()
 	return {
 		"device_control": DeviceControlAgent(llm_svc, tool_runner, telemetry_store),
-		"sensor_analysis": SensorAnalysisAgent(llm_svc, mqtt_svc, tool_reg),
-		"anomaly_expert": AnomalyExpertAgent(llm_svc, mqtt_svc, telemetry_store),
-		"web_research": WebResearchAgent(
+		"telemetry_report": TelemetryReportService(mqtt_svc, read_tool_runner),
+		"anomaly_analyzer": AnomalyAnalyzerService(
+			mqtt_svc,
+			telemetry_store,
+			read_tool_runner,
+		),
+		"web_research": WebResearchService(
 			web_search_service,
 			max_results=WEB_SEARCH_MAX_RESULTS,
 			fetch_top_result=WEB_SEARCH_FETCH_TOP_RESULT,
@@ -210,43 +219,20 @@ def print_runtime_summary(settings: dict, agents: dict) -> None:
 	log_hera(f"Provider: {active_provider}")
 	log_hera(f"Orchestrator model: {provider_models['orchestratorModel']}")
 	log_hera(
-		"Agent models: "
+		"Components: "
 		f"device_control={provider_models['deviceControlModel']}, "
-		f"sensor_analysis={provider_models['sensorAnalysisModel']}, "
-		f"anomaly_expert={provider_models['anomalyExpertModel']}, "
+		"telemetry_report=deterministic, "
+		"anomaly_analyzer=deterministic, "
 		"web_research=duckduckgo"
 	)
-	log_hera(f"Agents: {', '.join(agents)}")
-	log_hera("Bot running ... (Ctrl+C to stop)\n")
+	log_hera(f"Runtime components: {', '.join(agents)}")
+	log_hera("Web runtime components ready\n")
 
 
 def main() -> None:
 	configure_logging()
 	print_banner()
-
-	if not TELEGRAM_BOT_TOKEN:
-		log_hera("TELEGRAM_BOT_TOKEN not set in .env")
-		return
-
-	settings, provider = load_runtime_settings()
-	mqtt_svc = connect_mqtt()
-	if mqtt_svc is None:
-		return
-
-	llm_svc = LLMService(provider)
-	tool_reg, tool_runner = build_runtime(mqtt_svc)
-	memory_service = build_memory_service()
-	agents = build_agents(llm_svc, mqtt_svc, tool_reg, tool_runner, memory_service)
-	orchestrator = Orchestrator(
-		llm_svc,
-		agents,
-		mqtt_svc,
-		tool_runner=tool_runner,
-		memory_service=memory_service,
-		orchestrator_model=None,
-	)
-	print_runtime_summary(settings, agents)
-	TelegramAdapter(orchestrator, mqtt_svc, provider).run()
+	log_hera("Start the web API with: python BE/HERA/api_server.py")
 
 
 if __name__ == "__main__":

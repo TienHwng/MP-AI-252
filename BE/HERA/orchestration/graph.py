@@ -30,7 +30,11 @@ class OrchestrationGraph:
 	def get_thread_state(self, thread_id: str) -> dict:
 		config = {"configurable": {"thread_id": str(thread_id)}}
 		snapshot = self.graph.get_state(config)
-		return dict(getattr(snapshot, "values", {}) or {})
+		values = dict(getattr(snapshot, "values", {}) or {})
+		pending = values.get("pending_device_clarification")
+		if isinstance(pending, dict) and pending.get("status") == "cleared":
+			values["pending_device_clarification"] = None
+		return values
 
 	def update_thread_state(self, thread_id: str, values: dict) -> None:
 		config = {"configurable": {"thread_id": str(thread_id)}}

@@ -3,6 +3,7 @@
 from runtime.capability_registry import CapabilityRegistry
 from runtime.execution_context import ExecutionContext
 from runtime.policy_engine import PolicyEngine
+from runtime.read_tool_runner import ReadToolRunner
 from runtime.tool_contracts import (
 	SUPPORTED_TOOL_NAMES,
 	get_current_telemetry_call,
@@ -21,6 +22,7 @@ __all__ = [
 	"CapabilityRegistry",
 	"ExecutionContext",
 	"PolicyEngine",
+	"ReadToolRunner",
 	"RuntimeToolNode",
 	"RuntimeToolNodeResult",
 	"SUPPORTED_TOOL_NAMES",

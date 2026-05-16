@@ -1,0 +1,8 @@
+provider,repeat,case_id,text,expected_intent,predicted_intent,intent_correct,expected_tools,tools_ok,tool_detail,http_ok,latency_ms,agent_name,tools_used,error,message
+ollama-live,0,intent_device_001,bật đèn phòng khách giúp tôi,device_control,device_control,True,turn_on_device,True,ok,True,45753.437,orchestrator,turn_on_device,,
+ollama-live,0,intent_device_002,tắt relay đi,device_control,device_control,True,turn_off_device,True,ok,True,19667.413,orchestrator,turn_off_device,,
+ollama-live,0,intent_sensor_001,nhiệt độ hiện tại bao nhiêu,sensor_query,device_control,False,,True,not_applicable,True,23755.927,orchestrator,get_device_status,,
+ollama-live,0,intent_sensor_002,độ ẩm và ánh sáng trong nhà thế nào,sensor_query,device_control,False,,True,not_applicable,True,27253.262,orchestrator,,,
+ollama-live,0,intent_anomaly_001,hệ thống có bất thường gì không,anomaly_query,anomaly_query,True,,True,not_applicable,True,19024.945,orchestrator,,,
+ollama-live,0,intent_general_001,"xin chào, bạn là ai",general,general,True,,True,not_applicable,True,9674.597,orchestrator,,,
+ollama-live,0,intent_web_001,tìm kiếm tin mới nhất về AI,web_search,web_search,True,,True,not_applicable,True,25010.584,orchestrator,,,

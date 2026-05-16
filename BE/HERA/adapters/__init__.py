@@ -1,1 +1,1 @@
-"""HERA I/O Adapters — Telegram, Voice (stub), REST (stub)."""
+"""HERA I/O adapters for non-core transports."""

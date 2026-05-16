@@ -1,0 +1,15 @@
+{
+  "provider": "ollama-live",
+  "cases": 7,
+  "runs": 7,
+  "intent_accuracy_percent": 71.43,
+  "tool_call_success_percent": 100.0,
+  "http_success_percent": 100.0,
+  "latency_ms": {
+    "mean": 24305.738,
+    "median": 23755.927,
+    "p95": 45753.437,
+    "min": 9674.597,
+    "max": 45753.437
+  }
+}

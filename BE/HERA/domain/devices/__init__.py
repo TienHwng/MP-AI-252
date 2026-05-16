@@ -6,7 +6,9 @@ from domain.devices.device_catalog import (
 	DEVICE_TOOL_PARAMS,
 	DEVICE_VALUE_SPECS,
 	DEVICE_VALUE_TOOL_PARAMS,
+	DEVICE_PLACEMENTS,
 	LIGHT_TARGETS,
+	LIGHT_PLACEMENTS,
 	LIGHT_TOOL_PARAMS,
 	SENSOR_VALUE_SPECS,
 	SENSOR_VALUE_TOOL_PARAMS,
@@ -17,6 +19,9 @@ from domain.devices.device_catalog import (
 	normalize_device_value_property,
 	normalize_light_target,
 	normalize_sensor_target,
+	placement_prompt_lines,
+	resolve_placed_device_reference,
+	user_target_options,
 )
 
 __all__ = [
@@ -25,7 +30,9 @@ __all__ = [
 	"DEVICE_TOOL_PARAMS",
 	"DEVICE_VALUE_SPECS",
 	"DEVICE_VALUE_TOOL_PARAMS",
+	"DEVICE_PLACEMENTS",
 	"LIGHT_TARGETS",
+	"LIGHT_PLACEMENTS",
 	"LIGHT_TOOL_PARAMS",
 	"SENSOR_VALUE_SPECS",
 	"SENSOR_VALUE_TOOL_PARAMS",
@@ -36,4 +43,7 @@ __all__ = [
 	"normalize_device_value_property",
 	"normalize_light_target",
 	"normalize_sensor_target",
+	"placement_prompt_lines",
+	"resolve_placed_device_reference",
+	"user_target_options",
 ]

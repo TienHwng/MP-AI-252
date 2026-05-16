@@ -244,21 +244,6 @@ class MQTTManager:
 			},
 		}
 
-		# Broker configuration
-		self.broker_config = {
-			"listeners": {
-				"default": {
-					"type": "tcp",
-					"bind": f"{self.broker_bind_host}:{self.port}",
-				}
-			},
-			"plugins": {
-				"amqtt.plugins.authentication.AnonymousAuthPlugin": {},
-				"amqtt.plugins.topic_checking.TopicTabooPlugin": {},
-				"amqtt.plugins.sys.broker.BrokerSysPlugin": {"sys_interval": 10},
-			},
-		}
-
 		# Initialize Client
 		self.client = mqtt.Client()
 		# Attach callback functions

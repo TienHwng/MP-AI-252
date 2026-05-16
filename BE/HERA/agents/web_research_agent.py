@@ -1,4 +1,4 @@
-"""Web research agent backed by the configured search provider."""
+"""Web research service backed by the configured search provider."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def looks_like_vietnamese(text: str) -> bool:
 	return any(marker in normalized for marker in VIETNAMESE_MARKERS)
 
 
-class WebResearchAgent:
+class WebResearchService:
 	"""Runs bounded web search/fetch work and returns structured evidence."""
 
 	def __init__(
@@ -81,7 +81,7 @@ class WebResearchAgent:
 		url = self._extract_url(message.text)
 
 		if url:
-			tool_calls = [
+			data_sources = [
 				{
 					"name": "fetch_web_page",
 					"args": {"url": url},
@@ -94,8 +94,8 @@ class WebResearchAgent:
 			trimmed_fetch = self._trim_fetch_result(result)
 			analysis_payload = {
 				"mode": mode,
-				"tool_calls": tool_calls,
-				"tool_results": [
+				"data_sources": data_sources,
+				"data_results": [
 					{
 						"name": "fetch_web_page",
 						"ok": result.get("status") == "ok",
@@ -137,7 +137,7 @@ class WebResearchAgent:
 						metadata=report,
 					)
 
-			tool_calls = [
+			data_sources = [
 				{
 					"name": "search_web",
 					"args": {"query": query, "max_results": self.max_results},
@@ -161,8 +161,8 @@ class WebResearchAgent:
 					"reason": search_intent.reason,
 					"parameters": search_intent.parameters,
 				},
-				"tool_calls": tool_calls,
-				"tool_results": [
+				"data_sources": data_sources,
+				"data_results": [
 					{
 						"name": "search_web",
 						"ok": result.get("status") == "ok",
@@ -207,7 +207,7 @@ class WebResearchAgent:
 			return None
 
 		tool_name = f"search_{intent}"
-		tool_calls = [
+		data_sources = [
 			{
 				"name": tool_name,
 				"args": parameters,
@@ -233,8 +233,8 @@ class WebResearchAgent:
 					"reason": "specialized_service",
 					"parameters": parameters,
 				},
-				"tool_calls": tool_calls,
-				"tool_results": [
+				"data_sources": data_sources,
+				"data_results": [
 					{"name": tool_name, "ok": True, "result": trimmed},
 				],
 				"query": query,
@@ -260,8 +260,8 @@ class WebResearchAgent:
 				"reason": "specialized_service_fallback",
 				"parameters": parameters,
 			},
-			"tool_calls": [
-				*tool_calls,
+			"data_sources": [
+				*data_sources,
 				{
 					"name": "search_web",
 					"args": {"query": query, "max_results": self.max_results},
@@ -269,7 +269,7 @@ class WebResearchAgent:
 					"source": "web_research_subgraph",
 				},
 			],
-			"tool_results": [
+			"data_results": [
 				{
 					"name": tool_name,
 					"ok": False,
@@ -322,7 +322,7 @@ class WebResearchAgent:
 			base_query = " ".join(query.split())
 		else:
 			base_query = " ".join((fallback or "").split())
-		return WebResearchAgent._ground_time_location_query(
+		return WebResearchService._ground_time_location_query(
 			base_query,
 			fallback,
 			context,
@@ -385,7 +385,7 @@ class WebResearchAgent:
 					{
 						"title": str(item.get("title") or "").strip(),
 						"url": str(item.get("url") or "").strip(),
-						"content": WebResearchAgent._trim_text(
+						"content": WebResearchService._trim_text(
 							str(item.get("content") or ""),
 							MAX_SEARCH_SNIPPET_CHARS,
 						),
@@ -398,7 +398,7 @@ class WebResearchAgent:
 	@staticmethod
 	def _trim_fetch_result(result: dict[str, Any]) -> dict[str, Any]:
 		trimmed = dict(result)
-		trimmed["content"] = WebResearchAgent._trim_text(
+		trimmed["content"] = WebResearchService._trim_text(
 			str(result.get("content") or ""),
 			MAX_FETCH_CONTENT_CHARS,
 		)
@@ -452,3 +452,8 @@ class WebResearchAgent:
 				else None
 			),
 		}
+
+
+WebResearchAgent = WebResearchService
+
+__all__ = ["WebResearchAgent", "WebResearchService", "looks_like_vietnamese"]

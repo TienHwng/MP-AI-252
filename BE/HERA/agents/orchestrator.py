@@ -45,22 +45,21 @@ from prompts import (
 	PENDING_CONFIRMATION_SYSTEM,
 	ROUTER_SYSTEM,
 )
-from runtime import ExecutionContext, RuntimeToolNode, ToolRunner
+from runtime import (
+	ExecutionContext,
+	ReadToolRunner,
+	RuntimeToolNode,
+	ToolRunner,
+)
 from schemas import IncomingRequest, MemoryContext, RouteDecision, ToolProposal
+from services import ResponseComposer
+from services.text_utils import clean_user_visible_text, format_timestamp, looks_vietnamese
 
 from agents.base import AgentLike
 from agents.device_agent import (
 	explicit_target_from_text,
 )
-from agents.orchestrator_helpers import (
-	clean_user_visible_text,
-	format_timestamp,
-	looks_vietnamese,
-	render_anomaly_text,
-	render_device_control_text,
-	render_device_specialist_fallback_text,
-	render_sensor_text,
-)
+from domain.devices import user_target_options
 
 # ── Intent taxonomy ───────────────────────────────────────────
 
@@ -95,11 +94,20 @@ class Orchestrator:
 		self.agents = agents
 		self.mqtt = mqtt
 		self.tool_runner = tool_runner
+		device_executor = getattr(tool_runner, "device_executor", None)
+		self.read_tool_runner = (
+			ReadToolRunner(mqtt, device_executor)
+			if tool_runner is not None and device_executor is not None
+			else None
+		)
 		self.runtime_tool_node = (
-			RuntimeToolNode(tool_runner) if tool_runner is not None else None
+			RuntimeToolNode(tool_runner, self.read_tool_runner)
+			if tool_runner is not None
+			else None
 		)
 		self.memory_service = memory_service
 		self.orchestrator_model = orchestrator_model
+		self.response_composer = ResponseComposer()
 		self.graph = OrchestrationGraph(self)
 
 	# ── public entry point ────────────────────────────────────
@@ -142,6 +150,19 @@ class Orchestrator:
 		intent = str(route_plan["intent"])
 		memory_scope = str(route_plan.get("memory_scope") or "none")
 
+		if intent == "sensor_query" and await self._looks_like_device_command(
+			message,
+			focus_target,
+		):
+			log_graph(
+				"Semantic route correction",
+				detail=(
+					"Router chose sensor_query, but device planner recognised "
+					"a device request. Using full device graph."
+				),
+			)
+			return None
+
 		# Only short-path for simple cases that need no memory and no execution
 		if intent == "device_control" or memory_scope not in {"none"}:
 			return None
@@ -159,11 +180,21 @@ class Orchestrator:
 		if intent == "general":
 			# If router provided a direct_response, use it
 			direct_response = route_plan.get("direct_response")
-			if isinstance(direct_response, str) and direct_response.strip():
+			if (
+				isinstance(direct_response, str)
+				and direct_response.strip()
+				and self.route_direct_response_is_trusted(route_plan)
+			):
 				response = AgentResponse(
 					text=clean_user_visible_text(direct_response),
 					agent_name="orchestrator",
 					metadata={"route_direct_response": True},
+				)
+			elif isinstance(direct_response, str) and direct_response.strip():
+				response = await self.handle_general(
+					message,
+					memory_context,
+					history=chat_history,
 				)
 			else:
 				# Safety guard: when the router has no direct_response,
@@ -237,7 +268,7 @@ class Orchestrator:
 		message: UserMessage,
 		request: IncomingRequest,
 	) -> AgentResponse:
-		agent = self.agents.get("sensor_analysis")
+		agent = self.agents.get("telemetry_report")
 		if agent is not None:
 			specialist_response = await agent.process(
 				message,
@@ -251,7 +282,7 @@ class Orchestrator:
 			snapshot = self.mqtt.get_sensor_snapshot()
 			specialist_response = AgentResponse(
 				text="",
-				agent_name="sensor_analysis",
+				agent_name="telemetry_report",
 				metadata={
 					"specialist_report": {
 						"summary": "sensor_snapshot_report",
@@ -276,7 +307,7 @@ class Orchestrator:
 		message: UserMessage,
 		request: IncomingRequest,
 	) -> AgentResponse:
-		agent = self.agents.get("anomaly_expert")
+		agent = self.agents.get("anomaly_analyzer")
 		if agent is not None:
 			specialist_response = await agent.process(
 				message,
@@ -287,7 +318,7 @@ class Orchestrator:
 				},
 			)
 		else:
-			from agents.anomaly_agent import (
+			from services import (
 				classify_anomaly,
 				compute_telemetry_freshness,
 			)
@@ -297,7 +328,7 @@ class Orchestrator:
 			classification = classify_anomaly(snapshot, freshness)
 			specialist_response = AgentResponse(
 				text="",
-				agent_name="anomaly_expert",
+				agent_name="anomaly_analyzer",
 				metadata={
 					"specialist_report": {
 						"summary": "anomaly_snapshot_report",
@@ -327,6 +358,12 @@ class Orchestrator:
 		request = IncomingRequest.from_user_message(message)
 		chat_history = list(state.get("chat_history") or [])
 		last_tool_results = list(state.get("last_tool_results") or [])
+		pending_device_clarification = state.get("pending_device_clarification")
+		if (
+			isinstance(pending_device_clarification, dict)
+			and pending_device_clarification.get("status") == "cleared"
+		):
+			pending_device_clarification = None
 		log_graph(
 			"Intake",
 			data={
@@ -347,7 +384,7 @@ class Orchestrator:
 			"chat_history": chat_history,
 			"active_focus": state.get("active_focus"),
 			"pending_confirmation": state.get("pending_confirmation"),
-			"pending_device_clarification": state.get("pending_device_clarification"),
+			"pending_device_clarification": pending_device_clarification,
 			"last_tool_results": last_tool_results,
 		}
 
@@ -427,6 +464,20 @@ class Orchestrator:
 			focus_target=focus_target,
 			pending_device_clarification=pending_clarification,
 		)
+		if (
+			route_plan.get("intent") == "sensor_query"
+			and await self._looks_like_device_command(message, focus_target)
+		):
+			log_route(
+				"Corrected sensor_query to device_control",
+				detail="Device planner recognised an actuator/status request.",
+			)
+			route_plan = {
+				**route_plan,
+				"intent": "device_control",
+				"memory_scope": "none",
+				"direct_response": None,
+			}
 		if pending_clarification is not None:
 			if route_plan.get("pending_mode") == "clarification_answer":
 				pending_action = pending_clarification.get("requested_action")
@@ -469,6 +520,7 @@ class Orchestrator:
 					}
 			else:
 				pending_clarification = None
+				metadata["clear_pending_device_clarification"] = True
 
 		intent = str(route_plan["intent"])
 		route_decision = RouteDecision.from_intent(
@@ -499,6 +551,7 @@ class Orchestrator:
 			if (
 				isinstance(direct_response, str)
 				and direct_response.strip()
+				and self.route_direct_response_is_trusted(route_plan)
 			):
 				return {
 					"response": AgentResponse(
@@ -532,8 +585,7 @@ class Orchestrator:
 						str(requested_action),
 						route_decision.specialist,
 						str(
-							device_clarification.get("clarification_question")
-							or "Bạn muốn mình điều khiển thiết bị nào?"
+							device_clarification.get("clarification_question") or ""
 						),
 					)
 				}
@@ -585,6 +637,8 @@ class Orchestrator:
 		state_update: OrchestrationState = {"specialist_response": specialist_response}
 		if pending_device_clarification is not None:
 			state_update["pending_device_clarification"] = pending_device_clarification
+		elif state.get("pending_device_clarification") is not None:
+			state_update["pending_device_clarification"] = None
 		return state_update
 
 	async def graph_handle_pending_confirmation(
@@ -768,9 +822,21 @@ class Orchestrator:
 			detail=f"Reply: {response.text[:100]}{'…' if len(response.text) > 100 else ''}",
 		)
 
+		report = response.metadata.get("specialist_report")
+		summary = report.get("summary") if isinstance(report, dict) else None
+		next_pending_device_clarification = (
+			state.get("pending_device_clarification")
+			if summary
+			in {
+				"awaiting_target_clarification",
+				"partial_tool_call_ready_awaiting_target_clarification",
+			}
+			else {"status": "cleared"}
+		)
 		state_update: OrchestrationState = {
 			"response": response,
 			"chat_history": chat_history,
+			"pending_device_clarification": next_pending_device_clarification,
 		}
 		if active_focus is not None:
 			state_update["active_focus"] = active_focus
@@ -896,57 +962,28 @@ class Orchestrator:
 	def _looks_vietnamese(text: str) -> bool:
 		return looks_vietnamese(text)
 
-	@staticmethod
-	def _format_entity_list(items: list[str], prefer_vietnamese: bool) -> str:
-		if not items:
-			return ""
-		if len(items) == 1:
-			return items[0]
-		if len(items) == 2:
-			joiner = " và " if prefer_vietnamese else " and "
-			return f"{items[0]}{joiner}{items[1]}"
-		last_joiner = ", và " if prefer_vietnamese else ", and "
-		return ", ".join(items[:-1]) + last_joiner + items[-1]
-
-	@staticmethod
-	def _action_label(capability_name: str, prefer_vietnamese: bool) -> str:
-		labels = {
-			"turn_on_device": ("bật", "turn on"),
-			"turn_off_device": ("tắt", "turn off"),
-			"get_device_status": ("kiểm tra trạng thái", "check the status of"),
-		}
-		vi, en = labels.get(capability_name, ("điều khiển", "control"))
-		return vi if prefer_vietnamese else en
-
-	@staticmethod
-	def _requested_action_text(action: str, prefer_vietnamese: bool) -> str:
-		labels = {
-			"turn_on": ("bật", "turn something on"),
-			"turn_off": ("tắt", "turn something off"),
-			"status": ("kiểm tra trạng thái", "check the status"),
-		}
-		vi, en = labels.get(action, ("điều khiển", "control something"))
-		return vi if prefer_vietnamese else en
-
 	def render_device_control_text(self, user_text: str, payload: dict) -> str:
-		return render_device_control_text(user_text, payload)
+		return self.response_composer.render_device_control_text(user_text, payload)
 
 	def render_device_specialist_fallback_text(
 		self,
 		user_text: str,
 		specialist_response: AgentResponse,
 	) -> str:
-		return render_device_specialist_fallback_text(user_text, specialist_response)
+		return self.response_composer.render_device_specialist_fallback_text(
+			user_text,
+			specialist_response,
+		)
 
 	def render_sensor_text(
 		self, user_text: str, specialist_response: AgentResponse
 	) -> str:
-		return render_sensor_text(user_text, specialist_response)
+		return self.response_composer.render_sensor_text(user_text, specialist_response)
 
 	def render_anomaly_text(
 		self, user_text: str, specialist_response: AgentResponse
 	) -> str:
-		return render_anomaly_text(user_text, specialist_response)
+		return self.response_composer.render_anomaly_text(user_text, specialist_response)
 
 	def render_web_research_text(
 		self, user_text: str, specialist_response: AgentResponse
@@ -1056,7 +1093,7 @@ class Orchestrator:
 			return None
 		question = raw_report.get("clarification_question")
 		payload = raw_report.get("analysis_payload", {})
-		if not question or not isinstance(payload, dict):
+		if not isinstance(payload, dict):
 			return None
 		parsed_command = payload.get("parsed_command", {})
 		if not isinstance(parsed_command, dict):
@@ -1086,7 +1123,8 @@ class Orchestrator:
 		return {
 			"request_id": request.request_id,
 			"requested_action": requested_action,
-			"clarification_question": question,
+			"clarification_question": question if isinstance(question, str) else None,
+			"available_targets": payload.get("available_targets", []),
 			"created_at": time.time(),
 		}
 
@@ -1174,12 +1212,14 @@ class Orchestrator:
 			if self.tool_runner
 			else {},
 		}
+		if clarification_question:
+			report["clarification_question"] = clarification_question
 		analysis_payload = dict(report)
 		specialist_report = {
 			"specialist_name": agent_name,
 			"summary": "awaiting_target_clarification",
 			"tool_proposals": [],
-			"clarification_question": clarification_question,
+			"clarification_question": clarification_question or None,
 			"analysis_payload": analysis_payload,
 		}
 		report["specialist_report"] = specialist_report
@@ -1573,6 +1613,13 @@ class Orchestrator:
 			"confidence": max(0.0, min(float(confidence), 1.0)),
 		}
 
+	@staticmethod
+	def route_direct_response_is_trusted(route_plan: dict) -> bool:
+		confidence = route_plan.get("confidence")
+		if not isinstance(confidence, int | float):
+			return False
+		return float(confidence) >= 0.95
+
 	async def _looks_like_device_command(
 		self,
 		message: UserMessage,
@@ -1928,7 +1975,8 @@ class Orchestrator:
 			"specialist_summary": report.get("summary"),
 			"analysis": analysis,
 			"tool_calls": analysis.get("tool_calls", []),
-			"required_tool_calls": analysis.get("required_tool_calls", []),
+			"data_sources": analysis.get("data_sources", []),
+			"data_results": analysis.get("data_results", []),
 			"tool_results": execution_results
 			if execution_results is not None
 			else specialist_response.metadata.get("tool_execution_results", []),
@@ -1936,14 +1984,15 @@ class Orchestrator:
 				"tool_result_facts", {}
 			),
 			"device_labels": {
-				"main_led": "Main LED",
-				"neo_led": "NeoPixel LED",
-				"ws2812": "WS2812 LED strip",
-				"relay": "Relay",
-				"mini_fan": "Mini fan",
+				"main_led": "Living room light",
+				"neo_led": "Bedroom light",
+				"ws2812": "Toilet light",
+				"relay": "Living room TV",
+				"mini_fan": "Living room fan",
 				"all_lights": "All lights",
 				"all_devices": "All devices",
 			},
+			"available_device_targets": user_target_options(),
 		}
 
 	async def compose_device_control_user_text(

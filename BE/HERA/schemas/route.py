@@ -50,16 +50,16 @@ class RouteDecision(BaseModel):
 		if intent == "sensor_query":
 			return cls(
 				intent="sensor_query",
-				specialist="sensor_analysis",
+				specialist="telemetry_report",
 				requires_execution=False,
 				risk_level="low",
-				capability_scope=["get_sensor_status"],
+				capability_scope=["get_current_telemetry"],
 				max_tool_steps=1,
 			)
 		if intent == "anomaly_query":
 			return cls(
 				intent="anomaly_query",
-				specialist="anomaly_expert",
+				specialist="anomaly_analyzer",
 				requires_execution=False,
 				risk_level="low",
 				capability_scope=["analyze_anomaly"],

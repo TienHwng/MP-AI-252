@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from schemas import ToolExecutionResult, ToolProposal
+from schemas import ToolExecutionResult, ToolProposal, VerificationResult
 
 from runtime.execution_context import ExecutionContext
+from runtime.read_tool_runner import ReadToolRunner
 from runtime.tool_contracts import SUPPORTED_TOOL_NAMES
 from runtime.tool_runner import ToolRunner
 
@@ -22,8 +23,13 @@ class RuntimeToolNodeResult:
 class RuntimeToolNode:
 	"""Small graph node adapter around HERA's domain-safe ToolRunner."""
 
-	def __init__(self, tool_runner: ToolRunner) -> None:
+	def __init__(
+		self,
+		tool_runner: ToolRunner,
+		read_tool_runner: ReadToolRunner | None = None,
+	) -> None:
 		self.tool_runner = tool_runner
+		self.read_tool_runner = read_tool_runner
 
 	def invoke(
 		self,
@@ -41,12 +47,65 @@ class RuntimeToolNode:
 		tool_calls: list[dict[str, Any]],
 		context: ExecutionContext,
 	) -> RuntimeToolNodeResult:
-		proposals = [
-			self._proposal_from_tool_call(tool_call) for tool_call in tool_calls
-		]
-		return self.invoke(
-			[proposal for proposal in proposals if proposal is not None],
-			context,
+		read_results: list[ToolExecutionResult] = []
+		proposals: list[ToolProposal] = []
+		for tool_call in tool_calls:
+			read_result = self._read_result_from_tool_call(tool_call, context)
+			if read_result is not None:
+				read_results.append(read_result)
+				continue
+			proposal = self._proposal_from_tool_call(tool_call)
+			if proposal is not None:
+				proposals.append(proposal)
+		write_result = self.invoke(proposals, context)
+		return RuntimeToolNodeResult(
+			execution_results=[*read_results, *write_result.execution_results],
+		)
+
+	def _read_result_from_tool_call(
+		self,
+		tool_call: dict[str, Any],
+		context: ExecutionContext,
+	) -> ToolExecutionResult | None:
+		if self.read_tool_runner is None:
+			return None
+		name = tool_call.get("name")
+		if name not in {
+			"get_current_telemetry",
+			"get_telemetry_window",
+			"get_device_status",
+		}:
+			return None
+		args = tool_call.get("args", {})
+		if not isinstance(args, dict):
+			args = {}
+		result = self.read_tool_runner.run(str(name), args)
+		payload = result.get("result") if isinstance(result, dict) else {}
+		if name == "get_device_status" and isinstance(payload, dict):
+			raw_after_state = payload.get("device_status", {})
+			after_state = raw_after_state if isinstance(raw_after_state, dict) else {}
+		else:
+			after_state = payload if isinstance(payload, dict) else {"value": payload}
+		reason = str(
+			result.get("reason") or ("read_ok" if result.get("ok") else "read_failed")
+		)
+		return ToolExecutionResult(
+			ok=bool(result.get("ok")),
+			capability_name=str(name),
+			status=reason,
+			reason=reason,
+			after_state=after_state,
+			verification=VerificationResult.not_checked(
+				{
+					"phase": "read_tool_runner",
+					"note": "Read-only runtime tool executed without policy or side effects.",
+				}
+			),
+			raw_metadata={
+				"read_result": result,
+				"target": payload.get("target") if isinstance(payload, dict) else None,
+				"runtime_context": context.model_dump(mode="json"),
+			},
 		)
 
 	@staticmethod
@@ -61,6 +120,7 @@ class RuntimeToolNode:
 		}:
 			return None
 		if name == "set_device_state":
+			# Compatibility input only; normalize to canonical write capabilities.
 			state = args.get("state")
 			if state is True:
 				name = "turn_on_device"

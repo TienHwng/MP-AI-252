@@ -17,7 +17,14 @@ from core.llm_service import LLMService
 from core.logger import log_agent
 from core.message import AgentResponse, UserMessage
 from core.runtime_settings import runtime_settings
-from domain.devices import DEVICE_TARGETS, DEVICE_VALUE_SPECS, SENSOR_VALUE_SPECS
+from domain.devices import (
+	DEVICE_TARGETS,
+	DEVICE_VALUE_SPECS,
+	SENSOR_VALUE_SPECS,
+	placement_prompt_lines,
+	resolve_placed_device_reference,
+	user_target_options,
+)
 from domain.devices.device_catalog import SCENE_CATALOG, SCENE_LABELS
 from prompts import (
 	DEVICE_COMMAND_INTERPRETER_PROMPT,
@@ -52,14 +59,14 @@ SENSOR_CONDITION_ALIASES = {
 }
 
 SENSOR_LABELS_VI = {
-	"temperature": "nhiá»‡t Ä‘á»™",
-	"humidity": "Ä‘á»™ áº©m",
-	"light": "Ã¡nh sÃ¡ng",
-	"anomaly": "Ä‘iá»ƒm báº¥t thÆ°á»ng",
+	"temperature": "nhiệt độ",
+	"humidity": "độ ẩm",
+	"light": "ánh sáng",
+	"anomaly": "điểm bất thường",
 }
 
 SENSOR_UNITS = {
-	"temperature": "Â°C",
+	"temperature": "°C",
 	"humidity": "%",
 	"light": "",
 	"anomaly": "",
@@ -104,6 +111,33 @@ def normalize_text(text: str) -> str:
 	return " ".join(text.strip().lower().split())
 
 
+def has_conditional_language(normalized: str) -> bool:
+	return any(
+		marker in normalized
+		for marker in (
+			"nếu",
+			"neu",
+			"khi",
+			"trên",
+			"tren",
+			"dưới",
+			"duoi",
+			"cao hơn",
+			"cao hon",
+			"thấp hơn",
+			"thap hon",
+			"lớn hơn",
+			"lon hon",
+			"nhỏ hơn",
+			"nho hon",
+			">",
+			"<",
+			">=",
+			"<=",
+		)
+	)
+
+
 def explicit_target_from_text(text: str) -> str | None:
 	"""Extract an explicit device target from text using canonical device IDs.
 
@@ -125,6 +159,12 @@ def explicit_target_from_text(text: str) -> str | None:
 	for target, patterns in canonical_ids.items():
 		if any(pattern in normalized for pattern in patterns):
 			return target
+	placed_light = resolve_placed_device_reference(text, kind="light")
+	if placed_light is not None:
+		return placed_light
+	placed_device = resolve_placed_device_reference(text)
+	if placed_device is not None:
+		return placed_device
 	# Check group targets
 	group_markers = {
 		"all_devices": ("all devices", "all_devices"),
@@ -417,8 +457,8 @@ def detect_condition_sensor(normalized: str) -> str | None:
 
 def detect_condition_window_seconds(normalized: str) -> int | None:
 	patterns = (
-		r"(?:trong|tong|vÃ²ng|vong|within|last)\s+(\d+(?:[.,]\d+)?)\s*(giÃ¢y|giay|s|sec|secs|second|seconds|phÃºt|phut|m|min|mins|minute|minutes)",
-		r"(\d+(?:[.,]\d+)?)\s*(giÃ¢y|giay|s|sec|secs|second|seconds|phÃºt|phut|m|min|mins|minute|minutes)\s+(?:vá»«a rá»“i|vua roi|qua|gáº§n Ä‘Ã¢y|gan day|last|ago)",
+		r"(?:trong|tong|vòng|vong|within|last)\s+(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)",
+		r"(\d+(?:[.,]\d+)?)\s*(giây|giay|s|sec|secs|second|seconds|phút|phut|m|min|mins|minute|minutes)\s+(?:vừa rồi|vua roi|qua|gần đây|gan day|last|ago)",
 	)
 	for pattern in patterns:
 		match = re.search(pattern, normalized)
@@ -426,7 +466,7 @@ def detect_condition_window_seconds(normalized: str) -> int | None:
 			continue
 		value = float(match.group(1).replace(",", "."))
 		unit = match.group(2)
-		if unit in {"phÃºt", "phut", "m", "min", "mins", "minute", "minutes"}:
+		if unit in {"phút", "phut", "m", "min", "mins", "minute", "minutes"}:
 			value *= 60
 		return max(1, int(value))
 	return None
@@ -441,31 +481,31 @@ def detect_condition_operator_threshold(
 			">=",
 			(
 				r">=\s*",
-				r"Ã­t nháº¥t\s+",
+				r"ít nhất\s+",
 				r"it nhat\s+",
-				r"tá»«\s+",
+				r"từ\s+",
 				r"tu\s+",
-				r"lÃªn\s+",
+				r"lên\s+",
 				r"len\s+",
-				r"Ä‘áº¡t\s+",
+				r"đạt\s+",
 				r"dat\s+",
-				r"cháº¡m\s+",
+				r"chạm\s+",
 				r"cham\s+",
-				r"tá»›i\s+",
+				r"tới\s+",
 			),
 		),
-		("<=", (r"<=\s*", r"tá»‘i Ä‘a\s+", r"toi da\s+")),
+		("<=", (r"<=\s*", r"tối đa\s+", r"toi da\s+")),
 		(
 			">",
 			(
 				r">\s*",
-				r"trÃªn\s+",
+				r"trên\s+",
 				r"tren\s+",
-				r"cao hÆ¡n\s+",
+				r"cao hơn\s+",
 				r"cao hon\s+",
-				r"lá»›n hÆ¡n\s+",
+				r"lớn hơn\s+",
 				r"lon hon\s+",
-				r"hÆ¡n\s+",
+				r"hơn\s+",
 				r"hon\s+",
 			),
 		),
@@ -473,11 +513,11 @@ def detect_condition_operator_threshold(
 			"<",
 			(
 				r"<\s*",
-				r"dÆ°á»›i\s+",
+				r"dưới\s+",
 				r"duoi\s+",
-				r"tháº¥p hÆ¡n\s+",
+				r"thấp hơn\s+",
 				r"thap hon\s+",
-				r"nhá» hÆ¡n\s+",
+				r"nhỏ hơn\s+",
 				r"nho hon\s+",
 			),
 		),
@@ -489,17 +529,17 @@ def detect_condition_operator_threshold(
 				return operator, float(match.group(1).replace(",", "."))
 
 	if sensor_name == "temperature":
-		if any(marker in normalized for marker in ("cao", "nÃ³ng", "nong", "high")):
+		if any(marker in normalized for marker in ("cao", "nóng", "nong", "high")):
 			return ">", float(NORMAL_TEMP_MAX)
 		if any(
-			marker in normalized for marker in ("tháº¥p", "thap", "láº¡nh", "lanh", "low")
+			marker in normalized for marker in ("thấp", "thap", "lạnh", "lanh", "low")
 		):
 			return "<", float(NORMAL_TEMP_MIN)
 	if sensor_name == "humidity":
-		if any(marker in normalized for marker in ("cao", "áº©m", "am", "high")):
+		if any(marker in normalized for marker in ("cao", "ẩm", "am", "high")):
 			return ">", float(NORMAL_HUMI_MAX)
 		if any(
-			marker in normalized for marker in ("tháº¥p", "thap", "khÃ´", "kho", "low")
+			marker in normalized for marker in ("thấp", "thap", "khô", "kho", "low")
 		):
 			return "<", float(NORMAL_HUMI_MIN)
 	return None, None
@@ -547,6 +587,7 @@ def normalise_command(
 	reference = parsed.get("reference")
 	requested_action = parsed.get("requested_action")
 	requested_target = parsed.get("requested_target")
+	target_type = parsed.get("target_type")
 	condition = parsed.get("condition")
 	if action not in {
 		"turn_on",
@@ -599,9 +640,12 @@ def normalise_command(
 		)
 	if requested_target not in DEVICE_TARGETS:
 		requested_target = target
+	if target_type not in {"light", "fan", "relay"}:
+		target_type = None
 	command = {
 		"action": action,
 		"target": target,
+		"target_type": target_type,
 		"reference": reference,
 		"confidence": parsed.get("confidence"),
 		"requested_action": requested_action,
@@ -885,12 +929,12 @@ def build_tool_proposal(command: dict[str, Any]) -> ToolProposal | None:
 	return tool_call_to_proposal(tool_call) if tool_call else None
 
 
-def build_required_read_tool_calls(command: dict[str, Any]) -> list[dict[str, Any]]:
+def build_required_data_sources(command: dict[str, Any]) -> list[dict[str, Any]]:
 	required_calls: list[dict[str, Any]] = []
 	seen: set[tuple[Any, Any]] = set()
 	if "commands" in command:
 		for item in command_list_from(command):
-			for call in build_required_read_tool_calls(item):
+			for call in build_required_data_sources(item):
 				args = call.get("args", {}) if isinstance(call, dict) else {}
 				key = (
 					call.get("name") if isinstance(call, dict) else None,
@@ -965,6 +1009,8 @@ class DeviceControlAgent:
 				"role": "system",
 				"content": (
 					DEVICE_COMMAND_INTERPRETER_PROMPT
+					+ "\n\nPhysical device placement catalog:\n"
+					+ placement_prompt_lines()
 					+ "\n\nCurrent device snapshot:\n"
 					+ device_context
 					+ "\n\nRecent action memory:\n"
@@ -1011,6 +1057,8 @@ class DeviceControlAgent:
 				"content": (
 					DEVICE_TARGET_CLARIFICATION_PROMPT
 					+ f"\n\nRequested action:\n{requested_action}"
+					+ "\n\nPhysical device placement catalog:\n"
+					+ placement_prompt_lines()
 				),
 			},
 			{"role": "user", "content": message.text},
@@ -1024,7 +1072,7 @@ class DeviceControlAgent:
 		parsed = extract_json_object(result["content"])
 		target = parsed.get("target")
 		if target not in DEVICE_TARGETS:
-			target = None
+			target = resolve_placed_device_reference(message.text)
 		confidence = parsed.get("confidence")
 		if not isinstance(confidence, int | float):
 			confidence = 0.0 if target is None else 0.6
@@ -1104,6 +1152,17 @@ class DeviceControlAgent:
 			if (proposal := tool_call_to_proposal(tool_call)) is not None
 		]
 		commands = command_list_from(command)
+		available_targets = user_target_options(
+			next(
+				(
+					str(item.get("target_type"))
+					for item in commands
+					if item.get("target") is None
+					and item.get("target_type") in {"light", "fan", "relay"}
+				),
+				None,
+			)
+		)
 		clarification_question = None
 		needs_clarification = any(
 			(
@@ -1132,10 +1191,8 @@ class DeviceControlAgent:
 		]
 		if needs_clarification and tool_calls:
 			summary = "partial_tool_call_ready_awaiting_target_clarification"
-			clarification_question = "Báº¡n muá»‘n mÃ¬nh Ä‘iá»u khiá»ƒn thiáº¿t bá»‹ nÃ o?"
 		elif needs_clarification:
 			summary = "awaiting_target_clarification"
-			clarification_question = "Báº¡n muá»‘n mÃ¬nh Ä‘iá»u khiá»ƒn thiáº¿t bá»‹ nÃ o?"
 		elif any(
 			isinstance(condition, dict) and condition.get("status") == "not_met"
 			for condition in conditions
@@ -1157,15 +1214,16 @@ class DeviceControlAgent:
 		elif tool_calls:
 			summary = "tool_call_ready"
 
-		required_tool_calls = build_required_read_tool_calls(command)
+		data_sources = build_required_data_sources(command)
 		report = {
 			"parsed_command": command,
 			"parsed_commands": commands,
 			"tool_calls": tool_calls,
-			"required_tool_calls": required_tool_calls,
+			"data_sources": data_sources,
 			"tool_proposals": (
 				[proposal.model_dump(mode="json") for proposal in tool_proposals]
 			),
+			"available_targets": available_targets,
 			"device_status": self.tool_runner.get_device_status_report(),
 		}
 		analysis_payload = dict(report)

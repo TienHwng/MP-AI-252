@@ -31,9 +31,7 @@
 \usepackage{xcolor}
 \usepackage{colortbl}
 \usepackage{tikz}
-\usetikzlibrary{arrows,backgrounds,decorations.pathmorphing,shapes.geometric,positioning}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows,backgrounds,decorations.pathmorphing}
 \usepackage{eso-pic}
 
 % --- Packages: floats, captions, and subfigures
@@ -137,6 +135,41 @@
 \definecolor{codecomment}{RGB}{106,153,85}
 \definecolor{codenumber}{RGB}{150,150,150}
 
+\usepackage{minted}
+\usepackage{tcolorbox}
+\tcbuselibrary{minted, skins}
+
+% Cấu hình một môi trường riêng cho JSON
+\newtcblisting{jsoncode}[1][]{%
+  listing engine=minted,
+  minted language=json,
+  minted style=tango, % Theme này phân biệt màu Key và Value rất rõ
+  minted options={
+    fontsize=\small,
+    breaklines=true,
+    linenos=false % Đổi thành true nếu em muốn hiện số dòng
+  },
+  colback=gray!5,       % Màu nền xám nhạt
+  colframe=gray!40,     % Màu viền khung
+  boxrule=0.5pt,        % Độ dày viền
+  arc=3pt,              % Độ bo góc
+  left=2mm, right=2mm, top=2mm, bottom=2mm,
+  listing only,
+  title=#1,             % Caption cho block code
+  fonttitle=\bfseries\small,
+  coltitle=black,
+  attach boxed title to top center={yshift=-1mm},
+  boxed title style={colback=gray!20, colframe=gray!40, size=small}
+}
+
+
+\lstdefinelanguage{json}{
+    basicstyle=\ttfamily\small,
+    showstringspaces=false,
+    breaklines=true,
+    keepspaces=true,
+}
+
 \lstdefinestyle{espCode}{
     language=C,
     basicstyle=\ttfamily\small,
@@ -159,3 +192,10 @@
 
 % --- Listings: active style
 \lstset{style=espCode}
+
+
+\usepackage{booktabs}
+\usepackage{pgfplots}
+\usepackage{siunitx}
+\usepackage{float}
+\pgfplotsset{compat=1.18}

@@ -91,17 +91,13 @@ In the H.E.R.A system, the AIoT Kit serves as the main source of peripheral modu
     \hline
     5  & Light Sensor (LDR) & 1 & Detects surrounding light intensity to support context-aware lighting automation. \\
     \hline
-    6  & IR Receiver Sensor & 1 & Receives infrared signals from a remote controller, enabling wireless command input for device operation. \\
+    6  & LCD Display & 1 & Displays real-time sensor readings, device states, and general system status information. \\
     \hline
-    7  & Gas Sensor (MQ-2) & 1 & Detects combustible gases and smoke levels to support basic gas leakage and safety monitoring. \\
+    7  & RGB LED Module (WS2812) & 1 & Provides visual output for lighting control demonstration and system status indication. \\
     \hline
-    8  & LCD Display & 1 & Displays real-time sensor readings, device states, and general system status information. \\
+    8 & Mini Fan & 1 & Simulates ventilation or cooling control in response to environmental conditions or user commands. \\
     \hline
-    9  & RGB LED Module (WS2812) & 1 & Provides visual output for lighting control demonstration and system status indication. \\
-    \hline
-    10 & Mini Fan & 1 & Simulates ventilation or cooling control in response to environmental conditions or user commands. \\
-    \hline
-    11 & Relay Module & 1 & Enables switching control of external electrical loads or household appliances. \\
+    9 & Relay Module & 1 & Enables switching control of external electrical loads or household appliances. \\
     \hline
   \end{tabularx}
 \end{table}
@@ -116,7 +112,7 @@ To provide a clearer view of the hardware architecture, the devices used in the 
   \label{tab:functional_classification}
   \renewcommand{\arraystretch}{1.2}
   \small
-  \begin{tabularx}{\textwidth}{|p{3.4cm}|p{5.0cm}|X|}
+  \begin{tabularx}{\textwidth}{|p{2.2cm}|p{4.0cm}|X|}
     \hline
     \textbf{Category} & \textbf{Devices} & \textbf{Role in the System} \\
     \hline \hline
@@ -125,8 +121,8 @@ To provide a clearer view of the hardware architecture, the devices used in the 
     & These units form the computational and control core of the system. The PC performs high-level processing tasks such as speech recognition, natural language understanding, and command orchestration, while the Yolo UNO executes embedded control tasks including sensor acquisition, MQTT communication, and actuator management. \\
     \hline
     Input Devices
-    & Microphone / sound sensor, DHT20 temperature and humidity sensor, LDR light sensor, IR receiver sensor, MQ-2 gas sensor
-    & These devices collect user commands and environmental data, including voice input, ambient conditions, infrared remote signals, and gas concentration information, then forward them to the controller for processing and decision-making. \\
+    & DHT20 temperature and humidity sensor, LDR light sensor
+    & These devices collect environmental data, specifically temperature, humidity, and ambient light intensity, then forward it to the controller for processing and decision-making. \\
     \hline
     Output Devices
     & LCD display, RGB LED module, mini fan, relay module
@@ -163,139 +159,125 @@ The software environment and main libraries used in this project (which are alre
 \subsubsection{Firmware Directory Tree}
 
 \begin{lstlisting}[style=projecttree]
-IOT-251-Assignment/                 # Project root (PlatformIO workspace)
-|-- .pio/                           # PlatformIO build artifacts (auto-generated)
-|-- .venv/                          # Local Python virtual environment
-|-- .vscode/                        # VS Code / PlatformIO configuration
-|-- boards/                         # Custom board definition
-|   `-- yolo_uno.json               # YoloUNO ESP32-S3 board configuration
-|-- data/                           # Web assets stored in SPIFFS/LittleFS
-|   |-- index.html                  # AP-mode web UI (Task 4)
-|   |-- script.js                   # Web UI logic (button handlers, AJAX)
-|   `-- styles.css                  # CSS styling for the web interface
-|-- include/                        # Header files and global interfaces
-|   |-- .configuration.h            # Central configuration macros (extended)
-|   |-- global.h                    # Global objects, semaphores, task handles
-|   |-- dht20_reader.h              # DHT20 reader task (Tasks 1-3)
-|   |-- led_blinky.h                # Temperature-based LED task (Task 1)
-|   |-- neo_blinky.h                # Humidity-based NeoPixel task (Task 2)
-|   |-- temp_humi_monitor.h         # LCD monitor task (Task 3)
-|   |-- mainserver.h                # AP-mode web server interface (Task 4)
-|   |-- coreiot.h                   # CoreIOT client functions (Task 6)
-|   |-- tinyml.h                    # TinyML inference interface (Task 5)
-|   |-- bot_alert.h                 # Telegram alert task (extended feature)
-|   |-- sensor_log.h                # Dataset logging task (extended feature)
-|   |-- task_check_info.h           # System info / debug-print task
-|   |-- task_core_iot.h             # CoreIOT RTOS task wrapper
-|   |-- task_handler.h              # Task creation and supervision helpers
-|   |-- task_rs485.h                # RS485 communication task (optional)
-|   |-- task_toogle_boot.h          # BOOT button handler task
-|   |-- task_webserver.h            # Web server RTOS task wrapper
-|   `-- task_wifi.h                 # Wi-Fi connection management task
-|-- lib/                            # Local copies of Arduino/ESP32 libraries
-|   |-- ArduinoHttpClient/          # HTTP/WebSocket client for CoreIOT
-|   `-- ...                         # Other reused libraries (JSON, MQTT, etc.)
-|-- python/                         # Host-side Python tools and experiments
-|   |-- CoreIOT Simulator/          # Scripts to simulate CoreIOT dashboard
-|   |-- MQTT Broker/                # Local MQTT test utilities
-|   |-- Telegram Bot/               # Telegram Bot API test scripts
-|   `-- Tiny ML/                    # Dataset processing and training pipeline
-|       |-- data/                   # Raw and cleaned sensor datasets (CSV)
-|       |-- plots/                  # Training and evaluation plots
-|       |-- trained models/         # Saved .keras/.tflite/.h TinyML models
-|       |-- data_cleaner.py         # Clean and filter raw DHT20 logs
-|       |-- model_tester.py         # Evaluate trained models on test data
-|       |-- model_verify.py         # Verify model behaviour on new samples
-|       |-- TLF_For_MCU.py          # Convert/export models for MCU deployment
-|       `-- ...                     # Additional helper scripts and artifacts
-|-- src/                            # ESP32-S3 application source files
-|   |-- main.cpp                    # Entry point, FreeRTOS task creation
-|   |-- global.cpp                  # Definition of globals, semaphores, queues
-|   |-- dht20_reader.cpp            # DHT20 reader implementation (Tasks 1-3)
-|   |-- led_blinky.cpp              # LED blink logic (Task 1)
-|   |-- neo_blinky.cpp              # NeoPixel control logic (Task 2)
-|   |-- temp_humi_monitor.cpp       # LCD display logic (Task 3)
-|   |-- mainserver.cpp              # AP-mode web server logic (Task 4)
-|   |-- coreiot.cpp                 # CoreIOT publish logic (Task 6)
-|   |-- tinyml.cpp                  # On-device TinyML inference (Task 5)
-|   |-- bot_alert.cpp               # Telegram notifications (extended feature)
-|   |-- sensor_log.cpp              # Dataset logging (extended feature)
-|   |-- task_check_info.cpp         # System info / debug utilities
-|   |-- task_core_iot.cpp           # CoreIOT RTOS task implementation
-|   |-- task_handler.cpp            # Task initialisation and supervision
-|   |-- task_rs485.cpp              # RS485 communication (optional extension)
-|   |-- task_toogle_boot.cpp        # BOOT button behaviour
-|   |-- task_webserver.cpp          # Web server RTOS task implementation
-|   `-- task_wifi.cpp               # Wi-Fi connection management
-|-- test/                           # Additional test sketches and notes
-|   `-- README                      # Notes for test cases
-|-- .gitignore                      # Git ignore rules
-|-- platformio.ini                  # PlatformIO project configuration
-`-- README.md                       # Project documentation
+MP-AI-252/                       # Root directory of the project workspace
+|-- firmware/                    # Embedded firmware for the ESP32-based device
+|   |-- boards/                  # Custom board definitions for PlatformIO
+|   |-- data/                    # Filesystem data stored on the board
+|   |-- include/                 # Header files for shared modules and drivers
+|   |-- lib/                     # Local and third-party embedded libraries
+|   |   |-- DHT20/               # Driver library for the DHT20 sensor
+|   |   |-- LCD/                 # Driver library for the LCD display
+|   |   `-- PubSubClient/        # MQTT client library for device communication
+|   |-- src/                     # Main implementation source files
+|   `-- test/                    # Test folder for firmware modules
+|
+|-- BE/                          # Backend services and AI processing modules
+|   |-- Database/                # Database scripts and backend server setup
+|   |-- HERA/                    # Core multi-agent AI assistant backend
+|   |   |-- adapters/            # Adapters for external communication channels
+|   |   |-- agents/              # AI agents for different system tasks
+|   |   |-- core/                # Shared core logic and system services
+|   |   `-- ...
+|   |-- MQTT_Broker/             # MQTT broker, simulator, and test utilities
+|   |-- Telegram Bot/            # Utilities for Telegram-based messaging
+|   `-- omniverse/               # Omniverse assets and related resources
+|
+|-- FE/                          # Frontend applications and user interfaces
+|   |-- board-host/              # Lightweight web UI for board interaction
+|   `-- hera-dashboard/          # Main dashboard for monitoring and control
+|       |-- public/              # Static assets served directly by the app
+|       `-- src/                 # Main source code of the frontend
+|           |-- assets/          # Images, icons, and static resources
+|           |-- components/      # Reusable UI components
+|           |-- pages/           # Page-level views of the application
+|           `-- services/        # API calls and service logic
+|
+|-- docs/                        # Documentation and LaTeX report sources
+|   |-- content/                 # LaTeX section files for report chapters
+|   |-- image/                   # Figures, plots, and visual assets
+|   `-- report/                  # Report project and compiled outputs
+|
+|-- .gitignore                   # Git ignore rules for generated and temporary files
+|-- platformio.ini               # PlatformIO project configuration file
+|-- README.md                    # Main overview and usage guide of the project
+`-- run_full_pipeline.sh         # Shell script to run the full system pipeline
 \end{lstlisting}
 
 
 \subsubsection{Description of Main Directories and Files}
 
-The project is organized into several folders and configuration files in the working directory:
+The project is organized into several main folders and configuration files in the root working directory:
 
 \begin{itemize}
-    \item \texttt{\textbf{platformio.ini}}: PlatformIO project configuration (board type, framework, build options and library dependencies).
-    \item \texttt{README.md}, \texttt{requirements.txt}: project documentation and Python environment requirements.
+  \item \texttt{\textbf{platformio.ini}}: PlatformIO project configuration file, including board settings, framework options, and embedded library dependencies for firmware development.
+  \item \texttt{README.md}: the main project overview, describing the purpose of the system, its modules, and usage instructions.
+  \item \texttt{run\_full\_pipeline.sh}: shell script for executing the full system pipeline, typically used to automate multi-stage tasks across project modules.
+  \item \texttt{tomtat.md}: summary notes or a concise project overview used for quick reference.
+  \item \texttt{.gitignore}: Git configuration file specifying generated, temporary, and environment-specific files to be excluded from version control.
 \end{itemize}
 
 The main directories are:
 
 \begin{itemize}
-    \item \textbf{.venv/}: local Python virtual environment used for data processing, TinyML training and CoreIOT/Telegram simulation scripts.
-    \item \textbf{boards/}: custom board definition files for the YoloUNO (ESP32-S3) platform used by PlatformIO.
-    \item \textbf{data/}: web-server assets (e.g., \texttt{index.html}, \texttt{script.js}, \texttt{styles.css}) that are uploaded to the ESP32-S3 filesystem and served by the AP-mode web server (Task~4).
-    \item \textbf{include/}: C/C++ header files for each application module and task. Typical headers include:
+  \item \textbf{firmware/}: embedded firmware source tree for the ESP32-based device. This module contains the low-level logic for device control, sensor acquisition, communication, and local peripherals.
     \begin{itemize}
-        \item \texttt{global.h}: global objects, semaphores and shared data structures.
-        \item \texttt{dht20\_reader.h}, \texttt{led\_blinky.h}, \texttt{neo\_blinky.h}: task interfaces for the DHT20 reader, temperature-based LED and humidity-based NeoPixel control.
-        \item \texttt{temp\_humi\_monitor.h}: LCD monitoring task (temperature, humidity and state).
-        \item \texttt{coreiot.h}, \texttt{tinyml.h}: CoreIOT client and TinyML inference interfaces.
-        \item \texttt{bot\_alert.h}, \texttt{task\_wifi.h}, \texttt{task\_webserver.h}: Telegram alert task and Wi-Fi/web server management tasks.
-        \item \texttt{.configuration.h}: centralized configuration header that defines system modes, timing parameters and pin mappings (extended feature).
-    \end{itemize}
-    \item \textbf{lib/}: third-party Arduino/PlatformIO libraries such as \texttt{ArduinoHttpClient} and other dependencies (JSON, MQTT, \ldots) that are reused by the project.
-    \item \textbf{python/}: host-side Python utilities, divided into subfolders:
-    \begin{itemize}
-        \item \textbf{CoreIOT Simulator/}: scripts for simulating the CoreIOT dashboard and testing data publishing.
-        \item \textbf{MQTT Broker/}: helper scripts for experimenting with MQTT-based communication.
-        \item \textbf{Telegram Bot/}: scripts for testing the Telegram Bot API and sending messages.
-        \item \textbf{Tiny ML/}: TinyML toolchain for dataset preparation, model training and deployment:
+      \item \textbf{boards/}: custom PlatformIO board definition files, including the configuration for the \texttt{yolo\_uno} board.
+      \item \textbf{data/}: board filesystem data used for deployment to the embedded device when required.
+      \item \textbf{include/}: C/C++ header files for shared interfaces, hardware abstractions, and manager modules. The folder is further divided into:
         \begin{itemize}
-            \item \texttt{data/}: raw and cleaned sensor datasets in CSV format.
-            \item \texttt{plots/}: visualizations of training curves and evaluation metrics.
-            \item \texttt{trained models/}: exported models in \texttt{.keras}, \texttt{.tflite} and \texttt{.h} formats for MCU deployment.
-            \item \texttt{data\_cleaner.py}: cleans and filters raw DHT20 logs, handling outliers and missing values.
-            \item \texttt{model\_tester.py}: evaluates trained models on test data and reports accuracy and confusion matrix.
-            \item \texttt{model\_verify.py}: verifies model behaviour on new samples before deployment.
-            \item \texttt{TLF\_For\_MCU.py}: converts trained models into a TensorFlow Lite Micro representation and generates C arrays for the ESP32-S3 firmware.
+          \item \textbf{devices/}: abstractions and controllers for actuators and output devices, such as binary-state devices, WS2812 LEDs, and actuator management.
+          \item \textbf{sensors/}: abstractions and interfaces for supported sensors, including DHT20- and MQ2-related sensor modules.
+          \item Shared headers such as \texttt{global.h}, \texttt{main.h}, \texttt{mqtt\_handle.h}, \texttt{analog\_manager.h}, \texttt{digital\_manager.h}, \texttt{LCD\_display.h}, \texttt{ir\_receiver.h}, \texttt{led\_display.h}, and \texttt{neo\_display.h} provide declarations for common system components.
+        \end{itemize}
+      \item \textbf{lib/}: local reusable libraries and third-party embedded dependencies, including:
+        \begin{itemize}
+          \item \textbf{DHT20/}: driver implementation for the DHT20 sensor.
+          \item \textbf{LCD/}: LCD driver library for display handling.
+          \item \textbf{PubSubClient/}: MQTT client library used for network-based device communication.
+        \end{itemize}
+      \item \textbf{src/}: main firmware implementation files, including source code for display handling, analog/digital management, global resource initialization, MQTT communication, infrared input, NeoPixel output, and sensor acquisition.
+      \item \textbf{test/}: auxiliary test directory for firmware-related experiments and validation.
+    \end{itemize}
+
+  \item \textbf{BE/}: backend and AI service layer of the system. This module groups the data, communication, orchestration, and intelligent assistant components used by the overall platform.
+    \begin{itemize}
+      \item \textbf{Database/}: database initialization and backend server scripts, including package configuration and server-side setup files such as \texttt{init\_dbs.js} and \texttt{server.js}.
+      \item \textbf{HERA/}: the core multi-agent AI assistant backend. This folder is structured into several submodules:
+        \begin{itemize}
+          \item \textbf{adapters/}: communication adapters for external interaction channels, such as Telegram and voice-based interfaces.
+          \item \textbf{agents/}: specialized agents responsible for different tasks, including anomaly detection, chat handling, device interaction, orchestration, and sensor-related reasoning.
+          \item \textbf{core/}: shared backend services and infrastructure, including the event bus, language policy, LLM service, message representation, MQTT service, and tool registry.
+          \item Additional files such as \texttt{main.py}, \texttt{hera\_bot.py}, \texttt{config.py}, and \texttt{omniverse\_connector.py} define the main application entry points and runtime configuration of the HERA backend.
+        \end{itemize}
+      \item \textbf{MQTT\_Broker/}: lightweight MQTT infrastructure and utilities, including broker logic, publisher/subscriber examples, simulator scripts, and test programs for validating message-based communication.
+      \item \textbf{Telegram Bot/}: helper scripts for Telegram-based messaging and notification features.
+      \item \textbf{omniverse/}: assets and scene resources related to Omniverse integration.
+    \end{itemize}
+
+  \item \textbf{FE/}: frontend applications and user-facing interfaces. This module contains the web-based components used for local control and system monitoring.
+    \begin{itemize}
+      \item \textbf{board-host/}: lightweight local web interface consisting of static files such as \texttt{index.html}, \texttt{script.js}, and \texttt{styles.css}, used for direct interaction with the board.
+      \item \textbf{hera-dashboard/}: the main frontend dashboard for the HERA system, developed as a modern web application.
+        \begin{itemize}
+          \item \textbf{public/}: static public assets such as icons and favicon resources.
+          \item \textbf{src/}: main source code of the dashboard frontend, further divided into:
+            \begin{itemize}
+              \item \textbf{assets/}: images, icons, and other static UI resources.
+              \item \textbf{components/}: reusable user interface components.
+              \item \textbf{pages/}: page-level views and route targets.
+              \item \textbf{services/}: service-layer code for API calls and frontend--backend communication.
+            \end{itemize}
+          \item Files such as \texttt{App.jsx}, \texttt{main.jsx}, \texttt{index.css}, \texttt{package.json}, \texttt{tailwind.config.js}, and \texttt{vite.config.js} define the application structure, styling system, package dependencies, and build configuration.
         \end{itemize}
     \end{itemize}
 
-\item \textbf{src/}: main application source files for the ESP32-S3 firmware:
+  \item \textbf{docs/}: documentation and report-writing resources for the project.
     \begin{itemize}
-        \item \textbf{RTOS task implementations}:
-        \begin{itemize}
-            \item \texttt{dht20\_reader.cpp}: periodic reading of temperature and humidity from the DHT20 sensor.
-            \item \texttt{led\_blinky.cpp}: temperature-based LED blinking logic (Task~1).
-            \item \texttt{neo\_blinky.cpp}: humidity-based NeoPixel control (Task~2).
-            \item \texttt{temp\_humi\_monitor.cpp}: LCD display of temperature, humidity and state (Task~3).
-            \item \texttt{task\_wifi.cpp}: Wi-Fi connection management in STA mode.
-            \item \texttt{task\_webserver.cpp}: AP-mode web server handling HTTP requests (Task~4).
-            \item \texttt{coreiot.cpp}: CoreIOT data publishing logic (Task~6).
-            \item \texttt{tinyml.cpp}: on-device TinyML inference using the exported model (Task~5).
-            \item \texttt{bot\_alert.cpp}: Telegram notification and command handling (extended feature).
-            \item \texttt{task\_toogle\_boot.cpp}: BOOT button behaviour and related actions.
-        \end{itemize}
-        \item \texttt{global.cpp} and \texttt{task\_handler.cpp}: implementation of shared resources, semaphore and queue creation, and central task orchestration.
-        \item \texttt{main.cpp}: entry point defining \texttt{setup()} and \texttt{loop()}, responsible for initialisation and creation of all FreeRTOS tasks.
+      \item \textbf{content/}: LaTeX section files for individual report chapters, such as introduction, requirement analysis, device description, multi-AI architecture, TinyML/personalization, and database sections.
+      \item \textbf{image/}: figures, plots, diagrams, and other graphical assets used in the report.
+      \item \textbf{report/}: a standalone report workspace containing content files, style files, images, build artifacts, and compiled output such as the final PDF.
+      \item Additional root files such as \texttt{main.tex}, \texttt{main.pdf}, \texttt{HOW\_TO\_COMPILE.md}, and \texttt{BUILD\_AND\_RENDER.bat} support report authoring and compilation.
     \end{itemize}
-    \item \textbf{test/}: additional test sketches and notes used during development.
 \end{itemize}
 
 
@@ -305,10 +287,10 @@ The main directories are:
 An important design decision is the introduction of a centralized configuration header (included at the beginning of \texttt{global.h}) that defines all operational parameters using preprocessor macros. This header groups together:
 
 \begin{itemize}
-    \item \textbf{Mode flags}: debug and logging options (e.g., enabling or disabling debug output and payload display).
-    \item \textbf{Task delays and timeouts}: delays for LED blinking, NeoPixel updates, sensor reading, TinyML inference, CoreIOT publishing, and Wi-Fi/MQTT retry intervals.
-    \item \textbf{GPIO mappings}: pins for the on-board LED, NeoPixel data line and LED count.
-    \item \textbf{I\textsuperscript{2}C pins}: SDA and SCL GPIO mapping for the LCD module and other I\textsuperscript{2}C peripherals.
+  \item \textbf{Mode flags}: debug and logging options (e.g., enabling or disabling debug output and payload display).
+  \item \textbf{Task delays and timeouts}: delays for LED blinking, NeoPixel updates, sensor reading, TinyML inference, CoreIOT publishing, and Wi-Fi/MQTT retry intervals.
+  \item \textbf{GPIO mappings}: pins for the on-board LED, NeoPixel data line and LED count.
+  \item \textbf{I\textsuperscript{2}C pins}: SDA and SCL GPIO mapping for the LCD module and other I\textsuperscript{2}C peripherals.
 \end{itemize}
 
 An excerpt of the configuration header is shown below:
@@ -317,14 +299,18 @@ An excerpt of the configuration header is shown below:
 // ----- General Settings -----
 // Mode Settings
 #define IS_DEBUG_MODE               false
-#define IS_MONITOR_MODE             true
+#define IS_MONITOR_MODE             false
 #define IS_SHOW_DHT20_STATUS        false
 #define IS_SHOW_LED_STATUS          false
+#define IS_SHOW_DIGITAL_STATUS      false
+#define IS_SHOW_ANALOG_STATUS       false
+#define IS_SHOW_BUTTON_STATUS       false
 #define IS_SHOW_NEO_STATUS          false
 #define IS_SHOW_LCD_STATUS          false
 #define IS_SHOW_PAYLOAD             false
 #define IS_SHOW_INFERENCE_RESULT    false
 
+#define IS_SHOW_MQ2_STATUS          false
 #define IS_SHOW_BOT_STATUS          false
 #define IS_SHOW_SENSOR_LOG          false
 
@@ -350,20 +336,26 @@ An excerpt of the configuration header is shown below:
 #define WIFI_RETRY_INTERVAL_MS      5000
 #define MQTT_RETRY_INTERVAL_MS      5000
 #define SENSOR_LOG_DELAY_MS         2000
+#define GAS_MONITOR_DELAY_MS        2000
 // ----- END General Settings -----
 
 // ----- Board default ports mapping -----
-// Digital Ports
+// Digital Grove Ports
 #define DIGITAL_PORT_1_PIN          18      // D9
 #define DIGITAL_PORT_2_PIN          10      // D7
 #define DIGITAL_PORT_3_PIN          8       // D5
 #define DIGITAL_PORT_4_PIN          6       // D3
 
-// Analog Ports
-#define ANALOG_PORT_1_PIN           3       // A3
-#define ANALOG_PORT_2_PIN           4       // A2
-#define ANALOG_PORT_3_PIN           5       // A1
-#define ANALOG_PORT_4_PIN           6       // A0
+#define DIGITAL_PORT_1_SUB_PIN      21      // D10
+#define DIGITAL_PORT_2_SUB_PIN      17      // D8
+#define DIGITAL_PORT_3_SUB_PIN      9       // D6
+#define DIGITAL_PORT_4_SUB_PIN      7       // D4
+
+// Analog Grove Ports
+#define ANALOG_PORT_1_PIN           4       // A3
+#define ANALOG_PORT_2_PIN           3       // A2
+#define ANALOG_PORT_3_PIN           2       // A1
+#define ANALOG_PORT_4_PIN           1       // A0
 
 // I2C Pins
 #define I2C_SDA_PIN                 11      // A4
@@ -377,14 +369,14 @@ An excerpt of the configuration header is shown below:
 
 // Grove's port devices
 #define WS2812_PIN                  DIGITAL_PORT_1_PIN
-#define MINI_FAN_PIN                DIGITAL_PORT_2_PIN
-#define IR_RECEIVE_PIN              DIGITAL_PORT_3_PIN
+#define IR_RECEIVE_PIN              DIGITAL_PORT_2_PIN
+#define MINI_FAN_PIN                DIGITAL_PORT_3_PIN
 #define RELAY_PIN                   DIGITAL_PORT_4_PIN
 
-#define LIGHT_SENSOR_PIN            ANALOG_PORT_1_PIN
-#define MQ2_SENSOR_PIN              ANALOG_PORT_2_PIN
-#define SOIL_MOISTURE_PIN           ANALOG_PORT_3_PIN
-#define ANALOG_GPIO_PIN             ANALOG_PORT_4_PIN
+#define ANALOG_GPIO_PIN             ANALOG_PORT_1_PIN
+#define LIGHT_SENSOR_PIN            ANALOG_PORT_2_PIN
+#define MQ2_SENSOR_PIN              ANALOG_PORT_3_PIN
+#define SOIL_MOISTURE_PIN           ANALOG_PORT_4_PIN
 
 // GPIO ports
 #define LED_PIN                     48
@@ -394,6 +386,10 @@ An excerpt of the configuration header is shown below:
 
 #define WS2812_NUMBER               4
 // ----- END GPIO Pins Definitions -----
+
+// ----- Sensor & Device Constants -----
+#define V_REF                      3.3f
+// ----- END Sensor & Device Constants -----
 \end{lstlisting}
 
 At system startup, this header is compiled into all relevant modules, and the macros are used instead of hard-coded literals inside the application logic. This design allows users to adjust system behavior (timing, modes and pin mapping) by editing a single header file, without modifying the core task implementations. This centralized configuration mechanism is an explicit extended feature beyond the original assignment.

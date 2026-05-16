@@ -1,1 +1,1 @@
-"""HERA Agents — multi-agent system components."""
+"""HERA specialist components."""

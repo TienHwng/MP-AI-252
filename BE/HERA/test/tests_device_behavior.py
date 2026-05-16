@@ -13,10 +13,8 @@ from typing import Any
 
 import agents.device_agent as device_agent_module
 import runtime.tool_runner as tool_runner_module
-from agents.anomaly_agent import classify_anomaly
 from agents.device_agent import DeviceControlAgent, build_tool_call, build_tool_proposal
 from agents.orchestrator import Orchestrator
-from agents.web_research_agent import WebResearchAgent
 from core.message import AgentResponse, MessageSource, UserMessage
 from domain.devices.device_executor import DeviceExecutor
 from prompts import (
@@ -25,12 +23,14 @@ from prompts import (
 	DEVICE_TARGET_CLARIFICATION_PROMPT,
 	FINAL_RESPONSE_SYSTEM,
 	GENERAL_SYSTEM,
+	PENDING_CONFIRMATION_SYSTEM,
 	ROUTER_SYSTEM,
 )
 from runtime.capability_registry import CapabilityRegistry
 from runtime.policy_engine import PolicyEngine
 from runtime.tool_runner import ToolRunner
 from schemas import MemoryContext, ToolProposal
+from services import WebResearchService, classify_anomaly
 from web_search import DuckDuckGoSearchService, SearchIntentClassifier
 
 
@@ -60,6 +60,9 @@ class FakeLLM:
 		if system.startswith(FINAL_RESPONSE_SYSTEM):
 			self.general_call_count += 1
 			return {"content": self._compose_final_response(user)}
+		if system.startswith(PENDING_CONFIRMATION_SYSTEM):
+			self.general_call_count += 1
+			return {"content": "confirm" if "xác nhận" in user.lower() else "unclear"}
 		if system.startswith(GENERAL_SYSTEM.split("{time_context}", 1)[0]):
 			self.general_call_count += 1
 			return {"content": self._general_response(user)}
@@ -148,6 +151,23 @@ class FakeLLM:
 	@staticmethod
 	def _parse_command(text: str) -> dict:
 		lower_text = text.lower()
+		if "set ws2812 brightness to 128" in lower_text:
+			return {
+				"action": "set_device_value",
+				"target": "ws2812",
+				"property": "brightness",
+				"value": 128,
+				"reference": "none",
+				"confidence": 0.92,
+			}
+		if "set temperature to 31.5" in lower_text:
+			return {
+				"action": "set_sensor_value",
+				"sensor": "temperature",
+				"value": 31.5,
+				"reference": "none",
+				"confidence": 0.92,
+			}
 		if "vừa được bật" in text or lower_text.startswith("ắt "):
 			return {
 				"action": "turn_off",
@@ -165,6 +185,12 @@ class FakeLLM:
 				"chắc chưa",
 				"chac chua",
 				"status",
+				"đang bật không",
+				"dang bat khong",
+				"có đang bật",
+				"co dang bat",
+				"có đang tắt",
+				"co dang tat",
 			)
 		):
 			action = "status"
@@ -290,8 +316,8 @@ class FakeLLM:
 		):
 			results = payload.get("execution_results", [])
 			if results:
-				return "Mình đã xử lý phần rõ ràng rồi. Còn phần đèn thì bạn muốn mình bật đèn nào?"
-			return "Bạn muốn mình bật đèn nào?"
+				return "Mình đã xử lý phần rõ ràng rồi. Còn phần đèn, bạn chọn phòng khách, phòng ngủ hay toilet?"
+			return "Bạn chọn đèn phòng khách, phòng ngủ hay toilet?"
 		condition = command.get("condition", {})
 		if condition.get("status") == "not_met":
 			if condition.get("type") == "sensor_window_threshold":
@@ -650,6 +676,10 @@ async def test_device_intent_routing() -> None:
 		await orchestrator.classify_intent("relay đang bật hay tắt") == "device_control"
 	)
 	assert (
+		await orchestrator.classify_intent("đèn phòng khách có đang bật không nhỉ")
+		== "device_control"
+	)
+	assert (
 		await orchestrator.classify_intent("báo cáo tình hình ngôi nhà")
 		== "sensor_query"
 	)
@@ -780,7 +810,7 @@ async def test_answer_previous_followup_uses_conversation_context() -> None:
 	assert "bất thường" in anomaly_response.lower(), anomaly_response
 
 
-async def test_ambiguous_light_request_asks_for_clarification() -> None:
+async def test_room_named_light_request_maps_to_house_device() -> None:
 	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
 	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
 	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
@@ -802,8 +832,39 @@ async def test_ambiguous_light_request_asks_for_clarification() -> None:
 
 	response = await orchestrator.handle(message("bật đèn phòng khách giúp tôi"))
 
-	assert fake_mqtt.published == []
-	assert "đèn nào" in response.text.lower(), response.text
+	assert fake_mqtt.published == [("setValueLedBlinky", True)]
+	assert response.metadata["tool_execution_results"][0]["target"] == "main_led"
+
+
+async def test_room_named_light_status_uses_device_status_not_light_sensor() -> None:
+	tool_runner_module.DEVICE_VERIFICATION_TIMEOUT_SECONDS = 0
+	tool_runner_module.DEVICE_VERIFICATION_POLL_SECONDS = 0
+	device_agent_module.runtime_settings.get_active_model = lambda _field: "fake-model"
+	fake_llm = FakeLLM()
+	fake_mqtt = FakeMQTT()
+	runner = ToolRunner(
+		CapabilityRegistry(),
+		DeviceExecutor(fake_mqtt),
+		policy_engine=PolicyEngine(),
+	)
+	orchestrator = Orchestrator(
+		fake_llm,
+		{"device_control": DeviceControlAgent(fake_llm, runner)},
+		fake_mqtt,
+		tool_runner=runner,
+		memory_service=FakeMemoryService(),
+	)
+
+	response = await orchestrator.handle(
+		message("đèn phòng khách có đang bật không nhỉ")
+	)
+
+	assert response.metadata["intent"] == "device_control", response.metadata
+	assert response.metadata["tool_execution_results"][0]["target"] == "main_led"
+	assert (
+		response.metadata["tool_execution_results"][0]["capability_name"]
+		== "get_device_status"
+	)
 
 
 async def test_simple_general_short_path_returns_direct_response() -> None:
@@ -909,7 +970,7 @@ async def test_temporal_condition_checks_telemetry_window_before_acting() -> Non
 			"pending_device_clarification": {
 				"request_id": "previous",
 				"requested_action": "turn_on",
-				"clarification_question": "Bạn muốn mình điều khiển thiết bị nào?",
+				"clarification_question": "Bạn chọn mục nào trong nhà?",
 			}
 		},
 	)
@@ -1080,7 +1141,7 @@ async def test_multi_action_keeps_condition_scoped_per_action() -> None:
 	assert commands[0]["target"] == "mini_fan", commands
 	assert commands[0]["condition"]["status"] == "not_met", commands
 	assert commands[1]["target"] is None, commands
-	assert "đèn nào" in response.text.lower(), response.text
+	assert "phòng khách" in response.text.lower(), response.text
 	assert (
 		orchestrator.graph.get_thread_state("behavior-test")
 		.get("pending_device_clarification", {})
@@ -1132,7 +1193,7 @@ async def test_web_search_pipeline_uses_search_service() -> None:
 	web_service = FakeWebSearchService()
 	orchestrator = Orchestrator(
 		fake_llm,
-		{"web_research": WebResearchAgent(web_service)},
+		{"web_research": WebResearchService(web_service)},
 		FakeMQTT(),
 		memory_service=FakeMemoryService(),
 	)
@@ -1153,7 +1214,7 @@ async def test_weather_web_query_is_grounded_with_date_and_location() -> None:
 	web_service = FakeWebSearchService()
 	orchestrator = Orchestrator(
 		fake_llm,
-		{"web_research": WebResearchAgent(web_service)},
+		{"web_research": WebResearchService(web_service)},
 		FakeMQTT(),
 		memory_service=FakeMemoryService(),
 	)
@@ -1182,7 +1243,7 @@ def test_specialized_intent_classifier_supports_vietnamese_and_english() -> None
 async def test_web_research_uses_specialized_weather_service() -> None:
 	web_service = FakeWebSearchService()
 	weather = FakeWeatherService()
-	agent = WebResearchAgent(
+	agent = WebResearchService(
 		web_service,
 		intent_classifier=SearchIntentClassifier(
 			default_location="Ho Chi Minh City, Vietnam"
@@ -1205,7 +1266,7 @@ async def test_web_research_uses_specialized_weather_service() -> None:
 async def test_web_research_falls_back_when_specialized_unavailable() -> None:
 	web_service = FakeWebSearchService()
 	weather = FakeWeatherService(status="unavailable")
-	agent = WebResearchAgent(
+	agent = WebResearchService(
 		web_service,
 		intent_classifier=SearchIntentClassifier(
 			default_location="Ho Chi Minh City, Vietnam"
@@ -1221,7 +1282,7 @@ async def test_web_research_falls_back_when_specialized_unavailable() -> None:
 	payload = response.metadata["web_research"]
 	assert payload["search_intent"]["intent"] == "weather", payload
 	assert payload["specialized_error"]["reason"] == "missing_openweathermap_api_key"
-	assert payload["tool_results"][1]["name"] == "search_web", payload
+	assert payload["data_results"][1]["name"] == "search_web", payload
 	assert web_service.search_calls, web_service.search_calls
 
 
@@ -1379,7 +1440,8 @@ async def main() -> None:
 	await test_read_only_routing_and_rendering()
 	await test_identity_questions_do_not_use_router_direct_response()
 	await test_answer_previous_followup_uses_conversation_context()
-	await test_ambiguous_light_request_asks_for_clarification()
+	await test_room_named_light_request_maps_to_house_device()
+	await test_room_named_light_status_uses_device_status_not_light_sensor()
 	await test_simple_general_short_path_returns_direct_response()
 	await test_action_memory_question_is_not_device_control()
 	await test_conditional_device_request_checks_sensor_before_acting()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
 DEVICE_TARGETS = {
@@ -41,6 +42,79 @@ DEVICE_STATUS_KEYS = {
 	"ws2812": "ws2812",
 	"relay": "relay",
 	"mini_fan": "mini_fan",
+}
+
+# Physical placement catalog for user-facing device references.
+# This mirrors the House/FloorPlan placement so chat users can refer to
+# devices by room instead of internal target IDs.
+DEVICE_PLACEMENTS: dict[str, dict[str, Any]] = {
+	"main_led": {
+		"label": "Living room light",
+		"type": "light",
+		"room": "Living Room",
+		"aliases": (
+			"living room light",
+			"living room led",
+			"den phong khach",
+			"đèn phòng khách",
+			"phong khach light",
+		),
+	},
+	"neo_led": {
+		"label": "Bedroom light",
+		"type": "light",
+		"room": "Bedroom",
+		"aliases": (
+			"bedroom light",
+			"bedroom led",
+			"den phong ngu",
+			"đèn phòng ngủ",
+			"phong ngu light",
+		),
+	},
+	"ws2812": {
+		"label": "Toilet light",
+		"type": "light",
+		"room": "Toilet",
+		"aliases": (
+			"toilet light",
+			"bathroom light",
+			"restroom light",
+			"den nha ve sinh",
+			"đèn nhà vệ sinh",
+			"den toilet",
+			"đèn toilet",
+		),
+	},
+	"mini_fan": {
+		"label": "Living room fan",
+		"type": "fan",
+		"room": "Living Room",
+		"aliases": (
+			"living room fan",
+			"fan living room",
+			"quat phong khach",
+			"quạt phòng khách",
+		),
+	},
+	"relay": {
+		"label": "Living room TV",
+		"type": "relay",
+		"room": "Living Room",
+		"aliases": (
+			"living room tv",
+			"tv living room",
+			"tivi phong khach",
+			"tv phòng khách",
+			"ti vi phòng khách",
+		),
+	},
+}
+
+LIGHT_PLACEMENTS = {
+	target: placement
+	for target, placement in DEVICE_PLACEMENTS.items()
+	if placement.get("type") == "light"
 }
 
 # Scene catalog — mirrors the FE's handleActivateScene logic exactly.
@@ -299,6 +373,52 @@ def normalize_light_target(raw_target: Any) -> str | None:
 	return None
 
 
+def placement_prompt_lines() -> str:
+	lines = []
+	for target, placement in DEVICE_PLACEMENTS.items():
+		lines.append(
+			f"- {target}: {placement['label']} ({placement['room']}, {placement['type']})"
+		)
+	return "\n".join(lines)
+
+
+def user_target_options(kind: str | None = None) -> list[dict[str, str]]:
+	options = []
+	for target, placement in DEVICE_PLACEMENTS.items():
+		if kind is not None and placement.get("type") != kind:
+			continue
+		options.append(
+			{
+				"target": target,
+				"label": str(placement["label"]),
+				"room": str(placement["room"]),
+				"type": str(placement["type"]),
+			}
+		)
+	return options
+
+
+def resolve_placed_device_reference(text: str, *, kind: str | None = None) -> str | None:
+	normalized = _fold_text(text)
+	if not normalized:
+		return None
+	matches = []
+	for target, placement in DEVICE_PLACEMENTS.items():
+		if kind is not None and placement.get("type") != kind:
+			continue
+		candidates = [
+			str(placement.get("label") or ""),
+			str(placement.get("room") or ""),
+			*(str(alias) for alias in placement.get("aliases", ())),
+		]
+		for candidate in candidates:
+			folded_candidate = _fold_text(candidate)
+			if folded_candidate and folded_candidate in normalized:
+				matches.append(target)
+				break
+	return matches[0] if len(set(matches)) == 1 else None
+
+
 def normalize_device_value_property(raw_property: Any) -> str | None:
 	if not isinstance(raw_property, str):
 		return None
@@ -452,3 +572,12 @@ def _coerce_bool(value: Any) -> bool | None:
 		if normalized in {"0", "false", "no", "off", "clear"}:
 			return False
 	return None
+
+
+def _fold_text(value: str) -> str:
+	raw = (value or "").replace("đ", "d").replace("Đ", "D")
+	normalized = unicodedata.normalize("NFD", raw)
+	without_marks = "".join(
+		ch for ch in normalized if unicodedata.category(ch) != "Mn"
+	)
+	return " ".join(without_marks.lower().split())

@@ -1,8 +1,8 @@
 """
 Message types shared across the HERA pipeline.
 
-These dataclasses define the contract between adapters (Telegram, Voice, REST)
-and the agent layer.  Any new I/O adapter only needs to produce a
+These dataclasses define the contract between transport adapters and the
+agent layer. Any new I/O adapter only needs to produce a
 ``UserMessage`` and consume an ``AgentResponse``.
 """
 
@@ -16,7 +16,6 @@ from uuid import uuid4
 
 
 class MessageSource(StrEnum):
-	TELEGRAM = "telegram"
 	VOICE = "voice"
 	REST = "rest"
 

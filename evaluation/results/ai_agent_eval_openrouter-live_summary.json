@@ -1,0 +1,15 @@
+{
+  "provider": "openrouter-live",
+  "cases": 7,
+  "runs": 7,
+  "intent_accuracy_percent": 71.43,
+  "tool_call_success_percent": 100.0,
+  "http_success_percent": 100.0,
+  "latency_ms": {
+    "mean": 14940.308,
+    "median": 15515.885,
+    "p95": 23641.873,
+    "min": 6661.323,
+    "max": 23641.873
+  }
+}

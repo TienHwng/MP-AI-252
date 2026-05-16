@@ -13,6 +13,13 @@ Canonical actuator ontology (internal ID → human label):
 - all_lights: group → main_led, neo_led, ws2812
 - all_devices: group → main_led, neo_led, ws2812, relay, mini_fan
 
+Physical placement ontology:
+- main_led: Living room light / đèn phòng khách
+- neo_led: Bedroom light / đèn phòng ngủ
+- ws2812: Toilet light / đèn nhà vệ sinh
+- mini_fan: Living room fan / quạt phòng khách
+- relay: Living room TV / TV phòng khách
+
 Actions: turn_on, turn_off, status, set_device_value, set_sensor_value, activate_scene, unknown
 References: none, recent_changed_devices
 
@@ -25,7 +32,9 @@ Rules:
 - Interpret the user's meaning semantically in any language.
 - Return target=null when the user says a generic term like "light" or "đèn"
   without naming a specific device. HERA has multiple lights, so this is
-  ambiguous and requires clarification.
+  ambiguous and requires clarification. In that case set target_type="light".
+- If the user names a room/position, map it using the Physical placement
+  ontology. Example: "đèn phòng khách" / "living room light" => main_led.
 - Use all_lights / all_devices only for explicit "all" requests.
 - Set reference=recent_changed_devices when the user refers to what was just
   changed. But if they name a concrete target, the explicit target wins.
@@ -53,6 +62,7 @@ Output schema:
   "action": "turn_on" | "turn_off" | "status" | "set_device_value" | "set_sensor_value" | "activate_scene" | "unknown",
   "scene": "movie" | "sleep" | "away" | null,
   "target": "main_led" | "neo_led" | "ws2812" | "relay" | "mini_fan" | "all_lights" | "all_devices" | null,
+  "target_type": "light" | "fan" | "relay" | null,
   "property": "brightness" | "speed" | "color" | null,
   "value": number | boolean | string | object | null,
   "sensor": "temperature" | "humidity" | "light" | "gas" | "gas_detected" | null,
@@ -69,6 +79,7 @@ Output schema:
     {
       "action": "turn_on" | "turn_off" | "status" | "set_device_value" | "set_sensor_value" | "unknown",
       "target": "main_led" | "neo_led" | "ws2812" | "relay" | "mini_fan" | "all_lights" | "all_devices" | null,
+      "target_type": "light" | "fan" | "relay" | null,
       "property": "brightness" | "speed" | "color" | null,
       "value": number | boolean | string | object | null,
       "sensor": "temperature" | "humidity" | "light" | "gas" | "gas_detected" | null,
@@ -92,12 +103,17 @@ the user's clarification reply to one canonical target.
 Return ONLY one valid JSON object. Do not answer the user.
 
 Canonical targets:
-- main_led, neo_led, ws2812, relay, mini_fan
+- main_led: Living room light / đèn phòng khách
+- neo_led: Bedroom light / đèn phòng ngủ
+- ws2812: Toilet light / đèn nhà vệ sinh
+- mini_fan: Living room fan / quạt phòng khách
+- relay: Living room TV / TV phòng khách
 - all_lights, all_devices
 - null (if unclear)
 
 Rules:
 - Use semantic understanding, not keyword guessing.
+- If the reply names a room/position, map it using the placement list above.
 - Return null if the reply does not clearly identify one target.
 - Do not change the requested action; only resolve the target.
 
