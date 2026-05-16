@@ -32,6 +32,13 @@ const SCENE_LABELS = {
 };
 
 const RIGHT_SIDEBAR_TRANSITION_MS = 300;
+const DEVICE_TELEMETRY_KEYS = {
+  main_led: 'led',
+  neo_led: 'neo_led',
+  ws2812: 'ws2812',
+  relay: 'relay',
+  mini_fan: 'mini_fan',
+};
 
 const readEnvNumber = (keys, fallback) => {
   for (const key of keys) {
@@ -54,6 +61,33 @@ const ENVIRONMENT_THRESHOLDS = {
     min: readEnvNumber(['NORMAL_HUMI_MIN', 'NORMAL_HUMIDITY_MIN', 'VITE_NORMAL_HUMI_MIN', 'VITE_NORMAL_HUMIDITY_MIN'], 60),
     max: readEnvNumber(['NORMAL_HUMI_MAX', 'NORMAL_HUMIDITY_MAX', 'VITE_NORMAL_HUMI_MAX', 'VITE_NORMAL_HUMIDITY_MAX'], 80),
   },
+};
+
+const withOptimisticDeviceState = (telemetry, target, status) => {
+  if (!telemetry) return telemetry;
+
+  const deviceKey = DEVICE_TELEMETRY_KEYS[target] || target;
+  const devices = telemetry.devices || {};
+  const currentDevice = devices[deviceKey];
+  const nextDevice =
+    currentDevice && typeof currentDevice === 'object' && !Array.isArray(currentDevice)
+      ? { ...currentDevice, status }
+      : { status };
+  const nowIso = new Date().toISOString();
+
+  return {
+    ...telemetry,
+    devices: {
+      ...devices,
+      [deviceKey]: nextDevice,
+    },
+    updatedAt: nowIso,
+    last_seen_at: nowIso,
+    metadata: {
+      ...(telemetry.metadata || {}),
+      optimistic_ui: true,
+    },
+  };
 };
 
 const Home = ({ user, onLogout }) => {
@@ -138,6 +172,7 @@ const Home = ({ user, onLogout }) => {
     if (typeof currentStatus !== 'boolean') return;
     const nextValue = !currentStatus;
     setIsSubmittingControl(true);
+    setSensorData((current) => withOptimisticDeviceState(current, target, nextValue));
 
     try {
       await controlDeviceState(target, nextValue, {

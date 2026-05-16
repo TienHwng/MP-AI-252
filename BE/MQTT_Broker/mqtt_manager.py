@@ -44,6 +44,8 @@ from BE.HERA.config import (
 	MQTT_PORT,
 	MQTT_RPC_REQUEST_TOPIC_PREFIX,
 	MQTT_SUBSCRIBE_TOPIC,
+	TOPIC_ATTRIBUTES,
+	TOPIC_RPC_RESPONSE,
 )
 
 try:
@@ -343,6 +345,8 @@ class MQTTManager:
 						cls._first_present(
 							led.get("status"),
 							devices.get("led_status"),
+							payload.get("Led_Status"),
+							payload.get("led_status"),
 							payload.get("led_state"),
 						)
 					),
@@ -350,6 +354,7 @@ class MQTTManager:
 						cls._first_present(
 							led.get("brightness"),
 							devices.get("led_brightness"),
+							payload.get("Led_Brightness"),
 							payload.get("led_brightness"),
 						)
 					),
@@ -361,11 +366,18 @@ class MQTTManager:
 						cls._first_present(
 							neo_led.get("status"),
 							devices.get("neo_led_status"),
+							payload.get("NeoLed_Status"),
+							payload.get("neo_led_status"),
 							payload.get("neo_led_state"),
 						)
 					),
 					"brightness": cls._number_value(
-						cls._first_present(neo_led.get("brightness"), devices.get("strip_brightness"))
+						cls._first_present(
+							neo_led.get("brightness"),
+							devices.get("strip_brightness"),
+							payload.get("Strip_Brightness"),
+							payload.get("strip_brightness"),
+						)
 					),
 					"color": cls._first_present(neo_led.get("color"), devices.get("neo_led_color")),
 					"voltage": cls._number_value(neo_led.get("voltage")),
@@ -373,28 +385,57 @@ class MQTTManager:
 				"ws2812": {
 					**ws2812,
 					"status": cls._bool_value(
-						cls._first_present(ws2812.get("status"), devices.get("ws2812_status"))
+						cls._first_present(
+							ws2812.get("status"),
+							devices.get("ws2812_status"),
+							payload.get("WS2812_Status"),
+							payload.get("ws2812_status"),
+						)
 					),
 					"brightness": cls._number_value(
-						cls._first_present(ws2812.get("brightness"), devices.get("ws2812_brightness"))
+						cls._first_present(
+							ws2812.get("brightness"),
+							devices.get("ws2812_brightness"),
+							payload.get("WS2812_Brightness"),
+							payload.get("ws2812_brightness"),
+						)
 					),
-					"color": ws2812.get("color"),
+					"color": cls._first_present(
+						ws2812.get("color"),
+						payload.get("WS2812_Color"),
+						payload.get("ws2812_color"),
+					),
 					"voltage": cls._number_value(ws2812.get("voltage")),
 				},
 				"relay": {
 					**relay,
 					"status": cls._bool_value(
-						cls._first_present(relay.get("status"), devices.get("relay_status"))
+						cls._first_present(
+							relay.get("status"),
+							devices.get("relay_status"),
+							payload.get("Relay_Status"),
+							payload.get("relay_status"),
+						)
 					),
 					"voltage": cls._number_value(relay.get("voltage")),
 				},
 				"mini_fan": {
 					**mini_fan,
 					"status": cls._bool_value(
-						cls._first_present(mini_fan.get("status"), devices.get("mini_fan_status"))
+						cls._first_present(
+							mini_fan.get("status"),
+							devices.get("mini_fan_status"),
+							payload.get("Fan_Status"),
+							payload.get("fan_status"),
+						)
 					),
 					"speed": cls._number_value(
-						cls._first_present(mini_fan.get("speed"), devices.get("fan_speed"))
+						cls._first_present(
+							mini_fan.get("speed"),
+							devices.get("fan_speed"),
+							payload.get("Fan_Speed"),
+							payload.get("fan_speed"),
+						)
 					),
 					"voltage": cls._number_value(mini_fan.get("voltage")),
 				},
@@ -453,6 +494,85 @@ class MQTTManager:
 			},
 		}
 
+	@classmethod
+	def _merge_non_null(cls, base: object, update: object):
+		if update is None:
+			return copy.deepcopy(base)
+		if isinstance(base, dict) and isinstance(update, dict):
+			merged = copy.deepcopy(base)
+			for key, value in update.items():
+				if value is None:
+					continue
+				merged[key] = cls._merge_non_null(merged.get(key), value)
+			return merged
+		return copy.deepcopy(update)
+
+	def _record_latest_snapshot(
+		self,
+		*,
+		observed_at: datetime,
+		source_topic: str,
+		source: str,
+	) -> None:
+		self.latest_sensor_data["last_seen_at"] = observed_at.isoformat()
+		self.latest_sensor_data["source_topic"] = source_topic
+		self.latest_sensor_data["runtime"] = {
+			"mode": MODE,
+			"source": "mqtt",
+			"source_kind": "sim" if MODE == "sim" else "real",
+		}
+
+		if (
+			not self.persist_telemetry
+			or self.collection is None
+			or self.devices_collection is None
+		):
+			return
+
+		try:
+			current_user_id = None
+			try:
+				device_info = self.devices_collection.find_one(
+					{"device_id": "device_0001"}
+				)
+				if device_info:
+					current_user_id = device_info.get("current_user_id")
+			except Exception as e:
+				print(f"[ WARNING ] Could not fetch device owner: {e}")
+
+			doc = {
+				"recorded_at": observed_at,
+				"chart_recorded_at": floor_datetime_to_bucket(observed_at),
+				"metadata": {
+					"device_id": "device_0001",
+					"env_id": "env_0001",
+					"user_id": current_user_id,
+					"telemetry_bucket_seconds": TELEMETRY_BUCKET_SECONDS,
+					"source": source,
+					"mode": MODE,
+				},
+				**{
+					k: v
+					for k, v in self.latest_sensor_data.items()
+					if v is not None
+				},
+			}
+
+			self.collection.insert_one(doc)
+			self.telemetry_insert_count += 1
+			if TELEMETRY_DB_DEBUG or self.telemetry_insert_count == 1:
+				print(
+					"[ INFO ] [Database] Inserted telemetry "
+					f"#{self.telemetry_insert_count} "
+					f"user_id={current_user_id or 'unclaimed'}"
+				)
+		except Exception as e:
+			print(
+				f"[ WARNING ] MongoDB write failed ({e}). "
+				"MQTT will continue running, telemetry persistence is temporarily disabled."
+			)
+			self.persist_telemetry = False
+
 	@property
 	def sensor_state(self) -> dict:
 		"""Compatibility property - returns latest_sensor_data"""
@@ -473,7 +593,13 @@ class MQTTManager:
 
 	# --- Client callback functions ---
 	def on_connect(self, client, userdata, flags, rc):
-		client.subscribe(MQTT_SUBSCRIBE_TOPIC, qos=0)
+		subscriptions = {
+			MQTT_SUBSCRIBE_TOPIC,
+			TOPIC_ATTRIBUTES,
+			f"{TOPIC_RPC_RESPONSE.rstrip('/')}/#",
+		}
+		for topic in subscriptions:
+			client.subscribe(topic, qos=0)
 		# Upon connection, subscribe to all topics (#)
 		# print("[ OK ] Client Connected.")
 
@@ -492,65 +618,30 @@ class MQTTManager:
 			try:
 				parsed = json.loads(payload)
 				observed_at = datetime.now(UTC)
-				chart_recorded_at = floor_datetime_to_bucket(observed_at)
 				self.latest_sensor_data = self._normalize_sensor_payload(parsed)
-				self.latest_sensor_data["last_seen_at"] = observed_at.isoformat()
-				self.latest_sensor_data["source_topic"] = topic
-				self.latest_sensor_data["runtime"] = {
-					"mode": MODE,
-					"source": "mqtt",
-					"source_kind": "sim" if MODE == "sim" else "real",
-				}
+				self._record_latest_snapshot(
+					observed_at=observed_at,
+					source_topic=topic,
+					source="mqtt_manager",
+				)
 
-				if (
-					self.persist_telemetry
-					and self.collection is not None
-					and self.devices_collection is not None
-				):
-					try:
-						current_user_id = None
-						try:
-							device_info = self.devices_collection.find_one(
-								{"device_id": "device_0001"}
-							)
-							if device_info:
-								current_user_id = device_info.get("current_user_id")
-						except Exception as e:
-							print(f"[ WARNING ] Could not fetch device owner: {e}")
+			except Exception as e:
+				print("JSON parse error:", e)
 
-						doc = {
-							"recorded_at": observed_at,
-							"chart_recorded_at": chart_recorded_at,
-							"metadata": {
-								"device_id": "device_0001",
-								"env_id": "env_0001",
-								"user_id": current_user_id,
-								"telemetry_bucket_seconds": TELEMETRY_BUCKET_SECONDS,
-								"source": "mqtt_manager",
-								"mode": MODE,
-							},
-							**{
-								k: v
-								for k, v in self.latest_sensor_data.items()
-								if v is not None
-							},
-						}
-
-						self.collection.insert_one(doc)
-						self.telemetry_insert_count += 1
-						if TELEMETRY_DB_DEBUG or self.telemetry_insert_count == 1:
-							print(
-								"[ INFO ] [Database] Inserted telemetry "
-								f"#{self.telemetry_insert_count} "
-								f"user_id={current_user_id or 'unclaimed'}"
-							)
-					except Exception as e:
-						print(
-							f"[ WARNING ] MongoDB write failed ({e}). "
-							"MQTT will continue running, telemetry persistence is temporarily disabled."
-						)
-						self.persist_telemetry = False
-
+		elif "attributes" in topic:
+			try:
+				parsed = json.loads(payload)
+				observed_at = datetime.now(UTC)
+				normalized = self._normalize_sensor_payload(parsed)
+				self.latest_sensor_data = self._merge_non_null(
+					self.latest_sensor_data,
+					normalized,
+				)
+				self._record_latest_snapshot(
+					observed_at=observed_at,
+					source_topic=topic,
+					source="mqtt_attributes",
+				)
 			except Exception as e:
 				print("JSON parse error:", e)
 

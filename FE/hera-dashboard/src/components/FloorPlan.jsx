@@ -22,6 +22,13 @@ import {
 
 const TELEMETRY_STALE_MS = 30_000;
 const COMMAND_CONFIRM_TIMEOUT_MS = 8_000;
+const DEVICE_TELEMETRY_KEYS = {
+  main_led: 'led',
+  neo_led: 'neo_led',
+  ws2812: 'ws2812',
+  relay: 'relay',
+  mini_fan: 'mini_fan',
+};
 
 const markerDefinitions = [
   {
@@ -142,6 +149,33 @@ const buildMarkers = (telemetry) =>
       status: getDeviceStatus(telemetry, definition.target),
     };
   });
+
+const withOptimisticDeviceState = (telemetry, target, status) => {
+  if (!telemetry) return telemetry;
+
+  const deviceKey = DEVICE_TELEMETRY_KEYS[target] || target;
+  const devices = telemetry.devices || {};
+  const currentDevice = devices[deviceKey];
+  const nextDevice =
+    currentDevice && typeof currentDevice === 'object' && !Array.isArray(currentDevice)
+      ? { ...currentDevice, status }
+      : { status };
+  const nowIso = new Date().toISOString();
+
+  return {
+    ...telemetry,
+    devices: {
+      ...devices,
+      [deviceKey]: nextDevice,
+    },
+    updatedAt: nowIso,
+    last_seen_at: nowIso,
+    metadata: {
+      ...(telemetry.metadata || {}),
+      optimistic_ui: true,
+    },
+  };
+};
 
 const getMarkerLabel = (marker) => {
   if (marker.type === 'sensor') {
@@ -313,6 +347,7 @@ function DevicePanel({
 
   const Icon = marker.Icon;
   const isLit = isDimmable && sliderValue > 0;
+  const isActive = isDimmable ? (isLit || isOn) : isOn;
 
   return (
     <div style={styles.panel}>
@@ -326,7 +361,7 @@ function DevicePanel({
               width: 40,
               height: 40,
               borderRadius: 8,
-              background: isLit ? 'rgba(255, 193, 7, 0.15)' : 'rgba(203, 213, 225, 0.3)',
+              background: isActive ? 'rgba(58, 125, 68, 0.16)' : 'rgba(203, 213, 225, 0.3)',
               transition: 'all 200ms ease',
             }}
           >
@@ -334,9 +369,9 @@ function DevicePanel({
               size={22}
               strokeWidth={2}
               style={{
-                color: isLit ? '#ffc107' : '#64748b',
+                color: isActive ? '#3A7D44' : '#64748b',
                 transition: 'all 200ms ease',
-                filter: isLit ? 'drop-shadow(0 0 8px rgba(255, 193, 7, 0.6))' : 'none',
+                filter: isActive ? 'drop-shadow(0 0 8px rgba(58, 125, 68, 0.45))' : 'none',
               }}
             />
           </div>
@@ -356,43 +391,48 @@ function DevicePanel({
         {telemetry.updatedAt ? new Date(telemetry.updatedAt).toLocaleTimeString() : 'unknown'}
       </p>
 
-      {isControllable && isDimmable ? (
-        <div style={styles.sliderContainer}>
-          <div style={styles.sliderHeader}>
-            <span style={styles.sliderValue}>{sliderValue}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={sliderValue}
-            disabled={controlDisabled}
-            onChange={handleSliderChange}
-            onMouseUp={handleSliderRelease}
-            onTouchEnd={handleSliderRelease}
-            style={{
-              ...styles.slider,
-              background: `linear-gradient(to right, #3A7D44 ${sliderValue}%, #cbd5e1 ${sliderValue}%)`,
-            }}
-          />
-        </div>
-      ) : isControllable ? (
-        <button
-          type="button"
-          style={{
-            ...styles.primaryButton,
-            opacity: controlDisabled || pendingThisMarker ? 0.55 : 1,
-          }}
-          onClick={() => onToggle(marker)}
-          disabled={controlDisabled || pendingThisMarker}
-        >
-          {pendingThisMarker ? (
-            <RefreshCw size={16} style={styles.spinIcon} />
-          ) : (
-            null
+      {isControllable ? (
+        <>
+          {isDimmable && (
+            <div style={styles.sliderContainer}>
+              <div style={styles.sliderHeader}>
+                <span style={styles.sliderValue}>{sliderValue}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={sliderValue}
+                disabled={controlDisabled}
+                onChange={handleSliderChange}
+                onMouseUp={handleSliderRelease}
+                onTouchEnd={handleSliderRelease}
+                style={{
+                  ...styles.slider,
+                  background: `linear-gradient(to right, #3A7D44 ${sliderValue}%, #cbd5e1 ${sliderValue}%)`,
+                }}
+              />
+            </div>
           )}
-          Set {marker.status === true ? 'OFF' : 'ON'}
-        </button>
+
+          <button
+            type="button"
+            style={{
+              ...styles.primaryButton,
+              opacity: controlDisabled || pendingThisMarker ? 0.55 : 1,
+              marginTop: isDimmable ? 10 : styles.primaryButton.marginTop,
+            }}
+            onClick={() => onToggle(marker)}
+            disabled={controlDisabled || pendingThisMarker}
+          >
+            {pendingThisMarker ? (
+              <RefreshCw size={16} style={styles.spinIcon} />
+            ) : (
+              null
+            )}
+            Set {isOn ? 'OFF' : 'ON'}
+          </button>
+        </>
       ) : null}
     </div>
   );
@@ -412,6 +452,10 @@ export default function FloorPlan() {
   const setPending = useCallback((value) => {
     pendingCommandRef.current = value;
     setPendingCommand(value);
+  }, []);
+
+  const setOptimisticDeviceState = useCallback((target, status) => {
+    setTelemetry((current) => withOptimisticDeviceState(current, target, status));
   }, []);
 
   const handleTelemetry = useCallback((next) => {
@@ -520,6 +564,7 @@ export default function FloorPlan() {
       startedAt: Date.now(),
     };
     setPending(pending);
+    setOptimisticDeviceState(marker.target, expectedState);
     setNotice(`Sending MQTT command for ${marker.name}...`);
     setNoticeTone('info');
 
@@ -554,6 +599,11 @@ export default function FloorPlan() {
       startedAt: Date.now(),
     };
     setPending(pending);
+    setOptimisticDeviceState(marker.target, expectedState);
+    setDeviceIntensity((current) => ({
+      ...current,
+      [marker.id]: expectedState ? (current[marker.id] || 50) : 0,
+    }));
     setNotice(`Toggling ${marker.name}...`);
     setNoticeTone('info');
 
