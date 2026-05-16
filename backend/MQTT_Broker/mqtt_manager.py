@@ -655,49 +655,49 @@ if __name__ == "__main__":
 					menu_option(2, "Turn OFF living room light", Color.YELLOW),
 				),
 				menu_row(
-					menu_option(19, "Set LED Brightness", Color.YELLOW),
+					menu_option(3, "Set LED Brightness", Color.YELLOW),
 				),
 				menu_row(
-					menu_option(3, "Turn ON NeoPixel light", Color.YELLOW),
-					menu_option(4, "Turn OFF NeoPixel light", Color.YELLOW),
+					menu_option(4, "Turn ON NeoPixel light", Color.YELLOW),
+					menu_option(5, "Turn OFF NeoPixel light", Color.YELLOW),
 				),
 				menu_row(
-					menu_option(5, "Set NeoPixel Brightness", Color.YELLOW),
+					menu_option(6, "Set NeoPixel Brightness", Color.YELLOW),
 				),
 				menu_row(
-					menu_option(6, "Turn ON WS2812 light", Color.YELLOW),
-					menu_option(7, "Turn OFF WS2812 light", Color.YELLOW),
+					menu_option(7, "Turn ON WS2812 light", Color.YELLOW),
+					menu_option(8, "Turn OFF WS2812 light", Color.YELLOW),
 				),
 				menu_row(
-					menu_option(8, "Set WS2812 Brightness", Color.YELLOW),
-					menu_option(9, "Set WS2812 Color", Color.YELLOW),
+					menu_option(9, "Set WS2812 Brightness", Color.YELLOW),
+					menu_option(10, "Set WS2812 Color", Color.YELLOW),
 				),
 				menu_border("╟", "─", "╢"),
 
 				# === Section 2: Device controls ===
 				menu_section("DEVICE CONTROLS", Color.BLUE),
 				menu_row(
-					menu_option(10, "Turn ON mini fan", Color.BLUE),
-					menu_option(11, "Turn OFF mini fan", Color.BLUE),
+					menu_option(11, "Turn ON mini fan", Color.BLUE),
+					menu_option(12, "Turn OFF mini fan", Color.BLUE),
 				),
 				menu_row(
-					menu_option(12, f"Set Fan Speed (0-{2**10 - 1})", Color.BLUE),
+					menu_option(13, f"Set Fan Speed (0-{2**10 - 1})", Color.BLUE),
 				),
 				menu_row(
-					menu_option(13, "Turn ON relay", Color.BLUE),
-					menu_option(14, "Turn OFF relay", Color.BLUE),
+					menu_option(14, "Turn ON relay", Color.BLUE),
+					menu_option(15, "Turn OFF relay", Color.BLUE),
 				),
 				menu_border("╟", "─", "╢"),
 
 				# === Section 3: System monitoring ===
 				menu_section("SYSTEM MONITORING", Color.MAGENTA),
 				menu_row(
-					menu_option(15, "View sensors status", Color.MAGENTA),
-					menu_option(16, "View devices status", Color.MAGENTA),
+					menu_option(16, "View sensors status", Color.MAGENTA),
+					menu_option(17, "View devices status", Color.MAGENTA),
 				),
 				menu_row(
-					menu_option(17, "View network status", Color.MAGENTA),
-					menu_option(18, "View full telemetry data", Color.MAGENTA),
+					menu_option(18, "View network status", Color.MAGENTA),
+					menu_option(19, "View full telemetry data", Color.MAGENTA),
 				),
 				menu_border("╟", "─", "╢"),
 
@@ -755,7 +755,7 @@ if __name__ == "__main__":
 				)
 				mqtt_system.send_rpc_command("setValueLedBlinky", False)
 
-			elif choice == "19":
+			elif choice == "3":
 				print(
 					Color.GREEN
 					+ "\n>>> HERA: Setting LED brightness..."
@@ -773,7 +773,7 @@ if __name__ == "__main__":
 				except ValueError:
 					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
 
-			elif choice == "3":
+			elif choice == "4":
 				print(
 					Color.GREEN
 					+ "\n>>> HERA: Turning on the NeoPixel light..."
@@ -781,7 +781,7 @@ if __name__ == "__main__":
 				)
 				mqtt_system.send_rpc_command("setValueNeoLed", True)
 
-			elif choice == "4":
+			elif choice == "5":
 				print(
 					Color.YELLOW
 					+ "\n>>> HERA: Turning off the NeoPixel light..."
@@ -789,7 +789,7 @@ if __name__ == "__main__":
 				)
 				mqtt_system.send_rpc_command("setValueNeoLed", False)
 
-			elif choice == "5":
+			elif choice == "6":
 				print(
 					Color.GREEN
 					+ "\n>>> HERA: Setting NeoPixel brightness..."
@@ -807,15 +807,15 @@ if __name__ == "__main__":
 				except ValueError:
 					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
 
-			elif choice == "6":
+			elif choice == "7":
 				print(Color.GREEN + "\n>>> HERA: Turning on WS2812 light..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueWS2812", True)
 
-			elif choice == "7":
+			elif choice == "8":
 				print(Color.YELLOW + "\n>>> HERA: Turning off WS2812 light..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueWS2812", False)
 
-			elif choice == "8":
+			elif choice == "9":
 				print(Color.GREEN + "\n>>> HERA: Setting WS2812 brightness..." + Color.RESET)
 				try:
 					val = int(
@@ -829,7 +829,7 @@ if __name__ == "__main__":
 				except ValueError:
 					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
 
-			elif choice == "9":
+			elif choice == "10":
 				print(Color.YELLOW + "\n>>> HERA: Setting WS2812 color..." + Color.RESET)
 				try:
 					color_input = input(
@@ -844,15 +844,15 @@ if __name__ == "__main__":
 				except Exception as e:
 					print(Color.RED + f"Invalid color input: {e}" + Color.RESET)
 
-			elif choice == "10":
+			elif choice == "11":
 				print(Color.GREEN + "\n>>> HERA: Turning on mini fan..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueMiniFan", True)
 
-			elif choice == "11":
+			elif choice == "12":
 				print(Color.YELLOW + "\n>>> HERA: Turning off mini fan..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueMiniFan", False)
 
-			elif choice == "12":
+			elif choice == "13":
 				print(Color.BLUE + "\n>>> HERA: Setting fan speed..." + Color.RESET)
 				try:
 					val = int(
@@ -866,15 +866,15 @@ if __name__ == "__main__":
 				except ValueError:
 					print(Color.RED + "Invalid input. Please enter a number." + Color.RESET)
 
-			elif choice == "13":
+			elif choice == "14":
 				print(Color.GREEN + "\n>>> HERA: Turning on relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", True)
 
-			elif choice == "14":
+			elif choice == "15":
 				print(Color.YELLOW + "\n>>> HERA: Turning off relay..." + Color.RESET)
 				mqtt_system.send_rpc_command("setValueRelay", False)
 
-			elif choice == "15":
+			elif choice == "16":
 				print(Color.CYAN + "\n[ FETCHING SENSOR DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -897,7 +897,7 @@ if __name__ == "__main__":
 						+ Color.RESET
 					)
 
-			elif choice == "16":
+			elif choice == "17":
 				print(Color.CYAN + "\n[ FETCHING DEVICE STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -934,7 +934,7 @@ if __name__ == "__main__":
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
-			elif choice == "17":
+			elif choice == "18":
 				print(Color.CYAN + "\n[ FETCHING NETWORK STATUS ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
@@ -965,7 +965,7 @@ if __name__ == "__main__":
 				else:
 					print(Color.RED + "  - Waiting for telemetry..." + Color.RESET)
 
-			elif choice == "18":
+			elif choice == "19":
 				print(Color.CYAN + "\n[ FULL TELEMETRY DATA ]" + Color.RESET)
 				if (
 					hasattr(mqtt_system, "latest_sensor_data")
