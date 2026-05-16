@@ -69,7 +69,7 @@ In the H.E.R.A system, the AIoT Kit serves as the main source of peripheral modu
 
 
 \newpage
-\subsection{Hardware Device Inventory}
+\subsection{Hardware Device Inventory - Proof of Concept - PoC}
 
 \begin{table}[htbp]
   \centering
@@ -146,138 +146,151 @@ The software environment and main libraries used in this project (which are alre
   \item FreeRTOS as the real-time operating system.
   \item C/C++ as the main programming language for embedded tasks.
   \item Libraries for the DHT20 sensor, NeoPixel (Adafruit NeoPixel or equivalent), and I\textsuperscript{2}C LCD.
-  \item (python model ghi vô đây).
-  \item (Docker ghi vô đây)
-  \item Python 3.8.5 environment for data collection, cleaning, and model training.
+  \item Python  3.12.5 environment for data collection, cleaning, and model training.
   \item Telegram Bot API accessed from Python scripts.
 \end{itemize}
 
 
 \newpage
-\subsection{Firmware Directory Structure}
+\subsection{Project Source Code Organization}
 
-\subsubsection{Firmware Directory Tree}
+\subsubsection{Main Project Directory Tree}
 
 \begin{lstlisting}[style=projecttree]
-MP-AI-252/                       # Root directory of the project workspace
-|-- firmware/                    # Embedded firmware for the ESP32-based device
-|   |-- boards/                  # Custom board definitions for PlatformIO
-|   |-- data/                    # Filesystem data stored on the board
-|   |-- include/                 # Header files for shared modules and drivers
-|   |-- lib/                     # Local and third-party embedded libraries
-|   |   |-- DHT20/               # Driver library for the DHT20 sensor
-|   |   |-- LCD/                 # Driver library for the LCD display
-|   |   `-- PubSubClient/        # MQTT client library for device communication
-|   |-- src/                     # Main implementation source files
-|   `-- test/                    # Test folder for firmware modules
+MP-AI-252/                       # Root workspace of the H.E.R.A project
+|-- firmware/                    # ESP32/Yolo UNO firmware
+|   |-- boards/                  # Custom PlatformIO board definition
+|   |-- data/                    # Web/configuration assets stored on the board
+|   |-- include/                 # Firmware headers and shared declarations
+|   |-- lib/                     # Local embedded libraries
+|   |   |-- DHT20/               # Temperature and humidity sensor driver
+|   |   |-- LCD/                 # I2C LCD driver
+|   |   `-- PubSubClient/        # MQTT client library
+|   |-- src/                     # FreeRTOS tasks and device-control logic
+|   `-- test/                    # Firmware test and validation workspace
 |
-|-- BE/                          # Backend services and AI processing modules
-|   |-- Database/                # Database scripts and backend server setup
-|   |-- HERA/                    # Core multi-agent AI assistant backend
-|   |   |-- adapters/            # Adapters for external communication channels
-|   |   |-- agents/              # AI agents for different system tasks
-|   |   |-- core/                # Shared core logic and system services
-|   |   `-- ...
-|   |-- MQTT_Broker/             # MQTT broker, simulator, and test utilities
-|   |-- Telegram Bot/            # Utilities for Telegram-based messaging
-|   `-- omniverse/               # Omniverse assets and related resources
+|-- BE/                          # Backend, AI runtime, and data services
+|   |-- Database/                # Express API and MongoDB integration
+|   |-- HERA/                    # Multi-agent AI assistant runtime
+|   |   |-- adapters/            # Telegram and voice input adapters
+|   |   |-- agents/              # Specialist AI agents
+|   |   |-- core/                # LLM, MQTT, event, and tool services
+|   |   |-- domain/              # Smart-device catalog and execution logic
+|   |   |-- memory/              # Session/profile memory backed by MongoDB
+|   |   |-- orchestration/       # Agent routing graph and runtime state
+|   |   |-- runtime/             # Tool execution, policy, and verification
+|   |   |-- services/            # Higher-level assistant services
+|   |   |-- telemetry/           # Telemetry schema and storage layer
+|   |   `-- web_search/          # Web, news, and weather search utilities
+|   |-- MQTT_Broker/             # Local MQTT broker manager and simulator
+|   `-- Telegram Bot/            # Telegram helper utilities
 |
-|-- FE/                          # Frontend applications and user interfaces
-|   |-- board-host/              # Lightweight web UI for board interaction
-|   `-- hera-dashboard/          # Main dashboard for monitoring and control
-|       |-- public/              # Static assets served directly by the app
-|       `-- src/                 # Main source code of the frontend
-|           |-- assets/          # Images, icons, and static resources
-|           |-- components/      # Reusable UI components
-|           |-- pages/           # Page-level views of the application
-|           `-- services/        # API calls and service logic
+|-- FE/                          # Frontend workspace
+|   `-- hera-dashboard/          # React/Vite monitoring dashboard
+|       |-- public/              # Static assets served by the web app
+|       `-- src/                 # Dashboard source code
+|           |-- assets/          # UI images and static resources
+|           |-- components/      # Reusable React components
+|           |-- pages/           # Dashboard pages
+|           `-- services/        # API and MQTT client code
 |
 |-- docs/                        # Documentation and LaTeX report sources
-|   |-- content/                 # LaTeX section files for report chapters
-|   |-- image/                   # Figures, plots, and visual assets
-|   `-- report/                  # Report project and compiled outputs
+|   |-- content/                 # Report chapter sources
+|   |-- image/                   # Figures and visual assets
+|   |-- style/                   # LaTeX style and bibliography files
+|   `-- upgrade/                 # Technical notes and improvement plans
 |
-|-- .gitignore                   # Git ignore rules for generated and temporary files
-|-- platformio.ini               # PlatformIO project configuration file
-|-- README.md                    # Main overview and usage guide of the project
-`-- run_full_pipeline.sh         # Shell script to run the full system pipeline
+|-- evaluation/                  # Evaluation scripts and measured results
+|-- setup.ps1                    # Development-environment setup helper
+|-- requirements.txt             # Python dependency list used by setup.ps1
+`-- README.md                    # Project overview and run instructions
 \end{lstlisting}
 
 
 \subsubsection{Description of Main Directories and Files}
 
-The project is organized into several main folders and configuration files in the root working directory:
+The project repository is divided into several main source-code areas. Minor repository metadata and editor-related configuration files are omitted here so that the description focuses on the system components that directly implement H.E.R.A.
 
 \begin{itemize}
-  \item \texttt{\textbf{platformio.ini}}: PlatformIO project configuration file, including board settings, framework options, and embedded library dependencies for firmware development.
-  \item \texttt{README.md}: the main project overview, describing the purpose of the system, its modules, and usage instructions.
-  \item \texttt{run\_full\_pipeline.sh}: shell script for executing the full system pipeline, typically used to automate multi-stage tasks across project modules.
-  \item \texttt{tomtat.md}: summary notes or a concise project overview used for quick reference.
-  \item \texttt{.gitignore}: Git configuration file specifying generated, temporary, and environment-specific files to be excluded from version control.
+  \item \textbf{firmware/}: embedded firmware source tree for the ESP32-based Yolo UNO device. This module implements low-level sensor acquisition, actuator control, local device state management, Wi-Fi/MQTT communication, and the board configuration interface.
+    \begin{itemize}
+      \item \textbf{boards/}: custom board definition for the Yolo UNO target used by the firmware build system.
+      \item \textbf{data/}: static files for the board-side web/configuration portal, including HTML, CSS, and JavaScript assets.
+      \item \textbf{include/}: C/C++ headers for shared firmware modules. Important headers include \texttt{global.h}, \texttt{main.h}, \texttt{mqtt\_handle.h}, \texttt{analog\_manager.h}, \texttt{digital\_manager.h}, \texttt{board\_config\_server.h}, \texttt{button\_handler.h}, \texttt{LCD\_display.h}, \texttt{led\_display.h}, \texttt{neo\_display.h}, \texttt{sensor\_dht20.h}, and \texttt{mq2\_reader.h}.
+      \item \textbf{lib/}: embedded libraries used by the firmware:
+        \begin{itemize}
+          \item \textbf{DHT20/}: driver implementation for the DHT20 temperature and humidity sensor.
+          \item \textbf{LCD/}: I\textsuperscript{2}C LCD driver used by the display module.
+          \item \textbf{PubSubClient/}: MQTT client library used for broker communication.
+        \end{itemize}
+      \item \textbf{src/}: main firmware implementation. The entry point \texttt{main.cpp} initializes semaphores, serial communication, I\textsuperscript{2}C, Wi-Fi configuration, and FreeRTOS tasks for buttons, digital/analog I/O, MQTT, DHT20 sensing, LCD output, LED output, and NeoPixel display.
+      \item \textbf{test/}: workspace for firmware experiments and validation.
+    \end{itemize}
+
+  \item \textbf{BE/}: backend and AI service layer. This area contains the multi-agent assistant, MQTT infrastructure, database/API service, and Telegram utilities.
+    \begin{itemize}
+      \item \textbf{Database/}: Node.js/Express API connected to MongoDB. It serves authentication, telemetry queries, latest sensor values, device/activity data, and model-setting endpoints for the dashboard.
+      \item \textbf{HERA/}: Python multi-agent assistant runtime. The main entry points are \texttt{main.py}, which builds the assistant runtime, and \texttt{api\_server.py}, which exposes dashboard-facing HTTP endpoints while keeping device control on the same MQTT/tool-execution path as the assistant.
+        \begin{itemize}
+          \item \textbf{adapters/}: adapters for external channels such as Telegram and voice input.
+          \item \textbf{agents/}: specialist agents for orchestration, device control, and web research.
+          \item \textbf{core/}: common services such as MQTT service, LLM service, event bus, message model, runtime settings, and tool registry.
+          \item \textbf{domain/}: device catalog and device-execution layer that maps assistant or dashboard commands to controllable smart-home targets.
+          \item \textbf{memory/}: session, profile, retrieval, and action-summary memory backed by MongoDB when available.
+          \item \textbf{orchestration/}: graph and state definitions used to route user requests through the assistant runtime.
+          \item \textbf{runtime/}: capability registry, policy engine, tool runner, read-tool runner, and verification service.
+          \item \textbf{services/}, \textbf{telemetry/}, and \textbf{web\_search/}: higher-level services for anomaly analysis, telemetry reporting, response composition, telemetry storage, and external information retrieval.
+        \end{itemize}
+      \item \textbf{MQTT\_Broker/}: local MQTT broker manager and simulator scripts. These utilities support both simulated operation and real-device operation by publishing telemetry, handling RPC topics, and optionally persisting telemetry to MongoDB.
+      \item \textbf{Telegram Bot/}: helper scripts for sending Telegram messages and testing notification flows.
+    \end{itemize}
+
+  \item \textbf{FE/}: frontend workspace for the user-facing dashboard.
+    \begin{itemize}
+      \item \textbf{hera-dashboard/}: React/Vite dashboard for login, monitoring, analytics, floor-plan/device interaction, and model/runtime settings.
+        \begin{itemize}
+          \item \textbf{public/}: static assets served directly by the web application, including icons and floor-plan resources.
+          \item \textbf{src/}: application source code, organized into:
+            \begin{itemize}
+              \item \textbf{assets/}: static UI images and resources.
+              \item \textbf{components/}: reusable layout, dashboard, floor-plan, and chat components.
+              \item \textbf{pages/}: page-level views such as login, home, analytics, device/floor-plan, and settings screens.
+              \item \textbf{services/}: API and MQTT client code used for frontend--backend communication.
+            \end{itemize}
+          \item \texttt{App.jsx}, \texttt{main.jsx}, and \texttt{index.css} define the application shell, rendering entry point, and main styling layer.
+        \end{itemize}
+    \end{itemize}
+
+  \item \textbf{docs/}: documentation and report-writing resources.
+    \begin{itemize}
+      \item \textbf{content/}: LaTeX source files for the report chapters.
+      \item \textbf{image/}: figures, UI screenshots, diagrams, and assets used in the report.
+      \item \textbf{style/}: LaTeX style files, bibliography, cover, member list, and shared formatting definitions.
+      \item \textbf{upgrade/}: technical design notes, audits, and implementation plans created during system improvement.
+    \end{itemize}
+
+  \item \textbf{evaluation/}: evaluation scripts and result files used to measure AI-agent behavior, database performance, firmware MQTT/RPC latency, firmware heap usage, and dashboard floor-plan performance.
+
+  \item \texttt{\textbf{setup.ps1}}: Windows PowerShell setup wizard created by the development team to make the local development environment easier to prepare. The script checks for Git and Python 3.12, creates or reuses the project \texttt{.venv}, checks and installs Python packages from \texttt{requirements.txt}, installs \texttt{pre-commit}, sets up the Git hook when available, and supports dot-sourcing so the virtual environment can remain activated in the current terminal session.
 \end{itemize}
 
-The main directories are:
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{image/figure/setup_1.png}
+  \caption{Initial checks performed by the \texttt{setup.ps1} development-environment setup script.}
+  \label{fig:setup_ps1_initial_checks}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{image/figure/setup_2.png}
+  \caption{Dependency installation and environment preparation summary produced by \texttt{setup.ps1}.}
+  \label{fig:setup_ps1_dependency_summary}
+\end{figure}
 
 \begin{itemize}
-  \item \textbf{firmware/}: embedded firmware source tree for the ESP32-based device. This module contains the low-level logic for device control, sensor acquisition, communication, and local peripherals.
-    \begin{itemize}
-      \item \textbf{boards/}: custom PlatformIO board definition files, including the configuration for the \texttt{yolo\_uno} board.
-      \item \textbf{data/}: board filesystem data used for deployment to the embedded device when required.
-      \item \textbf{include/}: C/C++ header files for shared interfaces, hardware abstractions, and manager modules. The folder is further divided into:
-        \begin{itemize}
-          \item \textbf{devices/}: abstractions and controllers for actuators and output devices, such as binary-state devices, WS2812 LEDs, and actuator management.
-          \item \textbf{sensors/}: abstractions and interfaces for supported sensors, including DHT20- and MQ2-related sensor modules.
-          \item Shared headers such as \texttt{global.h}, \texttt{main.h}, \texttt{mqtt\_handle.h}, \texttt{analog\_manager.h}, \texttt{digital\_manager.h}, \texttt{LCD\_display.h}, \texttt{ir\_receiver.h}, \texttt{led\_display.h}, and \texttt{neo\_display.h} provide declarations for common system components.
-        \end{itemize}
-      \item \textbf{lib/}: local reusable libraries and third-party embedded dependencies, including:
-        \begin{itemize}
-          \item \textbf{DHT20/}: driver implementation for the DHT20 sensor.
-          \item \textbf{LCD/}: LCD driver library for display handling.
-          \item \textbf{PubSubClient/}: MQTT client library used for network-based device communication.
-        \end{itemize}
-      \item \textbf{src/}: main firmware implementation files, including source code for display handling, analog/digital management, global resource initialization, MQTT communication, infrared input, NeoPixel output, and sensor acquisition.
-      \item \textbf{test/}: auxiliary test directory for firmware-related experiments and validation.
-    \end{itemize}
 
-  \item \textbf{BE/}: backend and AI service layer of the system. This module groups the data, communication, orchestration, and intelligent assistant components used by the overall platform.
-    \begin{itemize}
-      \item \textbf{Database/}: database initialization and backend server scripts, including package configuration and server-side setup files such as \texttt{init\_dbs.js} and \texttt{server.js}.
-      \item \textbf{HERA/}: the core multi-agent AI assistant backend. This folder is structured into several submodules:
-        \begin{itemize}
-          \item \textbf{adapters/}: communication adapters for external interaction channels, such as Telegram and voice-based interfaces.
-          \item \textbf{agents/}: specialized agents responsible for different tasks, including anomaly detection, chat handling, device interaction, orchestration, and sensor-related reasoning.
-          \item \textbf{core/}: shared backend services and infrastructure, including the event bus, language policy, LLM service, message representation, MQTT service, and tool registry.
-          \item Additional files such as \texttt{main.py}, \texttt{hera\_bot.py}, \texttt{config.py}, and \texttt{omniverse\_connector.py} define the main application entry points and runtime configuration of the HERA backend.
-        \end{itemize}
-      \item \textbf{MQTT\_Broker/}: lightweight MQTT infrastructure and utilities, including broker logic, publisher/subscriber examples, simulator scripts, and test programs for validating message-based communication.
-      \item \textbf{Telegram Bot/}: helper scripts for Telegram-based messaging and notification features.
-      \item \textbf{omniverse/}: assets and scene resources related to Omniverse integration.
-    \end{itemize}
-
-  \item \textbf{FE/}: frontend applications and user-facing interfaces. This module contains the web-based components used for local control and system monitoring.
-    \begin{itemize}
-      \item \textbf{board-host/}: lightweight local web interface consisting of static files such as \texttt{index.html}, \texttt{script.js}, and \texttt{styles.css}, used for direct interaction with the board.
-      \item \textbf{hera-dashboard/}: the main frontend dashboard for the HERA system, developed as a modern web application.
-        \begin{itemize}
-          \item \textbf{public/}: static public assets such as icons and favicon resources.
-          \item \textbf{src/}: main source code of the dashboard frontend, further divided into:
-            \begin{itemize}
-              \item \textbf{assets/}: images, icons, and other static UI resources.
-              \item \textbf{components/}: reusable user interface components.
-              \item \textbf{pages/}: page-level views and route targets.
-              \item \textbf{services/}: service-layer code for API calls and frontend--backend communication.
-            \end{itemize}
-          \item Files such as \texttt{App.jsx}, \texttt{main.jsx}, \texttt{index.css}, \texttt{package.json}, \texttt{tailwind.config.js}, and \texttt{vite.config.js} define the application structure, styling system, package dependencies, and build configuration.
-        \end{itemize}
-    \end{itemize}
-
-  \item \textbf{docs/}: documentation and report-writing resources for the project.
-    \begin{itemize}
-      \item \textbf{content/}: LaTeX section files for individual report chapters, such as introduction, requirement analysis, device description, multi-AI architecture, TinyML/personalization, and database sections.
-      \item \textbf{image/}: figures, plots, diagrams, and other graphical assets used in the report.
-      \item \textbf{report/}: a standalone report workspace containing content files, style files, images, build artifacts, and compiled output such as the final PDF.
-      \item Additional root files such as \texttt{main.tex}, \texttt{main.pdf}, \texttt{HOW\_TO\_COMPILE.md}, and \texttt{BUILD\_AND\_RENDER.bat} support report authoring and compilation.
-    \end{itemize}
+  \item \texttt{README.md}: main project overview and run guide, including the major runtime entry points and service endpoints.
 \end{itemize}
 
 

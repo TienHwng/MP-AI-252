@@ -128,40 +128,7 @@ The current H.E.R.A orchestrator is implemented as a LangGraph state machine rat
 
 \begin{figure}[H]
     \centering
-    \resizebox{0.82\textwidth}{!}{%
-    \begin{tikzpicture}[
-            node/.style={draw=black!45, rounded corners=2pt, minimum width=3.35cm,
-                    minimum height=0.74cm, align=center, font=\scriptsize},
-            wide/.style={draw=black!45, rounded corners=2pt, minimum width=5.20cm,
-                    minimum height=0.74cm, align=center, font=\scriptsize},
-            arrow/.style={->, >=stealth, line width=0.78pt, draw=black!65},
-            every node/.style={font=\scriptsize}
-        ]
-        \node[node, fill=blue!10] (intake) at (0,0) {intake\\normalize request};
-        \node[node, fill=orange!15] (route) at (0,-1.05) {route\\classify intent};
-        \node[wide, fill=yellow!12] (state) at (0,-2.10)
-        {state gate\\pending confirmation + memory scope};
-        \node[node, fill=green!12] (general) at (-2.85,-3.45)
-        {general/read-only\\answer path};
-        \node[node, fill=green!12] (specialist) at (2.85,-3.45)
-        {specialist\\domain planner};
-        \node[node, fill=gray!12] (ground) at (2.85,-4.70) {ground tool plan};
-        \node[node, fill=gray!12] (execute) at (2.85,-5.95) {execute tools};
-        \node[node, fill=gray!12] (eval) at (2.85,-7.20) {evaluate results};
-        \node[wide, fill=purple!10] (compose) at (0,-8.45) {compose response\\with verified state};
-        \node[node, fill=blue!8] (final) at (0,-9.60) {finalize};
-
-        \draw[arrow] (intake) -- (route);
-        \draw[arrow] (route) -- (state);
-        \draw[arrow] (state.south) -- ++(0,-0.30) -| (general.north);
-        \draw[arrow] (state.south) -- ++(0,-0.30) -| (specialist.north);
-        \draw[arrow] (general.south) -- ++(0,-4.20) -| (compose.west);
-        \draw[arrow] (specialist) -- (ground);
-        \draw[arrow] (ground) -- (execute);
-        \draw[arrow] (execute) -- (eval);
-        \draw[arrow] (eval.south) -- ++(0,-0.36) -| (compose.east);
-        \draw[arrow] (compose) -- (final);
-    \end{tikzpicture}}
+    \includegraphics[width=0.82\textwidth]{image/langgraph.png}
     \caption{LangGraph execution topology of the H.E.R.A orchestrator.}
     \label{fig:hera-langgraph-flow}
 \end{figure}

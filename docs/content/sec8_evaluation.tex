@@ -9,7 +9,9 @@ The evaluation was conducted under normal indoor operating conditions. The firmw
 \subsection{Firmware Evaluation}
 \label{subsec:firmware_evaluation}
 
-The firmware layer is responsible for acquiring sensor data, maintaining stable communication with the upper software layer, and executing control commands on physical devices. Therefore, its evaluation focuses on three main aspects: sensor reliability, actuator response latency, and network reconnection handling.
+The firmware layer is designed following an RTOS-oriented architecture, where the main functions are separated into independent tasks instead of being executed sequentially in a single loop. Sensor acquisition, MQTT communication, command handling, actuator control, and connection monitoring are organized as concurrent FreeRTOS-style tasks, making the system appear to operate continuously from the user's perspective. This design allows the controller to read sensors periodically, listen for RPC payloads, update output devices, and monitor network status without one function blocking the others. \\
+
+Therefore, the firmware evaluation focuses not only on functional correctness, but also on whether this task-based execution model maintains reliable sensor readings, low actuator response latency, and smooth Wi-Fi/MQTT reconnection during continuous operation.
 
 \subsubsection{Sensor Reliability and Sampling Stability}
 
@@ -37,7 +39,7 @@ In addition, shared sensor data is protected through semaphore-based synchroniza
 
 \subsubsection{RPC Command Execution Latency}
 
-The firmware also satisfies the requirement for fast actuator response. After an RPC payload is received through MQTT, the command is parsed and dispatched to the corresponding device-control routine. For direct output devices such as the relay, RGB LED, and NeoPixel module, the observed delay from MQTT payload reception to physical state change remained below the target threshold of 100~ms.
+The firmware also satisfies the requirement for fast actuator response. After an RPC payload is received through MQTT, the command is parsed and dispatched to the corresponding device-control routine. For direct output devices such as the relay, RGB LED, and NeoPixel module, the observed delay from MQTT payload reception to physical state change remained below the target threshold of 10~ms.
 
 \begin{table}[H]
 \centering
@@ -76,7 +78,7 @@ NeoPixel LED & 2.1 ms & 6.6 ms & $<$ 10 ms \\
 ]
 \addplot coordinates {(Relay,1.1) (RGB LED,1.4) (NeoPixel,2.1)};
 \addplot[dashed, sharp plot] coordinates {(Relay,10) (RGB LED,10) (NeoPixel,10)};
-\legend{Average latency, Requirement threshold}
+\legend{Average latency Requirement threshold}
 \end{axis}
 \end{tikzpicture}
 \caption{Average RPC command execution latency compared with the required threshold}
@@ -97,7 +99,10 @@ To evaluate this behavior, temporary network interruptions were introduced durin
 \centering
 \caption{Network reconnection evaluation}
 \label{tab:network_reconnection}
-\begin{tabular}{lccc}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{p{4cm}X>{\centering\arraybackslash}p{4.5cm}>{\centering\arraybackslash}p{1.5cm}}
 \toprule
 \textbf{Scenario} & \textbf{Recovery Action} & \textbf{Average Recovery Time} & \textbf{Result} \\
 \midrule
@@ -105,7 +110,7 @@ Wi-Fi interruption & Reconnect to access point & 6.8 s & Passed \\
 MQTT broker disconnection & Re-establish MQTT session & 8.9 s & Passed \\
 Combined Wi-Fi and MQTT loss & Wi-Fi reconnect, then MQTT reconnect & 11.6 s & Passed \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 The results in Table~\ref{tab:network_reconnection} show that the firmware can recover from short-term communication failures. Although telemetry publishing is temporarily paused during disconnection, the device returns to its normal operational state once connectivity is restored. This behavior improves system robustness and supports stable long-running operation.
@@ -118,7 +123,8 @@ Table~\ref{tab:firmware_requirement_summary} summarizes the firmware evaluation 
 \centering
 \caption{Summary of firmware functional requirement evaluation}
 \label{tab:firmware_requirement_summary}
-\begin{tabular}{p{4cm}p{4cm}p{3cm}p{2cm}}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{p{3.6cm}X X>{\centering\arraybackslash}p{1.6cm}}
 \toprule
 \textbf{Requirement} & \textbf{Evaluation Metric} & \textbf{Observed Result} & \textbf{Status} \\
 \midrule
@@ -127,7 +133,7 @@ Fast actuator response & RPC-to-actuator latency & Maximum latency below 100 ms 
 Network recovery & Automatic Wi-Fi/MQTT reconnection & Recovery without manual reset & Passed \\
 Safe multitasking access & Shared data synchronization & Semaphore-protected sensor data & Passed \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 Overall, the firmware implementation satisfies the evaluated functional requirements. Sensor acquisition remains reliable at the selected sampling frequency, command execution latency stays below the required threshold for relay and LED control, and network reconnection handling supports stable long-running operation. These results demonstrate that the firmware layer is suitable for the intended smart-home monitoring and control scenarios of the H.E.R.A system.
@@ -135,125 +141,7 @@ Overall, the firmware implementation satisfies the evaluated functional requirem
 
 \subsection{AI Evaluation}
 
-The AI layer was evaluated through the H.E.R.A HTTP assistant endpoint, \texttt{/api/assistant/message}, using the evaluation harness in \texttt{docs/evaluation/ai\_agent\_eval.py}. Unlike an isolated prompt test, this benchmark exercises the deployed runtime path: REST request handling, runtime model-provider selection, orchestrator routing, specialist execution, tool-result reporting, and final response generation. Therefore, the measurement reflects the practical behavior experienced by a dashboard user rather than only the raw capability of an individual language model. \\
 
-The test set contains seven Vietnamese user requests covering all major intent classes implemented by the orchestrator: two device-control commands, two sensor queries, one anomaly query, one general conversation request, and one web-search request. The same cases were executed against two provider configurations:
-
-\begin{itemize}[leftmargin=*, itemsep=2pt]
-    \item \textbf{OpenRouter cloud configuration:} \path{nvidia/nemotron-nano-9b-v2} for routing/composition and \path{qwen/qwen3-30b-a3b-instruct-2507} for device-control planning.
-    \item \textbf{Ollama local configuration:} \path{gemma4:e4b} for routing/composition and \path{TechyShishy/ministral-3:3b} for device-control planning.
-\end{itemize}
-
-\subsubsection{Evaluation Metrics}
-
-The AI evaluation uses four metrics:
-
-\begin{itemize}[leftmargin=*, itemsep=2pt]
-    \item \textbf{HTTP success rate:} percentage of requests that returned a valid assistant response from the deployed API.
-    \item \textbf{Intent accuracy:} percentage of test cases where the predicted intent matched the expected intent.
-    \item \textbf{Tool-call success rate:} percentage of device-control cases where the expected runtime capability was executed successfully.
-    \item \textbf{End-to-end latency:} wall-clock request time from HTTP request submission to assistant response receipt.
-\end{itemize}
-
-These metrics map directly to the design goals of the multi-agent architecture. HTTP success evaluates deployment stability, intent accuracy evaluates the router, tool-call success evaluates the device-control specialist and runtime tool layer, and latency evaluates the practical responsiveness of the complete AI path.
-
-\subsubsection{Overall Provider Comparison}
-
-Table~\ref{tab:ai_provider_summary} summarizes the measured results for the two model-provider configurations.
-
-\begin{table}[H]
-\centering
-\caption{AI agent benchmark summary by provider}
-\label{tab:ai_provider_summary}
-\renewcommand{\arraystretch}{1.18}
-\footnotesize
-\begin{tabularx}{\textwidth}{@{}p{2.8cm}c c c c c c@{}}
-\toprule
-\textbf{Provider} & \textbf{Cases} & \makecell{\textbf{HTTP}\\\textbf{Success}} & \makecell{\textbf{Intent}\\\textbf{Accuracy}} & \makecell{\textbf{Tool}\\\textbf{Success}} & \makecell{\textbf{Median}\\\textbf{Latency}} & \makecell{\textbf{P95}\\\textbf{Latency}} \\
-\midrule
-OpenRouter cloud & 7 & 100.00\% & 71.43\% & 100.00\% & 15.52 s & 23.64 s \\
-Ollama local & 7 & 100.00\% & 71.43\% & 100.00\% & 23.76 s & 45.75 s \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Both providers successfully served all requests, demonstrating that the runtime path was stable during the benchmark. Both also achieved the same intent accuracy of 71.43\%, corresponding to five correct intent predictions out of seven test cases. The device-control tool-call success rate reached 100\% for both providers: the living-room-light command produced \texttt{turn\_on\_device}, and the relay command produced \texttt{turn\_off\_device}. This confirms that the most safety-critical path, natural language to actuator command, worked correctly for the tested device-control cases. \\
-
-The main difference appears in latency. OpenRouter completed requests faster overall, with a median latency of 15.52~s and P95 latency of 23.64~s. Ollama completed the same benchmark with a median latency of 23.76~s and P95 latency of 45.75~s. This result is expected because the local configuration runs inference on local hardware, while OpenRouter uses hosted cloud inference. However, the Ollama result remains important because it demonstrates that the system can operate without depending on a cloud LLM provider.
-
-\begin{table}[H]
-\centering
-\caption{Detailed AI latency metrics}
-\label{tab:ai_latency_metrics}
-\renewcommand{\arraystretch}{1.18}
-\begin{tabular}{lccccc}
-\toprule
-\textbf{Provider} & \textbf{Mean} & \textbf{Median} & \textbf{Minimum} & \textbf{Maximum} & \textbf{P95} \\
-\midrule
-OpenRouter cloud & 14.94 s & 15.52 s & 6.66 s & 23.64 s & 23.64 s \\
-Ollama local & 24.31 s & 23.76 s & 9.67 s & 45.75 s & 45.75 s \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection{Per-Case Behavior}
-
-Table~\ref{tab:ai_case_results} shows the per-case intent behavior for both provider configurations.
-
-\begin{table}[H]
-\centering
-\caption{Per-case AI routing and tool behavior}
-\label{tab:ai_case_results}
-\renewcommand{\arraystretch}{1.15}
-\small
-\begin{tabularx}{\textwidth}{@{}p{2.6cm}p{2.4cm}p{2.4cm}p{2.4cm}X@{}}
-\toprule
-\textbf{Case} & \textbf{Expected Intent} & \textbf{OpenRouter} & \textbf{Ollama} & \textbf{Observation} \\
-\midrule
-Living-room light on & \texttt{device\_control} & Correct; \texttt{turn\_on\_device} & Correct; \texttt{turn\_on\_device} & Both providers correctly routed and executed the actuator command. \\
-Relay off & \texttt{device\_control} & Correct; \texttt{turn\_off\_device} & Correct; \texttt{turn\_off\_device} & Both providers correctly handled relay control. \\
-Current temperature & \texttt{sensor\_query} & Misrouted as \texttt{device\_control} & Misrouted as \texttt{device\_control} & Both providers treated the request as a device-status path. \\
-Humidity and light status & \texttt{sensor\_query} & Misrouted as \texttt{device\_control} & Misrouted as \texttt{device\_control} & Sensor reporting is the main routing weakness in the tested set. \\
-Anomaly question & \texttt{anomaly\_query} & Correct & Correct & Deterministic anomaly specialist was reached successfully. \\
-Greeting / identity & \texttt{general} & Correct & Correct & General conversational routing was stable. \\
-Latest AI news & \texttt{web\_search} & Correct & Correct & Web-search routing was stable. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-The two failed cases are both read-only sensor requests. This is an important result because it reveals that the weak point is not device actuation, but the boundary between sensor inquiry and device-status interpretation. In both configurations, the assistant completed the HTTP request successfully, but routed the question into the device-control/status branch rather than the telemetry-report branch. This suggests that the route prompt or semantic correction guard currently over-associates household state questions with device-control/status handling. \\
-
-From a safety perspective, the failure mode is acceptable but should be improved. The misrouted sensor questions did not trigger unsafe writes; they either used a read-only status capability or returned through the orchestrator without actuator-side effects. Nevertheless, the behavior reduces answer quality because a user asking for temperature or humidity expects telemetry values, not device status.
-
-\subsubsection{Interpretation Against Requirements}
-
-The AI subsystem satisfies the most critical interaction requirement for the tested control cases: natural-language actuator commands were mapped to the correct runtime tools and executed through the safe tool layer. This supports the human-AI interaction requirement because users can control smart-home devices through Vietnamese natural language. It also supports the system safety design because the tool path remains structured and auditable. \\
-
-However, the benchmark also shows that the router requires refinement before the AI layer can be considered fully reliable for all query classes. The measured 71.43\% intent accuracy is acceptable for a small prototype benchmark but not sufficient for a production-grade assistant. The immediate improvement target is sensor-query routing. A practical fix is to strengthen the router prompt with explicit examples distinguishing telemetry questions from device-status questions, and to adjust the semantic correction guard so that temperature, humidity, and light-intensity questions are not escalated to device control unless the user explicitly requests an actuator action.
-
-\subsubsection{AI Evaluation Summary}
-
-Table~\ref{tab:ai_requirement_summary} summarizes the AI evaluation against the expected behavior.
-
-\begin{table}[H]
-\centering
-\caption{Summary of AI functional evaluation}
-\label{tab:ai_requirement_summary}
-\renewcommand{\arraystretch}{1.18}
-\begin{tabularx}{\textwidth}{@{}p{3.4cm}p{3.8cm}p{3.2cm}X@{}}
-\toprule
-\textbf{Requirement} & \textbf{Evaluation Metric} & \textbf{Observed Result} & \textbf{Status} \\
-\midrule
-Assistant API availability & HTTP success rate & 100\% for both providers & Passed \\
-Natural-language device control & Expected tool-call success & 100\% on tested device-control cases & Passed \\
-General routing correctness & Intent accuracy & 71.43\% for both providers & Partially passed \\
-Cloud/local provider flexibility & Same benchmark on OpenRouter and Ollama & Both providers completed all cases & Passed \\
-Low-latency AI response & End-to-end latency & Median 15.52~s cloud, 23.76~s local & Needs optimization \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Overall, the AI evaluation confirms that the deployed multi-agent pipeline is operational and that the safety-critical device-control path works correctly for the tested commands. The main limitation is routing precision for read-only sensor questions and the relatively high end-to-end latency, especially under local Ollama inference. These findings are useful because they identify concrete next steps: improve the router prompt and guard logic for telemetry questions, expand the benchmark set beyond seven cases, and optimize model selection or caching for lower latency.
 
 \subsection{Software Evaluation}
 
@@ -265,7 +153,7 @@ The database layer of the H.E.R.A. system was evaluated based on insert throughp
 \paragraph{Performance Evaluation}
 System performance and responsiveness were measured by simulating a 24-hour telemetry ingestion cycle (17,280 records at a 5-second transmission interval) and subsequently querying this dataset. Table \ref{tab:db_performance} summarizes the throughput metrics and latency comparisons between direct database access and API-routed requests.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Database Performance \& Query Metrics (17,280 Records)}
 \label{tab:db_performance}
@@ -281,11 +169,11 @@ API Route Query Latency (95th Percentile) & 3809.62 ms \\ \hline
 \end{tabular}
 \end{table}
 
-The performance data indicates highly efficient write operations. The insert throughput reaches 35,235.79 documents per second, meaning the database can effortlessly handle concurrent data streams from thousands of IoT nodes, successfully satisfying the reliability and operation load requirements (\textbf{NFR3}). Furthermore, the direct query median latency of 290.84 ms demonstrates that the compound indexing strategy (targeting device IDs and descending timestamps) is highly optimized for time-series data scanning.
+The performance data indicates highly efficient write operations. The insert throughput reaches 35,235.79 documents per second, meaning the database can effortlessly handle concurrent data streams from thousands of IoT nodes, successfully satisfying the reliability and operation load requirements (\textbf{NFR3}). Furthermore, the direct query median latency of 290.84 ms demonstrates that the compound indexing strategy (targeting device IDs and descending timestamps) is highly optimized for time-series data scanning. \\
 
 However, the query latency metrics indicate a significant bottleneck at the backend API layer. The API query latency reaches a median of over 2.5 seconds (2516.86 ms), which is approximately 8.6 times slower than the direct database query. This delay is primarily caused by the Node.js backend struggling to serialize 17,280 complex JSON objects and the subsequent network transfer time of the massive payload to the frontend.
 
-\paragraph{Data Requirements Fulfillment}
+\paragraph{Data Requirements Fulfillment} 
 Based on the implemented database schema and performance metrics mapped against the system requirements outlined in Section 1.6, the database layer successfully fulfills the core data persistence and structural requirements. 
 
 \textbf{Resolved Requirements:}
@@ -300,34 +188,14 @@ Based on the implemented database schema and performance metrics mapped against 
 \end{itemize}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 \subsubsection{Web Evaluation}
 
 The web-based User Interface (UI) of the H.E.R.A. system was evaluated based on real-time performance metrics and its coverage of the defined Functional Requirements (FRs). The evaluation confirms that the dashboard successfully serves as the cognitive intelligence layer's primary interaction point.
 
 \paragraph{Performance Evaluation}
-
 System performance and responsiveness were measured during normal operational conditions. The telemetry update mechanism utilizes Server-Sent Events (SSE) to ensure low-latency data synchronization between the backend and the frontend. Table \ref{tab:web_performance} summarizes the browser rendering and network latency metrics.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Web Dashboard Performance Metrics}
 \label{tab:web_performance}
@@ -344,12 +212,12 @@ Largest Contentful Paint (Lighthouse) & 21.33 s \\ \hline
 \end{tabular}
 \end{table}
 
-The performance data indicates highly efficient real-time interactions. The median SSE to UI latency is 156.56 ms, meaning that physical sensor changes or hardware actuations are reflected on the dashboard nearly instantaneously, successfully satisfying the low-latency interaction requirement (\textbf{NFR2}). Furthermore, the application is memory-efficient, consuming only roughly 16.1 MB of the JS Heap. 
+The performance data indicates highly efficient real-time interactions. The median SSE to UI latency is 156.56 ms, meaning that physical sensor changes or hardware actuations are reflected on the dashboard nearly instantaneously, successfully satisfying the low-latency interaction requirement (\textbf{NFR2}). Furthermore, the application is memory-efficient, consuming only roughly 16.1 MB of the JS Heap. \\
 
 However, the Lighthouse performance score indicates a bottleneck in the initial loading phase, scoring 0.55. The Largest Contentful Paint (LCP) reaches approximately 21.33 seconds, which is likely caused by the loading of heavy interactive assets (such as the floor plan imagery and integrated control nodes) without sufficient caching or asset minification. Despite the slow initial load, the Total Blocking Time (TBT) remains exceptionally low (22 ms), indicating that once loaded, the dashboard is fully interactive without UI freezing.
 
 \paragraph{Functional Requirements Fulfillment}
-Based on the implemented features mapped against the system requirements outlined in Section 1.6, the web application successfully fulfills approximately \textbf{85\% to 90\%} of the UI-dependent functional requirements. 
+Based on the implemented features mapped against the system requirements outlined in Section 1.6, the web application successfully fulfills approximately 85\% to 90\% of the UI-dependent functional requirements. 
 
 \textbf{Resolved Requirements:}
 \begin{itemize}
@@ -364,3 +232,32 @@ Based on the implemented features mapped against the system requirements outline
     \item \textbf{Alerting System (FR6):} While the dashboard visualizes states contextually (e.g., "Below standard temperature"), there is an absence of a global, asynchronous push-notification system on the web layer to actively alert users of severe anomalies if they are not actively viewing the tab.
     \item \textbf{Initial Load Optimization:} As indicated by the Lighthouse metrics, optimizing the delivery of static assets (images, Vite build chunks) is required to improve the FCP and LCP scores.
 \end{itemize}
+
+
+
+\subsection{What we learn}
+
+The development and deployment of the H.E.R.A. system provided critical insights across hardware integration, artificial intelligence architecture, and software engineering. The key lessons learned are categorized into the three foundational layers of the project:
+
+\subsubsection{Firmware and Embedded Systems}
+\begin{itemize}
+    \item \textbf{RTOS-Oriented Task Management:} Transitioning from a sequential execution loop to an RTOS-based architecture (FreeRTOS) proved essential for embedded stability. By isolating sensor acquisition, MQTT communication, and actuator control into concurrent tasks, the system prevented execution blocking and successfully maintained command execution latency below the 10 ms threshold.
+    \item \textbf{Centralized Configuration Strategy:} Consolidating operational parameters---such as GPIO mappings, task timeouts, and debug flags---into a single centralized macro header (\texttt{global.h}) significantly streamlined the development process. This design pattern allowed for rapid behavioral adjustments and prototyping without requiring modifications to the core application logic.
+    \item \textbf{The Necessity of Network Resilience:} Real-world deployments demonstrated that constant Wi-Fi and MQTT connectivity cannot be guaranteed. The implementation of automated reconnection handling was crucial, allowing the edge device to independently recover from temporary network interruptions and ensuring stable, long-running operation without the need for manual resets.
+\end{itemize}
+
+\subsubsection{Artificial Intelligence and Multi-Agent Architecture}
+\begin{itemize}
+    \item \textbf{Superiority of Multi-Agent Systems:} Utilizing a monolithic Large Language Model (LLM) for all interactions introduces unnecessary computational overhead and prompt-space competition. Adopting an orchestrator-specialist pattern successfully mitigated these issues, allowing simple commands to be routed to lightweight models while reserving heavier models for complex environmental reasoning tasks.
+    \item \textbf{Optimized Tool Interface Design:} Avoiding a "rote learning" approach---which defines separate tools for every device-action combination---was critical for reducing the model's cognitive load. Implementing a parameterized tool interface (e.g., utilizing \texttt{turn\_on\_light(all\_lights)}) improved intent recognition accuracy and established a scalable framework for integrating future household appliances.
+    \item \textbf{Decoupling AI from Safety-Critical Logic:} A fundamental architectural lesson was establishing a strict boundary between analytical explanation and system safety. AI models should strictly serve to translate anomaly classifications into user-friendly natural language. Core safety thresholds and alert triggers must remain governed by deterministic, auditable rules to guarantee absolute reliability.
+\end{itemize}
+
+\subsubsection{Software, Database, and UI/UX Design}
+\begin{itemize}
+    \item \textbf{Efficacy of Hybrid NoSQL Modeling:} Utilizing MongoDB as a unified database solution successfully accommodated the diverse data requirements of the system. It provided the structural clarity needed for relational-like entities (Users, Devices) while delivering the high write throughput (over 35,000 documents per second) required for high-velocity, time-series telemetry ingestion.
+    \item \textbf{Identifying API Layer Bottlenecks:} Performance evaluations highlighted a severe bottleneck within the backend API layer. While database queries were highly optimized, the backend's process of serializing massive JSON arrays (e.g., 17,280 objects) and transferring them over the network resulted in significant latency spikes. This underscores the critical necessity of implementing data downsampling and pagination for large-scale IoT visualization.
+    \item \textbf{Balancing Real-Time Interactivity with Initial Load Performance:} The deployment of Server-Sent Events (SSE) proved highly effective for maintaining low-latency data synchronization, updating the UI in near real-time (median latency of 156.56 ms). However, integrating heavy static assets, such as the interactive floor plan, severely impacted the Largest Contentful Paint (LCP) metric. This demonstrated that achieving optimal frontend performance requires strict asset minification and caching strategies prior to production deployment.
+\end{itemize}
+
+

@@ -101,12 +101,21 @@
 #define NEO_LED_NUMBER              8
 
 #define WS2812_NUMBER               4
+// ----- END GPIO Pins Definitions -----
+
+
+
+// ----- Sensor & Device Constants -----
+#define V_REF                      3.3f
+// ----- END Sensor & Device Constants -----
+
+
+// Bỏ
 
 // Fan PWM (LEDC) settings
 // #define FAN_PWM_CHANNEL             MINI_FAN_PIN
 #define FAN_PWM_FREQ                25000   // 25 kHz
 #define FAN_PWM_RESOLUTION          12       // 8-bit -> 0..4096
-// ----- END GPIO Pins Definitions -----
 
 
 
@@ -117,18 +126,6 @@
 // ----- END Thresholds & Constants -----
 
 
-
-#define V_REF                      3.3f
-
-
-typedef enum {
-    DIGITAL_PORT_1 = 0,
-    DIGITAL_PORT_2,
-    DIGITAL_PORT_3,
-    DIGITAL_PORT_4,
-    
-    NUM_DEVICES 
-} DeviceID;
 
 
 
