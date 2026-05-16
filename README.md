@@ -3,10 +3,10 @@
 HERA is an AIoT project that combines a multi-agent assistant, MQTT-based device control, telemetry persistence, and a realtime monitoring dashboard.
 
 This repository focuses on the practical local-development stack:
-- Multi-agent runtime: Python (`BE/HERA`)
-- MQTT infrastructure + simulator: Python (`BE/MQTT_Broker`)
-- Data/API layer: Node.js + MongoDB (`BE/Database`)
-- Dashboard: React + Vite (`FE/hera-dashboard`)
+- Multi-agent runtime: Python (`backend/HERA`)
+- MQTT infrastructure + simulator: Python (`backend/MQTT_Broker`)
+- Data/API layer: Node.js + MongoDB (`backend/Database`)
+- Dashboard: React + Vite (`frontend/hera-dashboard`)
 - Device firmware: ESP32 + PlatformIO (`firmware`)
 
 ## Core Capabilities
@@ -29,11 +29,11 @@ End-to-end flow:
 6. Database API serves telemetry/settings to the dashboard.
 
 Main runtime entry points:
-- HERA runtime: `BE/HERA/main.py`
-- HERA dashboard API: `BE/HERA/api_server.py`
-- MQTT manager: `BE/MQTT_Broker/mqtt_manager.py`
-- MQTT simulator: `BE/MQTT_Broker/mqtt_simulator.py`
-- API server: `BE/Database/server.js`
+- HERA runtime: `backend/HERA/main.py`
+- HERA dashboard API: `backend/HERA/api_server.py`
+- MQTT manager: `backend/MQTT_Broker/mqtt_manager.py`
+- MQTT simulator: `backend/MQTT_Broker/mqtt_simulator.py`
+- API server: `backend/Database/server.js`
 
 ## MQTT Topics
 
@@ -46,17 +46,15 @@ Main runtime entry points:
 
 ```text
 MP-AI-252/
-|- BE/
+|- backend/
 |  |- HERA/               # Multi-agent runtime (Telegram adapter, agents, tools)
 |  |- MQTT_Broker/        # Local broker manager and simulator scripts
 |  |- Database/           # Express API + MongoDB integration
 |  |- Telegram Bot/       # Utility scripts
-|- FE/
+|- frontend/
 |  |- hera-dashboard/     # Main React dashboard
-|  |- board-host/         # Additional frontend assets
 |- firmware/              # PlatformIO firmware for ESP32 board
 |- docs/                  # Thesis and technical documents
-|- infra/                 # Compose/scripts for infra support
 |- setup.ps1              # Windows setup bootstrap script
 |- requirements.txt
 | README.md
@@ -91,10 +89,10 @@ To keep `.venv` activated in the current shell:
 ### 2. Frontend and API dependencies
 
 ```powershell
-cd BE\Database
+cd backend\Database
 npm install
 
-cd ..\..\FE\hera-dashboard
+cd ..\..\frontend\hera-dashboard
 npm install
 ```
 
@@ -132,42 +130,42 @@ Activate Python env first in Python terminals:
 Terminal 1 - MQTT manager:
 
 ```powershell
-cd BE\MQTT_Broker
+cd backend\MQTT_Broker
 python mqtt_manager.py
 ```
 
 Terminal 2 - MQTT simulator (simulation mode):
 
 ```powershell
-cd BE\MQTT_Broker
+cd backend\MQTT_Broker
 python mqtt_simulator.py
 ```
 
 Terminal 3 - Database API:
 
 ```powershell
-cd BE\Database
+cd backend\Database
 node server.js
 ```
 
 Terminal 4 - HERA runtime:
 
 ```powershell
-cd BE\HERA
+cd backend\HERA
 python main.py
 ```
 
 Terminal 5 - HERA dashboard API:
 
 ```powershell
-cd BE\HERA
+cd backend\HERA
 python api_server.py
 ```
 
 Terminal 6 - Dashboard:
 
 ```powershell
-cd FE\hera-dashboard
+cd frontend\hera-dashboard
 npm run dev
 ```
 

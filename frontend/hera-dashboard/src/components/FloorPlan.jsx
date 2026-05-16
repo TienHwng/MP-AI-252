@@ -484,7 +484,7 @@ export default function FloorPlan() {
       } catch (error) {
         if (!cancelled) {
           setRuntimeError(
-            `${error.message || 'HERA dashboard API is unavailable'} Start BE\\HERA\\api_server.py for MQTT controls and assistant commands.`,
+            `${error.message || 'HERA dashboard API is unavailable'} Start backend\\HERA\\api_server.py for MQTT controls and assistant commands.`,
           );
         }
       }

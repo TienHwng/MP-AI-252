@@ -1,4 +1,4 @@
-// Benchmark MongoDB insert throughput and the 24h chart query used by FE Analytics.
+// Benchmark MongoDB insert throughput and the 24h chart query used by frontend Analytics.
 //
 // Example:
 //   node docs/evaluation/db_benchmark.mjs --count 17280 --api http://localhost:3001
@@ -132,4 +132,3 @@ const summary = {
 await fs.writeFile(path.join(outDir, 'db_benchmark.json'), JSON.stringify(summary, null, 2));
 console.log(JSON.stringify(summary, null, 2));
 await client.close();
-

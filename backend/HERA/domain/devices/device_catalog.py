@@ -117,7 +117,7 @@ LIGHT_PLACEMENTS = {
 	if placement.get("type") == "light"
 }
 
-# Scene catalog — mirrors the FE's handleActivateScene logic exactly.
+# Scene catalog — mirrors the frontend's handleActivateScene logic exactly.
 # Each scene is a list of step dicts:
 #   {"type": "state",  "target": <device_target>, "state": <bool>}
 #   {"type": "value",  "target": <device_target>, "property": <str>, "value": <any>}

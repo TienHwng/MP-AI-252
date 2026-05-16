@@ -194,7 +194,7 @@ void startHttpServer() {
 		request->send(
 			200,
 			"text/plain",
-			"H.E.R.A board config server is running. Upload FE/board-host files to LittleFS."
+			"H.E.R.A board config server is running. Upload firmware/data files to LittleFS."
 		);
 	});
 

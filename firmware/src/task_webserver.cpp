@@ -224,7 +224,7 @@ void connectWSV() {
 		server.onNotFound([](AsyncWebServerRequest *request) {
 			request->send(
 				200, "text/plain",
-				"H.E.R.A board config server is running. Upload FE/board-host files to LittleFS.");
+				"H.E.R.A board config server is running. Upload frontend/data files to LittleFS.");
 		});
 
 		handlersRegistered = true;

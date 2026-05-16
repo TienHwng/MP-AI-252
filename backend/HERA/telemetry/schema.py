@@ -1,6 +1,6 @@
 """Nested telemetry schema helpers.
 
-Canonical runtime payload follows BE/MQTT_Broker/mqtt_simulator.py:
+Canonical runtime payload follows backend/MQTT_Broker/mqtt_simulator.py:
 sensor values live under sensors.dht20 / sensors.light / sensors.gas and
 device states live under devices.<device>.status.
 """

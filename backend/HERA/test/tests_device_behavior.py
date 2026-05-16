@@ -1,6 +1,6 @@
 """Behavior regression harness for HERA device-control semantics.
 
-Run from BE/HERA:
+Run from backend/HERA:
     python tests_device_behavior.py
 """
 

@@ -169,7 +169,7 @@ MP-AI-252/                       # Root workspace of the H.E.R.A project
 |   |-- src/                     # FreeRTOS tasks and device-control logic
 |   `-- test/                    # Firmware test and validation workspace
 |
-|-- BE/                          # Backend, AI runtime, and data services
+|-- backend/                     # Backend, AI runtime, and data services
 |   |-- Database/                # Express API and MongoDB integration
 |   |-- HERA/                    # Multi-agent AI assistant runtime
 |   |   |-- adapters/            # Telegram and voice input adapters
@@ -185,7 +185,7 @@ MP-AI-252/                       # Root workspace of the H.E.R.A project
 |   |-- MQTT_Broker/             # Local MQTT broker manager and simulator
 |   `-- Telegram Bot/            # Telegram helper utilities
 |
-|-- FE/                          # Frontend workspace
+|-- frontend/                    # Frontend workspace
 |   `-- hera-dashboard/          # React/Vite monitoring dashboard
 |       |-- public/              # Static assets served by the web app
 |       `-- src/                 # Dashboard source code
@@ -227,7 +227,7 @@ The project repository is divided into several main source-code areas. Minor rep
       \item \textbf{test/}: workspace for firmware experiments and validation.
     \end{itemize}
 
-  \item \textbf{BE/}: backend and AI service layer. This area contains the multi-agent assistant, MQTT infrastructure, database/API service, and Telegram utilities.
+  \item \textbf{backend/}: backend and AI service layer. This area contains the multi-agent assistant, MQTT infrastructure, database/API service, and Telegram utilities.
     \begin{itemize}
       \item \textbf{Database/}: Node.js/Express API connected to MongoDB. It serves authentication, telemetry queries, latest sensor values, device/activity data, and model-setting endpoints for the dashboard.
       \item \textbf{HERA/}: Python multi-agent assistant runtime. The main entry points are \texttt{main.py}, which builds the assistant runtime, and \texttt{api\_server.py}, which exposes dashboard-facing HTTP endpoints while keeping device control on the same MQTT/tool-execution path as the assistant.
@@ -245,7 +245,7 @@ The project repository is divided into several main source-code areas. Minor rep
       \item \textbf{Telegram Bot/}: helper scripts for sending Telegram messages and testing notification flows.
     \end{itemize}
 
-  \item \textbf{FE/}: frontend workspace for the user-facing dashboard.
+  \item \textbf{frontend/}: frontend workspace for the user-facing dashboard.
     \begin{itemize}
       \item \textbf{hera-dashboard/}: React/Vite dashboard for login, monitoring, analytics, floor-plan/device interaction, and model/runtime settings.
         \begin{itemize}

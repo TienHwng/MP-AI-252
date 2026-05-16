@@ -232,7 +232,7 @@ def print_runtime_summary(settings: dict, agents: dict) -> None:
 def main() -> None:
 	configure_logging()
 	print_banner()
-	log_hera("Start the web API with: python BE/HERA/api_server.py")
+	log_hera("Start the web API with: python backend/HERA/api_server.py")
 
 
 if __name__ == "__main__":

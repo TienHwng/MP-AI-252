@@ -20,10 +20,10 @@ Install only what you need:
 
 ```powershell
 pip install paho-mqtt pyserial requests
-cd FE/hera-dashboard
+cd frontend/hera-dashboard
 npm install
 npm install -D playwright lighthouse
-cd ../../BE/Database
+cd ../../backend/Database
 npm install
 ```
 
@@ -31,18 +31,18 @@ Start the usual local services in separate terminals:
 
 ```powershell
 # MongoDB must be running locally.
-cd BE/Database
+cd backend/Database
 node server.js
 
-cd BE/HERA
+cd backend/HERA
 python api_server.py
 
-cd FE/hera-dashboard
+cd frontend/hera-dashboard
 npm run dev
 ```
 
 For real firmware tests, keep the ESP32 powered and connected to the same MQTT broker
-configured in `.env` / `BE/HERA/config.py`.
+configured in `.env` / `backend/HERA/config.py`.
 
 ## Report Formulas
 
@@ -56,4 +56,3 @@ Use these definitions consistently:
 | P50/P95 latency | percentile of per-request latency in milliseconds |
 | Insert throughput | `inserted_documents / elapsed_seconds` |
 | Heap drift | `last_free_heap_bytes - first_free_heap_bytes` |
-

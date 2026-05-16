@@ -1,8 +1,8 @@
 // Measure local React FloorPlan render and SSE-to-UI synchronization latency.
 //
-// Start FE Vite and BE/Database first:
-//   cd FE/hera-dashboard; npm run dev
-//   cd BE/Database; node server.js
+// Start frontend Vite and backend/Database first:
+//   cd frontend/hera-dashboard; npm run dev
+//   cd backend/Database; node server.js
 //
 // Example:
 //   node docs/evaluation/web_floorplan_perf.mjs --url http://localhost:5173

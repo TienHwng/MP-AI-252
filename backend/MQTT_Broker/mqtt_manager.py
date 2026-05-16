@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-# Must setup sys.path BEFORE importing from BE
+# Must setup sys.path BEFORE importing from backend
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
 	sys.path.append(str(PROJECT_ROOT))
@@ -37,7 +37,7 @@ class Color:
 	RESET = "\033[0m"
 
 
-from BE.HERA.config import (
+from backend.HERA.config import (
 	MODE,
 	MQTT_BROKER,
 	MQTT_BROKER_BIND_HOST,
