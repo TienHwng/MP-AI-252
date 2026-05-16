@@ -6,9 +6,11 @@ assistant instead of letting the React app simulate device state locally.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
+from adapters.voice_adapter import synthesize_speech_mp3
 from agents.orchestrator import Orchestrator
 from aiohttp import web
 from config import MODE, MQTT_BROKER, MQTT_PORT
@@ -345,6 +347,39 @@ async def handle_assistant_message(request: web.Request) -> web.Response:
 	)
 
 
+async def handle_assistant_tts(request: web.Request) -> web.Response:
+	try:
+		payload = await request.json()
+	except json.JSONDecodeError:
+		return web.json_response({"ok": False, "error": "invalid_json"}, status=400)
+
+	text = str(payload.get("text") or "").strip()
+	if not text:
+		return web.json_response({"ok": False, "error": "text is required"}, status=400)
+
+	lang = str(payload.get("lang") or "vi").strip().lower() or "vi"
+	try:
+		audio = await asyncio.to_thread(synthesize_speech_mp3, text, lang=lang)
+	except ValueError as exc:
+		return web.json_response({"ok": False, "error": str(exc)}, status=400)
+	except RuntimeError as exc:
+		return web.json_response({"ok": False, "error": str(exc)}, status=503)
+	except Exception as exc:
+		return web.json_response(
+			{"ok": False, "error": f"tts_failed: {exc}"},
+			status=502,
+		)
+
+	return web.Response(
+		body=audio,
+		content_type="audio/mpeg",
+		headers={
+			"Cache-Control": "no-store",
+			"Content-Disposition": 'inline; filename="hera-voice-reply.mp3"',
+		},
+	)
+
+
 async def cleanup(app: web.Application) -> None:
 	mqtt = app.get("mqtt")
 	if mqtt is not None:
@@ -383,6 +418,7 @@ def create_app() -> web.Application:
 	app.router.add_post("/api/sensors/{sensor}/value", handle_write_sensor_value)
 	app.router.add_post("/api/rpc", handle_rpc_command)
 	app.router.add_post("/api/assistant/message", handle_assistant_message)
+	app.router.add_post("/api/assistant/tts", handle_assistant_tts)
 	app.router.add_get("/api/settings/models", handle_get_model_settings)
 	app.router.add_put("/api/settings/models", handle_update_model_settings)
 	app.router.add_options("/{tail:.*}", lambda request: web.Response(status=204))

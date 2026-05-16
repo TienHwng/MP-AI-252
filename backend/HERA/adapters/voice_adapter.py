@@ -5,7 +5,7 @@ transport edge:
 
 1. Speech-to-text produces a normal text command.
 2. The text command is sent through ``Orchestrator.handle()``.
-3. The assistant response can optionally be spoken with ``pyttsx3``.
+3. The assistant response can optionally be synthesized with Google TTS.
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ class VoiceTurn:
 class VoiceAdapter:
 	"""Local STT/TTS adapter.
 
-	``SpeechRecognition`` is used for microphone/WAV transcription. ``pyttsx3``
-	is optional and only used to speak the assistant response. Both imports are
-	lazy so the normal web runtime does not require audio dependencies.
+	``SpeechRecognition`` is used for microphone/WAV transcription. ``gTTS`` is
+	used to synthesize Vietnamese MP3 audio. Both imports are lazy so the normal
+	web runtime does not require audio dependencies until voice is used.
 	"""
 
 	def __init__(
@@ -74,7 +74,7 @@ class VoiceAdapter:
 		chat_id: str = "voice",
 		metadata: dict[str, Any] | None = None,
 	) -> VoiceTurn:
-		"""Transcribe WAV/AIFF/FLAC bytes, orchestrate, and optionally speak."""
+		"""Transcribe WAV/AIFF/FLAC bytes, orchestrate, and synthesize if enabled."""
 		transcript = await asyncio.to_thread(self.transcribe_audio_bytes, audio_bytes)
 		response = await self.handle_text(transcript, chat_id=chat_id, metadata=metadata)
 		await self.speak(response.text)
@@ -85,7 +85,7 @@ class VoiceAdapter:
 		chat_id: str = "voice_local",
 		metadata: dict[str, Any] | None = None,
 	) -> VoiceTurn:
-		"""Capture one microphone phrase, process it, and optionally speak back."""
+		"""Capture one microphone phrase, process it, and synthesize if enabled."""
 		transcript = await asyncio.to_thread(self.listen_for_text)
 		response = await self.handle_text(transcript, chat_id=chat_id, metadata=metadata)
 		await self.speak(response.text)
@@ -109,28 +109,16 @@ class VoiceAdapter:
 		return self._recognize(recognizer, audio)
 
 	async def speak(self, text: str) -> None:
-		"""Speak text with pyttsx3 when enabled and installed."""
+		"""Synthesize response audio when TTS is enabled."""
 		if not self.enable_tts or not text:
 			return
-		await asyncio.to_thread(self._speak_sync, text)
+		await asyncio.to_thread(synthesize_speech_mp3, text)
 
 	def _recognize(self, recognizer: Any, audio: Any) -> str:
 		try:
 			return recognizer.recognize_google(audio, language=self.language)
 		except Exception as exc:
 			raise RuntimeError(f"Could not transcribe voice input: {exc}") from exc
-
-	def _speak_sync(self, text: str) -> None:
-		try:
-			import pyttsx3
-		except ImportError as exc:
-			raise RuntimeError(
-				"pyttsx3 is required for voice playback. Install it with "
-				"`pip install pyttsx3`.",
-			) from exc
-		engine = pyttsx3.init()
-		engine.say(text)
-		engine.runAndWait()
 
 	@staticmethod
 	def _speech_recognition() -> Any:
@@ -142,3 +130,18 @@ class VoiceAdapter:
 				"with `pip install SpeechRecognition PyAudio`.",
 			) from exc
 		return sr
+
+
+def synthesize_speech_mp3(text: str, *, lang: str = "vi") -> bytes:
+	"""Return Google Text-to-Speech MP3 bytes for Vietnamese text."""
+	clean_text = " ".join(str(text or "").split())
+	if not clean_text:
+		raise ValueError("TTS text is empty.")
+	try:
+		from gtts import gTTS
+	except ImportError as exc:
+		raise RuntimeError("gTTS is required for Vietnamese text-to-speech.") from exc
+
+	buffer = io.BytesIO()
+	gTTS(text=clean_text, lang=lang).write_to_fp(buffer)
+	return buffer.getvalue()

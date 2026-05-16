@@ -883,6 +883,21 @@ export const sendAssistantMessage = async (text, options = {}) => {
 	return response;
 };
 
+export const synthesizeAssistantSpeech = async (text, { lang = 'vi' } = {}) => {
+	const response = await fetch(`${HERA_API_BASE_URL}/api/assistant/tts`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ text, lang }),
+	});
+	if (!response.ok) {
+		const payload = await response.json().catch(() => ({}));
+		throw new Error(payload.error || 'Failed to synthesize voice reply');
+	}
+	return response.blob();
+};
+
 export const fetchRuntimeStatus = async () => {
 	return fetchJson(`${HERA_API_BASE_URL}/api/runtime/status`, {}, 'HERA dashboard API');
 };

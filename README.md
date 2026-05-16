@@ -16,8 +16,8 @@ This repository focuses on the practical local-development stack:
 - MQTT-based command and telemetry pipeline
 - Live telemetry ingestion and persistence in MongoDB
 - Dashboard for login, device control, analytics, and model settings
-- Voice command input and optional spoken replies in the dashboard assistant;
-  speech is transcribed to text and handled by the same HERA orchestration pipeline
+- Voice command input and optional Google TTS spoken replies in the dashboard
+  assistant; speech is transcribed to text and handled by the same HERA orchestration pipeline
 - Switchable LLM provider strategy (OpenRouter or Ollama)
 
 ## System Overview
@@ -192,6 +192,7 @@ Key API routes (HERA dashboard service):
 - `POST /api/devices/:target/state`
 - `POST /api/sensors/:sensor/value` (simulation mode only)
 - `POST /api/assistant/message` (accepts `source: "voice"` for transcribed voice commands)
+- `POST /api/assistant/tts` (Google TTS Vietnamese MP3 response audio)
 
 ## Runtime Modes
 

@@ -4,6 +4,7 @@ import {
   fetchAssistantChatHistory,
   saveAssistantInteraction,
   sendAssistantMessage,
+  synthesizeAssistantSpeech,
 } from '../../services/api';
 
 const formatTime = (value = new Date()) => {
@@ -42,6 +43,8 @@ const AiAssistant = () => {
   const [voiceError, setVoiceError] = useState('');
   const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(getStoredVoiceReplyPreference);
   const recognitionRef = useRef(null);
+  const audioReplyRef = useRef(null);
+  const audioUrlRef = useRef('');
   const speechVoicesRef = useRef([]);
   const voiceReplyEnabledRef = useRef(isVoiceReplyEnabled);
   const voiceCanceledRef = useRef(false);
@@ -81,7 +84,7 @@ const AiAssistant = () => {
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort?.();
-      window.speechSynthesis?.cancel?.();
+      stopVoiceReply();
     };
   }, []);
 
@@ -89,7 +92,7 @@ const AiAssistant = () => {
     voiceReplyEnabledRef.current = isVoiceReplyEnabled;
     localStorage.setItem(VOICE_REPLY_STORAGE_KEY, String(isVoiceReplyEnabled));
     if (!isVoiceReplyEnabled) {
-      window.speechSynthesis?.cancel?.();
+      stopVoiceReply();
     }
   }, [isVoiceReplyEnabled]);
 
@@ -108,8 +111,20 @@ const AiAssistant = () => {
     };
   }, []);
 
-  const speakAssistantResponse = (text) => {
-    if (!voiceReplyEnabledRef.current || !text) return;
+  const stopVoiceReply = () => {
+    window.speechSynthesis?.cancel?.();
+    if (audioReplyRef.current) {
+      audioReplyRef.current.pause();
+      audioReplyRef.current.src = '';
+      audioReplyRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = '';
+    }
+  };
+
+  const speakWithBrowserVoice = (text) => {
     if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance === 'undefined') {
       setVoiceError('Voice reply is not supported in this browser.');
       return;
@@ -129,6 +144,37 @@ const AiAssistant = () => {
 
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+  };
+
+  const speakAssistantResponse = async (text) => {
+    if (!voiceReplyEnabledRef.current || !text) return;
+    stopVoiceReply();
+
+    try {
+      const audioBlob = await synthesizeAssistantSpeech(text, { lang: 'vi' });
+      if (!voiceReplyEnabledRef.current) return;
+
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioUrlRef.current = audioUrl;
+      audioReplyRef.current = audio;
+      audio.onended = () => {
+        if (audioReplyRef.current === audio) {
+          audioReplyRef.current = null;
+        }
+        URL.revokeObjectURL(audioUrl);
+        if (audioUrlRef.current === audioUrl) {
+          audioUrlRef.current = '';
+        }
+      };
+      audio.onerror = () => {
+        speakWithBrowserVoice(text);
+      };
+      await audio.play();
+    } catch (error) {
+      console.warn('gTTS voice reply failed, falling back to browser voice:', error);
+      speakWithBrowserVoice(text);
+    }
   };
 
   const handleToggleVoiceReply = () => {
