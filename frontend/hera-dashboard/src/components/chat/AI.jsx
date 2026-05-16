@@ -32,6 +32,9 @@ const AiAssistant = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [voiceError, setVoiceError] = useState('');
+  const recognitionRef = useRef(null);
+  const voiceCanceledRef = useRef(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -65,16 +68,14 @@ const AiAssistant = () => {
     }
   }, [messages]);
 
-  const handleStartVoiceCommand = () => {
-    setIsRecording(true);
-  };
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort?.();
+    };
+  }, []);
 
-  const handleCancelVoiceCommand = () => {
-    setIsRecording(false);
-  };
-
-  const handleSend = async () => {
-    const text = input.trim();
+  const submitAssistantText = async (rawText, { source = 'rest' } = {}) => {
+    const text = rawText.trim();
     if (!text || isSending || isLoadingHistory) return;
 
     const userCreatedAt = new Date().toISOString();
@@ -87,10 +88,11 @@ const AiAssistant = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsRecording(false);
+    setVoiceError('');
     setIsSending(true);
 
     try {
-      const response = await sendAssistantMessage(text);
+      const response = await sendAssistantMessage(text, { source });
       const assistantText = response.text || 'HERA completed the request.';
       const assistantCreatedAt = new Date().toISOString();
       setMessages((prev) => [
@@ -108,6 +110,9 @@ const AiAssistant = () => {
         response,
         userCreatedAt,
         assistantCreatedAt,
+        userMetadata: {
+          source: source === 'voice' ? 'voice' : 'dashboard',
+        },
       }).catch((error) => {
         console.warn('Failed to save assistant chat history:', error);
       });
@@ -130,6 +135,9 @@ const AiAssistant = () => {
         response: { ok: false },
         userCreatedAt,
         assistantCreatedAt,
+        userMetadata: {
+          source: source === 'voice' ? 'voice' : 'dashboard',
+        },
         assistantMetadata: {
           is_error: true,
           error_message: assistantText,
@@ -140,6 +148,75 @@ const AiAssistant = () => {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleStartVoiceCommand = () => {
+    if (isSending || isLoadingHistory) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError('Voice recognition is not supported in this browser.');
+      return;
+    }
+
+    recognitionRef.current?.abort?.();
+    voiceCanceledRef.current = false;
+    setVoiceError('');
+    setInput('');
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    let latestTranscript = '';
+
+    recognition.onresult = (event) => {
+      latestTranscript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || '')
+        .join(' ')
+        .trim();
+      setInput(latestTranscript);
+    };
+
+    recognition.onerror = (event) => {
+      if (voiceCanceledRef.current) return;
+      const messagesByError = {
+        'not-allowed': 'Microphone permission was denied.',
+        'no-speech': 'No speech was detected.',
+        network: 'Voice recognition network request failed.',
+      };
+      setVoiceError(messagesByError[event.error] || 'Voice recognition failed.');
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsRecording(false);
+      if (voiceCanceledRef.current) return;
+      if (latestTranscript) {
+        submitAssistantText(latestTranscript, { source: 'voice' });
+      }
+    };
+
+    setIsRecording(true);
+    recognition.start();
+  };
+
+  const handleCancelVoiceCommand = () => {
+    voiceCanceledRef.current = true;
+    recognitionRef.current?.abort?.();
+    recognitionRef.current = null;
+    setIsRecording(false);
+    setVoiceError('');
+  };
+
+  const handleSend = async () => {
+    voiceCanceledRef.current = true;
+    recognitionRef.current?.abort?.();
+    await submitAssistantText(input, { source: 'rest' });
   };
 
   return (
@@ -183,7 +260,7 @@ const AiAssistant = () => {
             onKeyDown={(event) => {
               if (event.key === 'Enter') handleSend();
             }}
-            placeholder={isRecording ? 'Recording voice command...' : 'Ask H.E.R.A. anything...'}
+            placeholder={isRecording ? 'Listening...' : 'Ask H.E.R.A. anything...'}
             className="min-w-0 flex-1 rounded-lg border border-[#e0ddd0] bg-[#f8f5e9] px-4 py-3 text-sm text-[#4a3f35] focus:border-[#3A7D44] focus:outline-none sm:px-5"
           />
           <button
@@ -199,9 +276,10 @@ const AiAssistant = () => {
           <button
             type="button"
             onClick={handleStartVoiceCommand}
+            disabled={isSending || isLoadingHistory}
             className={`flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-3 font-medium text-white shadow-sm transition-all sm:py-4 ${
               isRecording ? 'bg-[#d98080] hover:bg-[#c96e6e]' : 'bg-[#9DC08B] hover:bg-[#3A7D44]'
-            }`}
+            } disabled:opacity-60`}
           >
             <Mic size={20} className={isRecording ? 'animate-pulse' : ''} />
             {isRecording ? 'Recording...' : 'Voice Command'}
@@ -217,6 +295,9 @@ const AiAssistant = () => {
             </button>
           )}
         </div>
+        {voiceError && (
+          <p className="text-sm text-red-600">{voiceError}</p>
+        )}
       </div>
     </div>
   );

@@ -603,6 +603,7 @@ export const saveAssistantInteraction = async ({
 	response = {},
 	userCreatedAt,
 	assistantCreatedAt,
+	userMetadata = {},
 	assistantMetadata = {},
 } = {}) => {
 	const user = getStoredUser();
@@ -631,7 +632,7 @@ export const saveAssistantInteraction = async ({
 					role: 'user',
 					text: userText,
 					created_at: userCreatedAt || new Date().toISOString(),
-					metadata: { source: 'dashboard' },
+					metadata: { source: 'dashboard', ...userMetadata },
 				},
 				{
 					role: 'assistant',
@@ -862,9 +863,10 @@ export const writeSensorValue = async (sensor, value, options = {}) => {
 	return response;
 };
 
-export const sendAssistantMessage = async (text) => {
+export const sendAssistantMessage = async (text, options = {}) => {
 	const user = getStoredUser();
 	const chatId = getCurrentChatSessionId();
+	const source = options.source === 'voice' ? 'voice' : 'rest';
 	const response = await fetchJson(`${HERA_API_BASE_URL}/api/assistant/message`, {
 		method: 'POST',
 		headers: {
@@ -874,6 +876,7 @@ export const sendAssistantMessage = async (text) => {
 			text,
 			user_id: user?.user_id || 'dashboard',
 			session_id: chatId || user?.user_id || 'dashboard',
+			source,
 		}),
 	}, 'HERA dashboard API');
 	await recordAssistantActivityLogs(response, text);

@@ -9,12 +9,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from aiohttp import web
-
 from agents.orchestrator import Orchestrator
+from aiohttp import web
 from config import MODE, MQTT_BROKER, MQTT_PORT
-from core.message import MessageSource, UserMessage
+from core.llm_service import LLMService
 from core.logger import log_error
+from core.message import MessageSource, UserMessage
 from domain.devices import DEVICE_TARGETS, normalize_device_target
 from main import (
 	build_agents,
@@ -24,7 +24,6 @@ from main import (
 	connect_mqtt,
 	load_runtime_settings,
 )
-from core.llm_service import LLMService
 from runtime.execution_context import ExecutionContext
 from schemas import ToolProposal
 
@@ -135,18 +134,25 @@ async def handle_set_device_state(request: web.Request) -> web.Response:
 	status = 200 if result.ok else 409
 	return web.json_response(jsonable(result.model_dump(mode="json")), status=status)
 
+
 async def handle_get_model_settings(request: web.Request) -> web.Response:
 	from core.runtime_settings import runtime_settings
+
 	settings = runtime_settings.get()
-	return web.json_response(jsonable({
-		"provider": settings.get("provider"),
-		"models": settings.get("models", {}),
-		"updatedAt": "",
-	}))
+	return web.json_response(
+		jsonable(
+			{
+				"provider": settings.get("provider"),
+				"models": settings.get("models", {}),
+				"updatedAt": "",
+			}
+		)
+	)
 
 
 async def handle_update_model_settings(request: web.Request) -> web.Response:
-	from core.runtime_settings import runtime_settings, prune_settings, deep_merge, DEFAULT_SETTINGS
+	from core.runtime_settings import prune_settings, runtime_settings
+
 	try:
 		payload = await request.json()
 	except Exception:
@@ -169,14 +175,18 @@ async def handle_update_model_settings(request: web.Request) -> web.Response:
 		return web.json_response({"ok": False, "error": str(exc)}, status=500)
 
 	updated = runtime_settings.refresh_and_log()
-	return web.json_response(jsonable({
-		"ok": True,
-		"settings": {
-			"provider": updated.get("provider"),
-			"models": updated.get("models", {}),
-			"updatedAt": "",
-		},
-	}))
+	return web.json_response(
+		jsonable(
+			{
+				"ok": True,
+				"settings": {
+					"provider": updated.get("provider"),
+					"models": updated.get("models", {}),
+					"updatedAt": "",
+				},
+			}
+		)
+	)
 
 
 async def handle_rpc_command(request: web.Request) -> web.Response:
@@ -190,16 +200,19 @@ async def handle_rpc_command(request: web.Request) -> web.Response:
 	params = payload.get("params")
 
 	if not method or params is None:
-		return web.json_response({"ok": False, "error": "method and params are required"}, status=400)
+		return web.json_response(
+			{"ok": False, "error": "method and params are required"},
+			status=400,
+		)
 
 	request.app["mqtt"].publish_rpc(method, params)
-	
+
 	return web.json_response(
 		{
 			"ok": True,
 			"message": f"Command '{method}' sent successfully",
 			"method": method,
-			"params": params
+			"params": params,
 		}
 	)
 
@@ -270,14 +283,21 @@ async def handle_assistant_message(request: web.Request) -> web.Response:
 
 	user_id = str(payload.get("user_id") or "dashboard")
 	session_id = str(payload.get("session_id") or user_id)
+	raw_source = str(payload.get("source") or "").strip().lower()
+	source = (
+		MessageSource.VOICE
+		if raw_source == MessageSource.VOICE.value
+		else MessageSource.REST
+	)
 	message = UserMessage(
 		text=text,
 		chat_id=f"dashboard:{session_id}",
-		source=MessageSource.REST,
+		source=source,
 		metadata={
 			"user_id": user_id,
 			"session_id": session_id,
 			"mode": MODE,
+			"input_modality": "voice" if source == MessageSource.VOICE else "text",
 		},
 	)
 	try:
@@ -319,6 +339,7 @@ async def handle_assistant_message(request: web.Request) -> web.Response:
 				"tools_used": response.tools_used,
 				"confidence": response.confidence,
 				"metadata": response.metadata,
+				"source": source.value,
 			}
 		)
 	)
