@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send, X } from 'lucide-react';
+import { Mic, Send, Volume2, VolumeX, X } from 'lucide-react';
 import {
   fetchAssistantChatHistory,
   saveAssistantInteraction,
@@ -26,6 +26,13 @@ const chatHistoryToMessages = (items = []) =>
       isError: Boolean(item.isError || item.metadata?.is_error),
     }));
 
+const VOICE_REPLY_STORAGE_KEY = 'hera_voice_reply_enabled';
+
+const getStoredVoiceReplyPreference = () => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(VOICE_REPLY_STORAGE_KEY) === 'true';
+};
+
 const AiAssistant = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -33,7 +40,10 @@ const AiAssistant = () => {
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [voiceError, setVoiceError] = useState('');
+  const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(getStoredVoiceReplyPreference);
   const recognitionRef = useRef(null);
+  const speechVoicesRef = useRef([]);
+  const voiceReplyEnabledRef = useRef(isVoiceReplyEnabled);
   const voiceCanceledRef = useRef(false);
   const scrollRef = useRef(null);
 
@@ -71,8 +81,60 @@ const AiAssistant = () => {
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort?.();
+      window.speechSynthesis?.cancel?.();
     };
   }, []);
+
+  useEffect(() => {
+    voiceReplyEnabledRef.current = isVoiceReplyEnabled;
+    localStorage.setItem(VOICE_REPLY_STORAGE_KEY, String(isVoiceReplyEnabled));
+    if (!isVoiceReplyEnabled) {
+      window.speechSynthesis?.cancel?.();
+    }
+  }, [isVoiceReplyEnabled]);
+
+  useEffect(() => {
+    if (!window.speechSynthesis) return undefined;
+
+    const updateVoices = () => {
+      speechVoicesRef.current = window.speechSynthesis.getVoices();
+    };
+
+    updateVoices();
+    window.speechSynthesis.addEventListener?.('voiceschanged', updateVoices);
+
+    return () => {
+      window.speechSynthesis.removeEventListener?.('voiceschanged', updateVoices);
+    };
+  }, []);
+
+  const speakAssistantResponse = (text) => {
+    if (!voiceReplyEnabledRef.current || !text) return;
+    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance === 'undefined') {
+      setVoiceError('Voice reply is not supported in this browser.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const vietnameseVoice = speechVoicesRef.current.find((voice) =>
+      voice.lang?.toLowerCase().startsWith('vi'),
+    );
+
+    utterance.lang = 'vi-VN';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    if (vietnameseVoice) {
+      utterance.voice = vietnameseVoice;
+    }
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleToggleVoiceReply = () => {
+    setVoiceError('');
+    setIsVoiceReplyEnabled((enabled) => !enabled);
+  };
 
   const submitAssistantText = async (rawText, { source = 'rest' } = {}) => {
     const text = rawText.trim();
@@ -104,6 +166,7 @@ const AiAssistant = () => {
           createdAt: assistantCreatedAt,
         },
       ]);
+      speakAssistantResponse(assistantText);
       saveAssistantInteraction({
         userText: text,
         assistantText,
@@ -283,6 +346,21 @@ const AiAssistant = () => {
           >
             <Mic size={20} className={isRecording ? 'animate-pulse' : ''} />
             {isRecording ? 'Recording...' : 'Voice Command'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleVoiceReply}
+            aria-pressed={isVoiceReplyEnabled}
+            title={isVoiceReplyEnabled ? 'Turn off voice replies' : 'Turn on voice replies'}
+            className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border px-4 py-3 font-medium transition-colors sm:py-4 ${
+              isVoiceReplyEnabled
+                ? 'border-[#3A7D44] bg-[#ecf5ec] text-[#2d6336] hover:bg-[#dfeedd]'
+                : 'border-[#e2d7cb] bg-white text-[#7b6655] hover:bg-[#f8f4ee]'
+            }`}
+          >
+            {isVoiceReplyEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            <span>{isVoiceReplyEnabled ? 'Voice Reply On' : 'Voice Reply Off'}</span>
           </button>
 
           {isRecording && (
