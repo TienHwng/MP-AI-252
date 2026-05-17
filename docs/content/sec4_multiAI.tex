@@ -21,86 +21,38 @@ H.E.R.A addresses this gap using an orchestrator-specialist architecture impleme
 
 \subsection{Current H.E.R.A AI Architecture}
 
-Figure~\ref{fig:hera-ai-overall-architecture} shows the current architecture. The user interacts with H.E.R.A through the dashboard REST API and chat interface. Messages are normalized into a common request format and then passed to the orchestrator. The orchestrator classifies intent, decides whether memory is needed, selects a specialist, and either uses a fast read-only path or runs the full graph.
+Figure~\ref{fig:hera-ai-overall-architecture} shows the current conversational intelligence core of H.E.R.A. This diagram focuses only on the AI layer, not the full hardware, database, or frontend architecture of the whole system. The user request first enters the request-understanding stage, where the input is normalized and prepared as a structured message. It is then passed to the H.E.R.A orchestrator, which coordinates routing, memory access, specialist selection, runtime tool execution, and final response generation. Supporting systems such as memory, specialist modules, safety verification, and the tool system are shown as indirect dependencies because they do not replace the main request path; instead, they provide context, capabilities, and validation to the core pipeline. \\
+
+The high-level flow can be read from left to right. A natural-language request becomes a normalized request, the orchestrator decides how it should be handled, a specialist produces either a domain report or a tool-oriented plan, the runtime tool boundary validates and executes the required tool calls, and the response generator converts the verified result into a user-facing answer. This separation is important because it keeps language interpretation, tool execution, and final explanation as distinct stages. In particular, the LLM does not directly publish MQTT commands. It can only propose structured actions that must pass through the runtime boundary.
 
 \begin{figure}[H]
     \centering
-    \resizebox{0.98\textwidth}{!}{%
-    \begin{tikzpicture}[
-            layer/.style 2 args={draw=black!18, rounded corners=2pt, fill=#1, minimum width=15.2cm,
-                minimum height=#2, align=left},
-            title/.style={font=\scriptsize\bfseries, text=black!72, anchor=west},
-            box/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=3.00cm,
-                minimum height=0.74cm, align=center, font=\scriptsize},
-            widebox/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=4.10cm,
-                minimum height=0.74cm, align=center, font=\scriptsize},
-            bandbox/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=12.45cm,
-                minimum height=0.82cm, align=center, font=\scriptsize},
-            store/.style={draw=black!38, rounded corners=2pt, fill=#1, minimum width=2.55cm,
-                minimum height=0.64cm, align=center, font=\scriptsize},
-            flow/.style={->, >=stealth, line width=0.82pt, draw=black!64},
-            every node/.style={font=\scriptsize}
-        ]
-        \node[layer={blue!4}{1.18cm}] at (0,0) {};
-        \node[title] at (-7.34,0.38) {1. User interaction and API boundary};
-        \node[widebox=blue!12] (dashboard) at (-4.95,-0.12) {H.E.R.A Dashboard\\chat, house map, settings};
-        \node[box=blue!12] (rest) at (0,-0.12) {FastAPI REST\\assistant endpoint};
-        \node[widebox=blue!12] (contract) at (4.95,-0.12) {Unified message contract\\session, language, user text};
-
-        \node[layer={orange!5}{1.42cm}] at (0,-1.65) {};
-        \node[title] at (-7.34,-1.12) {2. LangGraph orchestration core};
-        \node[bandbox=orange!16] (orchestrator) at (0,-1.76)
-        {Intent routing + session memory + specialist dispatch + response composition};
-
-        \node[layer={green!5}{1.34cm}] at (0,-3.45) {};
-        \node[title] at (-7.34,-2.97) {3. Specialist services};
-        \node[box=green!14] (dev) at (-5.55,-3.52) {Device Control\\Agent};
-        \node[box=green!14] (tel) at (-1.85,-3.52) {Telemetry Report\\Service};
-        \node[box=green!14] (ano) at (1.85,-3.52) {Anomaly Analyzer\\Service};
-        \node[box=green!14] (web) at (5.55,-3.52) {Web Research\\Service};
-
-        \node[layer={gray!7}{1.34cm}] at (0,-5.10) {};
-        \node[title] at (-7.34,-4.62) {4. Deterministic runtime and tool boundary};
-        \node[bandbox=gray!18] (runtime) at (0,-5.17)
-        {Capability registry + policy validation + tool execution + effect verification};
-
-        \node[layer={yellow!6}{1.18cm}] at (0,-6.75) {};
-        \node[title] at (-7.34,-6.33) {5. Infrastructure and physical environment};
-        \node[store=yellow!18] (llm) at (-5.80,-6.87) {Ollama /\\OpenRouter};
-        \node[store=yellow!18] (mongo) at (-2.90,-6.87) {MongoDB\\settings, memory};
-        \node[store=yellow!18] (mqtt) at (0,-6.87) {MQTT Broker\\telemetry, RPC};
-        \node[store=yellow!18] (search) at (2.90,-6.87) {External search\\weather, news};
-        \node[store=yellow!18] (esp) at (5.80,-6.87) {ESP32 edge\\sensors, actuators};
-
-        \draw[flow] (dashboard) -- (rest);
-        \draw[flow] (rest) -- (contract);
-        \draw[flow] (contract.south) -- ++(0,-0.32) -| (orchestrator.north);
-
-        \draw[flow] (orchestrator.south) -- (0,-2.62);
-        \draw[draw=black!64, line width=0.82pt] (-5.55,-2.62) -- (5.55,-2.62);
-        \draw[flow] (-5.55,-2.62) -- (dev.north);
-        \draw[flow] (-1.85,-2.62) -- (tel.north);
-        \draw[flow] (1.85,-2.62) -- (ano.north);
-        \draw[flow] (5.55,-2.62) -- (web.north);
-
-        \draw[flow] (dev.south) -- (-5.55,-4.18);
-        \draw[flow] (tel.south) -- (-1.85,-4.18);
-        \draw[flow] (ano.south) -- (1.85,-4.18);
-        \draw[flow] (web.south) -- (5.55,-4.18);
-        \draw[draw=black!64, line width=0.82pt] (-5.55,-4.18) -- (5.55,-4.18);
-        \draw[flow] (0,-4.18) -- (runtime.north);
-
-        \draw[flow] (runtime.south) -- (0,-6.28);
-        \draw[draw=black!64, line width=0.82pt] (-5.80,-6.28) -- (2.90,-6.28);
-        \draw[flow] (-5.80,-6.28) -- (llm.north);
-        \draw[flow] (-2.90,-6.28) -- (mongo.north);
-        \draw[flow] (0,-6.28) -- (mqtt.north);
-        \draw[flow] (2.90,-6.28) -- (search.north);
-        \draw[flow] (mqtt) -- (esp);
-    \end{tikzpicture}}
+    \includegraphics[width=0.98\textwidth]{image/system/high_level_architecture.png}
     \caption{Current layered architecture of the H.E.R.A multi-agent AI subsystem.}
     \label{fig:hera-ai-overall-architecture}
 \end{figure}
+
+Figure~\ref{fig:hera-orchestrator-block} expands the orchestration block shown in the high-level architecture. The orchestrator acts as the decision center between the user-facing API and the specialist/runtime layers. It first performs request-state intake, routes the message by intent, checks pending confirmation state, and selects the memory context required for the current request. The routing result then determines whether the request can be handled as general conversation, dispatched to a specialist, or sent into the tool-calling path. Only after this state gate does the system enter the runtime execution block. The final response is composed from the specialist report and any verified runtime result, rather than from unconfirmed model text alone.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{image/system/orchestrator_block.png}
+    \caption{Detailed orchestrator pipeline block inside the H.E.R.A multi-agent AI subsystem.}
+    \label{fig:hera-orchestrator-block}
+\end{figure}
+
+The red subprocess in Figure~\ref{fig:hera-orchestrator-block} represents the tool-calling and runtime execution block. This block is expanded in Figure~\ref{fig:hera-tool-calling-block}. Its input is a set of grounded tool calls or capability proposals produced by the specialist path. Its output is a normalized tool-execution result that returns to the response composer. Between those two points, the runtime performs capability validation, policy checking, read/write routing, optional confirmation handling, tool execution, result normalization, and effect verification. \\
+
+The read-only path is used for operations such as retrieving current telemetry, device status, or recent telemetry windows. These operations do not mutate external device state and can therefore be executed through a simpler read-tool runner. The write-capable path is stricter. It checks whether the target and arguments are valid, whether policy allows the action, whether user confirmation is required, and whether the physical effect can be verified after execution. This design keeps tool calling auditable: every runtime result has an explicit status, policy decision, and verification fact that can be used by the response composer and later evaluation logs.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{image/system/tool_block.png}
+    \caption{Internal flow of the H.E.R.A tool-calling and runtime execution block.}
+    \label{fig:hera-tool-calling-block}
+\end{figure}
+
+Together, Figures~\ref{fig:hera-ai-overall-architecture}, \ref{fig:hera-orchestrator-block}, and \ref{fig:hera-tool-calling-block} describe the same request flow at three levels of detail. The first figure shows where the AI core sits conceptually, the second figure shows how the orchestrator chooses the processing route, and the third figure shows how concrete tool calls are validated and executed. This layered presentation reflects the implementation principle of H.E.R.A: the AI system may interpret and plan, but physical effects must pass through deterministic runtime boundaries before they are reported back to the user.
 
 The architecture contains five main functional layers:
 
@@ -352,6 +304,43 @@ Although the settings schema still contains sensor and anomaly model fields, the
 
 The model configuration follows a cost-capability split. Routing benefits from a smaller model because the output space is bounded and latency matters. Device control uses a stronger instruction-following model because it must parse multilingual commands, room-level aliases, device values, conditional clauses, and clarification cases. The local Ollama configuration prioritizes offline availability with compact models, while the OpenRouter configuration assigns a larger Qwen model to device planning and Nemotron-family models to routing and explanatory roles. This split reflects the practical difference between low-cost local operation and cloud-assisted capability.
 
+The OpenRouter-side selection was not based only on model popularity. H.E.R.A was tested with simple dashboard prompts before integration, and the NVIDIA response behavior was the most stable among the candidate responses observed in the local comparison. Figures~\ref{fig:hera-model-choose-1} and~\ref{fig:hera-model-choose-2} show these prompt-level checks. These checks are not treated as a formal benchmark; rather, they provide project-specific evidence that the selected model family follows the expected conversational style before being placed into a constrained orchestrator runtime.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{image/system/model_choose1.png}
+    \caption{Initial prompt-level comparison used during model selection.}
+    \label{fig:hera-model-choose-1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{image/system/model_choose2.png}
+    \caption{Second prompt-level comparison used to validate response stability.}
+    \label{fig:hera-model-choose-2}
+\end{figure}
+
+Because the H.E.R.A workload is specific to language understanding, intent routing, and tool-oriented execution, the model choice was also checked against public benchmark evidence. NVIDIA's model card for \texttt{NVIDIA-Nemotron-Nano-9B-v2} reports stronger results than Qwen3-8B on instruction following, coding/reasoning, long-context evaluation, and Berkeley Function Calling Leaderboard v3 (BFCL v3), a benchmark designed to evaluate function/tool-calling capability.\footnote{\url{https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2}}\footnote{\url{https://sky.cs.berkeley.edu/project/berkeley-function-calling-leaderboard/}} The associated NVIDIA technical report further motivates the Nano-v2 family as an efficient hybrid Mamba-Transformer reasoning model, reporting comparable or better accuracy than similarly sized models with significantly higher inference throughput in long reasoning settings.\footnote{\url{https://arxiv.org/abs/2508.14444}} This external evidence matches the system-level requirement: the orchestrator model does not need to be the largest available model, but it must reliably follow instructions, preserve structured intent, and support agent/tool workflows.
+
+\begin{table}[H]
+    \centering
+    \caption{External evidence used to justify the NVIDIA/Nemotron model family}
+    \label{tab:hera-model-selection-evidence}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{@{}p{3.0cm}p{3.2cm}p{3.0cm}X@{}}
+        \toprule
+        \textbf{Evidence Source} & \textbf{Reported Metric} & \textbf{Reported Result} & \textbf{Relevance to H.E.R.A} \\
+        \midrule
+        NVIDIA model card & IFEval instruction strict & 90.3\% for Nemotron Nano 9B v2 vs. 89.4\% for Qwen3-8B & Supports the orchestrator role, where the model must follow routing and formatting instructions. \\
+        NVIDIA model card & BFCL v3 tool calling & 66.9\% for Nemotron Nano 9B v2 vs. 66.3\% for Qwen3-8B & Directly relevant to tool-oriented agents because BFCL evaluates function/API calling accuracy. \\
+        NVIDIA model card & RULER 128K long-context & 78.9\% for Nemotron Nano 9B v2 vs. 74.1\% for Qwen3-8B & Useful for multi-turn sessions where routing may depend on chat history, active focus, and recent actions. \\
+        NVIDIA technical report & Efficiency claim & Up to 6$\times$ higher inference throughput in long reasoning settings compared with similarly sized models & Relevant to a dashboard assistant because lower perceived latency matters during repeated chat interactions. \\
+        Project prompt checks & Simple user-facing prompts & NVIDIA responses were selected as the most stable in Figures~\ref{fig:hera-model-choose-1} and~\ref{fig:hera-model-choose-2} & Confirms that the public benchmark fit also appears in the project-specific conversational style. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
 \begin{table}[H]
     \centering
     \caption{Model role requirements for H.E.R.A}
@@ -370,6 +359,39 @@ The model configuration follows a cost-capability split. Routing benefits from a
     \end{tabularx}
 \end{table}
 
+\subsection{Dashboard Streaming Mode}
+
+The AI path described above still contains several latency sources: routing, model inference, specialist execution, optional tool execution, verification, and final response composition. Even when the backend completes correctly, returning the final answer as a single JSON payload makes the dashboard feel blocked until the full response is available. To reduce perceived latency, H.E.R.A introduces a streaming mode for the dashboard chat interface. This mode does not change the orchestrator's reasoning contract or the runtime tool boundary; it changes only how the already-generated assistant response is delivered to the frontend.
+
+Streaming is enabled by adding the query parameter \texttt{stream=true} to the dashboard assistant endpoint. The backend endpoint \texttt{/api/assistant/message} first builds the same \texttt{UserMessage} object used by the non-streaming path and still calls the same orchestrator. After the orchestrator returns a structured response, the API server switches from a normal JSON response to a Server-Sent Events (SSE) stream. The SSE response uses \texttt{text/event-stream}, disables caching, keeps the connection open, and includes CORS headers so that the browser can consume the stream from the dashboard origin.
+
+The backend streaming handler separates optional thinking metadata from final answer content. Thinking text, when present, is emitted in small three-character chunks with a short delay. Final answer text is emitted one character at a time with an approximately 20 ms delay, which produces a readable character-by-character response in the browser. Each message follows an OpenAI-compatible delta shape, such as \texttt{\{"choices":[\{"delta":\{"content":"H"\}\}]\}}, and the stream terminates with \texttt{data: [DONE]}. If the orchestrator fails before streaming begins, the backend returns the same error information through an SSE error payload so the frontend can surface the failure consistently.
+
+On the frontend, \texttt{sendAssistantMessageStreaming()} in the dashboard API service sends the request with \texttt{stream=true}, attaches an \texttt{AbortSignal}, reads \texttt{response.body.getReader()}, decodes complete SSE lines, and accumulates content and thinking streams separately. The chat component creates an empty assistant placeholder before the first chunk arrives, tracks the active streaming message id with a React ref, and updates only that message as chunks arrive. This design avoids re-rendering unrelated chat history on every token. Where available, \texttt{ReactDOM.flushSync()} is used to force immediate rendering per chunk, preventing React batching from collapsing many chunk updates into one visual update.
+
+\begin{table}[H]
+    \centering
+    \caption{Streaming-mode design decisions in the H.E.R.A dashboard chat}
+    \label{tab:hera-streaming-design}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{@{}p{2.7cm}X X@{}}
+        \toprule
+        \textbf{Layer} & \textbf{Implementation Decision} & \textbf{Design Rationale} \\
+        \midrule
+        Backend API & The \texttt{/api/assistant/message} endpoint selects SSE delivery when \texttt{stream=true} after normal orchestrator execution & Preserves the existing AI control flow while changing only the delivery mode. \\
+        Transport & SSE chunks use \texttt{data: ...} lines and terminate with \texttt{[DONE]} & Simple browser-native unidirectional streaming fits assistant responses without requiring WebSocket state. \\
+        Chunking & Thinking chunks use three characters; answer chunks use one character with a 20 ms delay & Makes response progress visible and readable instead of appearing as a buffered block. \\
+        Frontend parser & \texttt{ReadableStream} reader parses SSE lines and accumulates full text & Supports progressive rendering while still retaining the complete final answer for chat history. \\
+        React state & Active message id is stored in a ref and updated directly through an indexed message update & Reduces per-chunk state work and avoids unnecessary updates to previous messages. \\
+        User control & \texttt{AbortController} backs the pause action & Closing the fetch stream stops frontend updates and prevents wasted backend/network work. \\
+        Fallback & If streaming returns JSON or fails, the frontend falls back to the non-streaming API path & Keeps the dashboard usable even when streaming is unsupported or interrupted. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+This streaming design is therefore a presentation and responsiveness optimization, not a shortcut around safety. Tool execution still completes inside the runtime boundary before the final answer is streamed. The user receives the answer progressively, but the content remains grounded in the same verified orchestrator result as the non-streaming mode. This keeps the system design consistent with the rest of the H.E.R.A AI architecture: semantic reasoning and physical action remain controlled by the orchestrator and runtime layers, while the dashboard optimizes the delivery of the final user-facing response.
+
 \subsection{End-to-End Device-Control Flow}
 
 Figure~\ref{fig:hera-device-control-sequence} traces a representative command such as ``turn on the living room light''. The important point is that the LLM does not publish MQTT directly. It only proposes a structured action. The runtime validates and executes it.
@@ -381,6 +403,9 @@ Figure~\ref{fig:hera-device-control-sequence} traces a representative command su
                     minimum height=0.48cm, align=center, font=\scriptsize\bfseries},
             msg/.style={->, >=stealth, thick},
             ret/.style={->, >=stealth, thick, dotted},
+            internal/.style={draw, rounded corners=3pt, fill=gray!12,
+                    minimum width=2.0cm, minimum height=0.48cm,
+                    align=center, font=\scriptsize},
             lab/.style={font=\scriptsize, align=center}
         ]
         \def\u{0}
@@ -405,7 +430,7 @@ Figure~\ref{fig:hera-device-control-sequence} traces a representative command su
         \draw[msg] (\o,-1.45) -- node[above, lab] {route: device\_control} (\d,-1.45);
         \draw[ret] (\d,-2.1) -- node[above, lab] {tool proposal} (\o,-2.1);
         \draw[msg] (\o,-2.75) -- node[above, lab] {ground plan} (\r,-2.75);
-        \draw[msg] (\r,-3.4) -- node[above, lab] {policy check} (\r,-4.0);
+        \node[internal] at (\r,-3.65) {policy +\\capability check};
         \draw[msg] (\r,-4.65) -- node[above, lab] {publish RPC} (\m,-4.65);
         \draw[msg] (\m,-5.25) -- node[above, lab] {method + params} (\e,-5.25);
         \draw[ret] (\e,-5.85) -- node[above, lab] {telemetry/readback} (\r,-5.85);

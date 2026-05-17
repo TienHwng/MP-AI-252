@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenRouter Chat Streaming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Left Panel - Config */
+        .left-panel {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .left-panel h2 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .config-group {
+            margin-bottom: 20px;
+        }
+
+        .config-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .config-group input,
+        .config-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .config-group input:focus,
+        .config-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .status.valid {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.invalid {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Right Panel - Chat */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #fafafa;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: #4CAF50;
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+        }
+
+        .message.assistant .message-content {
+            background: #e9ecef;
+            color: #333;
+            border-radius: 18px 18px 18px 4px;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            max-height: 100px;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .btn-send {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-send:hover {
+            background: #45a049;
+        }
+
+        .btn-send:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-pause {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-pause:hover {
+            background: #e68900;
+        }
+
+        .btn-pause:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4CAF50;
+            border-radius: 50%;
+            animation: blink 1.4s infinite;
+        }
+
+        @keyframes blink {
+            0%, 20%, 50%, 80%, 100% { opacity: 1; }
+            40% { opacity: 0.3; }
+            60% { opacity: 0.3; }
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Log Panel */
+        .log-panel {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .log-panel h3 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .log-content {
+            background: #1e1e1e;
+            color: #00ff00;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+
+        .log-line {
+            margin: 3px 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line.info { color: #00ff00; }
+        .log-line.warn { color: #ffaa00; }
+        .log-line.error { color: #ff4444; }
+        .log-line.debug { color: #888; }
+
+        /* Thinking Block */
+        .thinking-block {
+            background: rgba(100, 150, 255, 0.08);
+            border-left: 3px solid rgba(100, 150, 255, 0.3);
+            border-radius: 6px;
+            padding: 0;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .thinking-header {
+            padding: 10px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            background: rgba(100, 150, 255, 0.05);
+            transition: all 0.2s;
+        }
+
+        .thinking-header:hover {
+            background: rgba(100, 150, 255, 0.1);
+        }
+
+        .thinking-toggle {
+            font-size: 12px;
+            display: inline-block;
+            width: 16px;
+            transition: transform 0.2s;
+        }
+
+        .thinking-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .thinking-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(100, 150, 255, 0.7);
+            text-transform: uppercase;
+        }
+
+        .thinking-content {
+            padding: 12px;
+            color: rgba(100, 150, 255, 0.6);
+            font-size: 13px;
+            line-height: 1.5;
+            opacity: 0.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .thinking-content.hidden {
+            max-height: 0;
+            padding: 0 12px;
+            overflow: hidden;
+        }
+
+        /* Loading Indicator */
+        .loading-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(76, 175, 80, 0.2);
+            border-top-color: #4CAF50;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .pulse-dots {
+            display: inline-flex;
+            gap: 3px;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            background: #4CAF50;
+            border-radius: 50%;
+            animation: pulse 1.4s infinite;
+        }
+
+        .pulse-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .pulse-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel -->
+        <div class="left-panel">
+            <h2>⚙️ Configuration</h2>
+
+            <div class="config-group">
+                <label>API Key</label>
+                <input 
+                    type="password" 
+                    id="apiKey" 
+                    placeholder="sk-..."
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="config-group">
+                <label>Model</label>
+                <select id="model">
+                    <option value="openai/gpt-4o">GPT-4o</option>
+                    <option value="openai/gpt-4">GPT-4</option>
+                    <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="nvidia/nemotron-nano-9b-v2">Nemotron Nano</option>
+                    <option value="meta-llama/llama-2-70b-chat">Llama 2 70B</option>
+                    <option value="mistral/mistral-7b-instruct">Mistral 7B</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" id="validateBtn">Validate API Key</button>
+
+            <div id="status" class="status" style="display: none;"></div>
+
+            <div class="info-text">
+                Get API key from<br>
+                <strong>openrouter.ai</strong>
+            </div>
+
+            <!-- Log Panel -->
+            <div class="log-panel">
+                <h3>📋 Logs</h3>
+                <div class="log-content" id="logContent"></div>
+                <button class="btn btn-primary" id="clearLogBtn" style="margin-top: 8px; background: #999;">Clear</button>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chatMessages">
+                <div class="info-text">
+                    👋 Welcome! Configure your API key on the left and start chatting.
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-area">
+                <div class="input-group">
+                    <textarea 
+                        id="messageInput" 
+                        placeholder="Type your message... (Shift+Enter for new line, Enter to send)"
+                        rows="1"
+                        disabled
+                    ></textarea>
+                    <button class="btn-send" id="sendBtn" disabled>Send</button>
+                    <button class="btn-pause" id="pauseBtn" disabled>Pause</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let apiKey = '';
+        let model = 'openai/gpt-4o';
+        let isStreaming = false;
+        let shouldStop = false;
+        let abortController = null;
+
+        const apiKeyInput = document.getElementById('apiKey');
+        const modelSelect = document.getElementById('model');
+        const validateBtn = document.getElementById('validateBtn');
+        const statusDiv = document.getElementById('status');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const logContent = document.getElementById('logContent');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+
+        // Logger
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logLine = document.createElement('div');
+            logLine.className = `log-line ${type}`;
+            logLine.textContent = `[${timestamp}] ${message}`;
+            logContent.appendChild(logLine);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        clearLogBtn.addEventListener('click', () => {
+            logContent.innerHTML = '';
+            log('Logs cleared', 'debug');
+        });
+
+        // Initial log
+        log('Ready to connect', 'info');
+
+        // Validate API Key
+        validateBtn.addEventListener('click', async () => {
+            const key = apiKeyInput.value.trim();
+            if (!key) {
+                showStatus('Please enter an API key', 'invalid');
+                log('API key validation: empty key', 'warn');
+                return;
+            }
+
+            log('Validating API key...', 'debug');
+            validateBtn.disabled = true;
+            validateBtn.textContent = 'Validating...';
+
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        'model': modelSelect.value,
+                        'messages': [{'role': 'user', 'content': 'test'}],
+                        'max_tokens': 1
+                    })
+                });
+
+                log(`API response status: ${response.status}`, 'debug');
+
+                if (response.status === 401) {
+                    showStatus('❌ Invalid API Key', 'invalid');
+                    log('API key validation failed: 401 Unauthorized', 'error');
+                } else if (response.ok || response.status === 400) {
+                    apiKey = key;
+                    model = modelSelect.value;
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                    showStatus('✅ API Key Valid', 'valid');
+                    log(`API key valid. Model: ${model}`, 'info');
+                } else {
+                    showStatus(`❌ Error: ${response.status}`, 'invalid');
+                    log(`API validation error: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Connection Error: ${error.message}`, 'invalid');
+                log(`Connection error: ${error.message}`, 'error');
+            } finally {
+                validateBtn.disabled = false;
+                validateBtn.textContent = 'Validate API Key';
+            }
+        });
+
+        // Model change
+        modelSelect.addEventListener('change', () => {
+            model = modelSelect.value;
+            log(`Model changed to: ${model}`, 'debug');
+        });
+
+        // Send message
+        sendBtn.addEventListener('click', () => sendMessage());
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Pause streaming
+        pauseBtn.addEventListener('click', () => {
+            shouldStop = true;
+            log('Stream paused by user', 'warn');
+            if (abortController) {
+                abortController.abort();
+            }
+        });
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !apiKey || isStreaming) return;
+
+            log(`Sending message (${message.length} chars)`, 'debug');
+
+            // Add user message
+            addMessage(message, 'user');
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Prepare for streaming
+            isStreaming = true;
+            shouldStop = false;
+            sendBtn.disabled = true;
+            pauseBtn.disabled = false;
+            abortController = new AbortController();
+
+            // Add assistant message placeholder with loading
+            const assistantMessageId = addMessage('', 'assistant', true);
+            const contentDiv = assistantMessageId.querySelector('.message-content');
+
+            try {
+                log(`Connecting to OpenRouter (${model})...`, 'debug');
+                const startTime = Date.now();
+
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        'model': model,
+                        'messages': [{'role': 'user', 'content': message}],
+                        'stream': true
+                    }),
+                    signal: abortController.signal
+                });
+
+                const connectTime = Date.now() - startTime;
+                log(`Connected in ${connectTime}ms, status: ${response.status}`, 'debug');
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    const errorMsg = error.error?.message || 'Unknown error';
+                    contentDiv.textContent = `❌ Error: ${errorMsg}`;
+                    log(`API Error: ${errorMsg}`, 'error');
+                    isStreaming = false;
+                    pauseBtn.disabled = true;
+                    sendBtn.disabled = false;
+                    return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let streamContent = '';
+                let thinkingContent = '';
+                let isThinking = false;
+                let thinkingBlock = null;
+                let chunkCount = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done || shouldStop) {
+                        if (shouldStop) log('Stream stopped by user', 'warn');
+                        break;
+                    }
+
+                    chunkCount++;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Process complete lines
+                    while (true) {
+                        const lineEnd = buffer.indexOf('\n');
+                        if (lineEnd === -1) break;
+
+                        const line = buffer.substring(0, lineEnd).trim();
+                        buffer = buffer.substring(lineEnd + 1);
+
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') {
+                                log(`Stream completed (${chunkCount} chunks, ${streamContent.length} chars)`, 'info');
+                                break;
+                            }
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                
+                                // Handle thinking
+                                if (parsed.choices?.[0]?.delta?.thinking) {
+                                    isThinking = true;
+                                    thinkingContent += parsed.choices[0].delta.thinking;
+                                    
+                                    if (!thinkingBlock) {
+                                        thinkingBlock = createThinkingBlock();
+                                        contentDiv.insertAdjacentElement('afterbegin', thinkingBlock);
+                                    }
+                                    
+                                    const thinkingContentDiv = thinkingBlock.querySelector('.thinking-content');
+                                    thinkingContentDiv.textContent = thinkingContent;
+                                }
+
+                                // Handle content
+                                const content = parsed.choices?.[0]?.delta?.content;
+                                if (content) {
+                                    if (isThinking && thinkingBlock) {
+                                        isThinking = false;
+                                    }
+                                    streamContent += content;
+                                    contentDiv.textContent = streamContent;
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                }
+                            } catch (e) {
+                                log(`Parse error: ${e.message}`, 'warn');
+                            }
+                        }
+                    }
+                }
+
+                if (shouldStop) {
+                    contentDiv.textContent = streamContent + ' \n⏸️ [Paused by user]';
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    log(`Error: ${error.message}`, 'error');
+                    contentDiv.textContent = `❌ Error: ${error.message}`;
+                }
+            } finally {
+                isStreaming = false;
+                pauseBtn.disabled = true;
+                sendBtn.disabled = false;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function createThinkingBlock() {
+            const block = document.createElement('div');
+            block.className = 'thinking-block';
+            block.innerHTML = `
+                <div class="thinking-header">
+                    <span class="thinking-toggle">▼</span>
+                    <span class="thinking-label">💭 Thinking</span>
+                </div>
+                <div class="thinking-content"></div>
+            `;
+
+            const header = block.querySelector('.thinking-header');
+            const content = block.querySelector('.thinking-content');
+            const toggle = block.querySelector('.thinking-toggle');
+
+            let isCollapsed = false;
+            header.addEventListener('click', () => {
+                isCollapsed = !isCollapsed;
+                toggle.classList.toggle('collapsed');
+                content.classList.toggle('hidden');
+            });
+
+            return block;
+        }
+
+        function addMessage(text, role, isLoading = false) {
+            if (chatMessages.textContent.includes('Welcome')) {
+                chatMessages.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            if (isLoading) {
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-indicator';
+                loadingDiv.innerHTML = `
+                    <span class="spinner"></span>
+                    <div class="pulse-dots">
+                        <div class="pulse-dot"></div>
+                        <div class="pulse-dot"></div>
+                        <div class="pulse-dot"></div>
+                    </div>
+                `;
+                contentDiv.appendChild(loadingDiv);
+            } else {
+                contentDiv.textContent = text || '...';
+            }
+
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            return messageDiv;
+        }
+
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', () => {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 100) + 'px';
+        });
+    </script>
+</body>
+</html>

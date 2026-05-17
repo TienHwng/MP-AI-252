@@ -141,6 +141,90 @@ Overall, the firmware implementation satisfies the evaluated functional requirem
 
 \subsection{AI Evaluation}
 
+The artificial-intelligence layer was evaluated using the local evaluation harness in the \texttt{evaluation/} directory. The test set contains seven representative user requests covering five routing categories: device control, sensor query, anomaly query, general conversation, and web search. Two of these cases require effectful device-control tools, while the remaining cases evaluate routing and response behavior without mandatory write-side tool execution. The harness records the predicted intent, expected tool usage, HTTP availability, and end-to-end request latency from the backend API. \\
+
+This evaluation focuses on the behavior of the deployed orchestrator-specialist pipeline rather than isolated prompt accuracy. Each request passes through the same runtime path used by the web dashboard: request intake, intent routing, specialist selection, optional tool execution, result normalization, and final response generation. Therefore, the measured latency includes model inference, orchestration overhead, tool-boundary handling, and response composition.
+
+\begin{table}[H]
+\centering
+\caption{AI agent evaluation test set}
+\label{tab:ai_eval_cases}
+\small
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{p{3.1cm}X p{3.2cm}}
+\toprule
+\textbf{Case Type} & \textbf{Example Request} & \textbf{Expected Behavior} \\
+\midrule
+Device control & \textit{bật đèn phòng khách giúp tôi} & Route to \texttt{device\_control} and call \texttt{turn\_on\_device} \\
+Device control & \textit{tắt relay đi} & Route to \texttt{device\_control} and call \texttt{turn\_off\_device} \\
+Sensor query & \textit{nhiệt độ hiện tại bao nhiêu} & Route to \texttt{sensor\_query} without write-side tools \\
+Sensor query & \textit{độ ẩm và ánh sáng trong nhà thế nào} & Route to \texttt{sensor\_query} without write-side tools \\
+Anomaly query & \textit{hệ thống có bất thường gì không} & Route to \texttt{anomaly\_query} \\
+General chat & \textit{xin chào, bạn là ai} & Route to \texttt{general} \\
+Web search & \textit{tìm kiếm tin mới nhất về AI} & Route to \texttt{web\_search} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Routing and Tool-Calling Accuracy}
+
+Table~\ref{tab:ai_eval_summary} summarizes the successful live evaluation runs. Both evaluated providers completed all requests through the HTTP API, resulting in a 100\% HTTP success rate. Intent accuracy reached 71.43\% for both providers, corresponding to five correct intent predictions out of seven cases. The two mismatches were both sensor-query cases that were routed as \texttt{device\_control}. Although these are counted as intent errors by the evaluation harness, they are not unsafe failures: the runtime did not execute an unintended write-side actuation for those sensor requests. In one case, the runtime used a read-only status tool, and in the other case no tool was used. \\
+
+The most important safety-critical metric is tool-calling correctness for effectful device-control requests. Both live providers achieved 100\% tool-call success on the two write-side cases. The system correctly selected \texttt{turn\_on\_device} for the living-room light request and \texttt{turn\_off\_device} for the relay request. This indicates that, when the request is truly actuator-oriented, the orchestrator and device-control specialist can generate the expected capability call and pass it through the runtime tool boundary.
+
+\begin{table}[H]
+\centering
+\caption{AI routing, tool-calling, and latency summary}
+\label{tab:ai_eval_summary}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{p{3.0cm}>{\centering\arraybackslash}p{1.5cm}>{\centering\arraybackslash}p{2.1cm}>{\centering\arraybackslash}p{2.1cm}>{\centering\arraybackslash}p{1.9cm}>{\centering\arraybackslash}p{1.9cm}>{\centering\arraybackslash}p{1.9cm}}
+\toprule
+\textbf{Provider Run} & \textbf{Cases} & \textbf{HTTP Success} & \textbf{Intent Accuracy} & \textbf{Tool Success} & \textbf{Median Latency} & \textbf{P95 Latency} \\
+\midrule
+\texttt{ollama-live} & 7 & 100.00\% & 71.43\% & 100.00\% & 23755.93 ms & 45753.44 ms \\
+\texttt{openrouter-live} & 7 & 100.00\% & 71.43\% & 100.00\% & 15515.89 ms & 23641.87 ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Latency Analysis}
+
+The cloud-backed \texttt{openrouter-live} run produced lower end-to-end latency than the local \texttt{ollama-live} run. The median latency decreased from 23755.93~ms to 15515.89~ms, and the 95th-percentile latency decreased from 45753.44~ms to 23641.87~ms. This shows that the deployed AI pipeline is functionally correct but still limited by model-response latency. The local model path is especially slow for full device-control requests because the request passes through routing, device-command interpretation, tool execution, verification, and response composition. \\
+
+The latency values are acceptable for offline evaluation and thesis validation, but they are not yet ideal for a production smart-home assistant. For interactive use, common read-only requests should rely more aggressively on the short path and deterministic telemetry services, while write-side requests should minimize the number of model calls before reaching the runtime tool boundary.
+
+\subsubsection{Failure Pattern and Interpretation}
+
+The main observed weakness is the boundary between \texttt{sensor\_query} and \texttt{device\_control}. Both live runs misclassified the two sensor-reading requests as device-control requests. This suggests that the router and device semantic guard are biased toward physical-device interpretation when the user mentions home state such as temperature, humidity, or light. From a safety perspective, this behavior is preferable to the opposite failure mode of treating an actuator command as casual conversation. However, it reduces routing precision and may add unnecessary latency because read-only telemetry questions can enter the heavier device-control path. \\
+
+The failed non-live summary files, \texttt{ai\_agent\_eval\_ollama-local} and \texttt{ai\_agent\_eval\_openrouter-cloud}, recorded 0\% HTTP success and null latency values. These results are interpreted as invalid environment runs rather than model-quality measurements, because the backend API did not return successful responses. They are therefore excluded from the primary comparison in Table~\ref{tab:ai_eval_summary}.
+
+\subsubsection{AI Requirement Satisfaction}
+
+Table~\ref{tab:ai_requirement_summary} maps the measured AI behavior to the expected system requirements.
+
+\begin{table}[H]
+\centering
+\caption{Summary of AI functional requirement evaluation}
+\label{tab:ai_requirement_summary}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{p{3.8cm}X X>{\centering\arraybackslash}p{1.8cm}}
+\toprule
+\textbf{Requirement} & \textbf{Evaluation Metric} & \textbf{Observed Result} & \textbf{Status} \\
+\midrule
+Multi-intent routing & Intent accuracy across seven representative requests & 71.43\% accuracy; general, anomaly, web, and device-control cases passed & Partial \\
+Safe device tool calling & Expected write-side tool selected for actuator requests & 100\% success on the two device-control tool cases & Passed \\
+Runtime availability & HTTP success rate through deployed backend API & 100\% success for both live provider runs & Passed \\
+Read-only query efficiency & Sensor queries should avoid unnecessary write-side routing & Sensor requests were routed as \texttt{device\_control}, increasing latency and reducing precision & Partial \\
+Interactive latency & Median and P95 end-to-end request latency & OpenRouter median 15.52 s; Ollama median 23.76 s & Needs optimization \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Overall, the AI subsystem demonstrates correct end-to-end operation and safe tool-boundary behavior for effectful commands. The evaluation confirms that H.E.R.A can route real user requests through the orchestrator, select specialist behavior, execute expected device-control tools, and return responses through the backend API. The main remaining limitations are routing precision for read-only sensor questions and high end-to-end latency. Future improvements should strengthen the router prompt and route schema for telemetry-specific language, add deterministic pre-routing for simple sensor queries, cache recent telemetry facts for short-path responses, and reduce the number of LLM calls required by common device-control flows.
 
 
 \subsection{Software Evaluation}
@@ -259,5 +343,3 @@ The development and deployment of the H.E.R.A. system provided critical insights
     \item \textbf{Identifying API Layer Bottlenecks:} Performance evaluations highlighted a severe bottleneck within the backend API layer. While database queries were highly optimized, the backend's process of serializing massive JSON arrays (e.g., 17,280 objects) and transferring them over the network resulted in significant latency spikes. This underscores the critical necessity of implementing data downsampling and pagination for large-scale IoT visualization.
     \item \textbf{Balancing Real-Time Interactivity with Initial Load Performance:} The deployment of Server-Sent Events (SSE) proved highly effective for maintaining low-latency data synchronization, updating the UI in near real-time (median latency of 156.56 ms). However, integrating heavy static assets, such as the interactive floor plan, severely impacted the Largest Contentful Paint (LCP) metric. This demonstrated that achieving optimal frontend performance requires strict asset minification and caching strategies prior to production deployment.
 \end{itemize}
-
-

@@ -1,20 +1,26 @@
 \babel@toc {english}{}\relax 
 \babel@toc {english}{}\relax 
 \contentsline {figure}{\numberline {1.1}{\ignorespaces System Architecture of H.E.R.A}}{7}{figure.caption.12}%
-\contentsline {figure}{\numberline {2.1}{\ignorespaces ESP32-S3-N16R8 based Ohstem Yolo UNO development board and pinout.}}{12}{figure.caption.18}%
-\contentsline {figure}{\numberline {2.2}{\ignorespaces OhStem AIoT Kit and its main hardware modules.}}{13}{figure.caption.19}%
-\contentsline {figure}{\numberline {3.1}{\ignorespaces Current layered architecture of the H.E.R.A multi-agent AI subsystem.}}{22}{figure.caption.22}%
-\contentsline {figure}{\numberline {3.2}{\ignorespaces LangGraph execution topology of the H.E.R.A orchestrator.}}{23}{figure.caption.24}%
-\contentsline {figure}{\numberline {3.3}{\ignorespaces Short-path optimization for read-only AI requests.}}{24}{figure.caption.26}%
-\contentsline {figure}{\numberline {3.4}{\ignorespaces Safe tool execution path for effectful device-control requests.}}{27}{figure.caption.29}%
-\contentsline {figure}{\numberline {3.5}{\ignorespaces End-to-end sequence for a device-control request.}}{28}{figure.caption.32}%
-\contentsline {figure}{\numberline {4.1}{\ignorespaces H.E.R.A. Control Center CLI interface demonstrating an RPC request for NeoPixel brightness adjustment.}}{31}{figure.caption.33}%
-\contentsline {figure}{\numberline {5.1}{\ignorespaces EERD of H.E.R.A}}{33}{figure.caption.34}%
-\contentsline {figure}{\numberline {5.2}{\ignorespaces Relational Mapping of H.E.R.A}}{33}{figure.caption.35}%
-\contentsline {figure}{\numberline {5.3}{\ignorespaces Login Interface}}{34}{figure.caption.36}%
-\contentsline {figure}{\numberline {5.4}{\ignorespaces H.E.R.A. Home Dashboard featuring the Interactive Floor Plan, Smart Scenes, and Multilingual AI Assistant.}}{35}{figure.caption.37}%
-\contentsline {figure}{\numberline {5.5}{\ignorespaces Analytic Page}}{36}{figure.caption.38}%
-\contentsline {figure}{\numberline {6.1}{\ignorespaces House floor-plan asset used as the spatial base of the H.E.R.A digital twin.}}{37}{figure.caption.39}%
-\contentsline {figure}{\numberline {6.2}{\ignorespaces Implemented H.E.R.A house view with live device and sensor markers overlaid on the floor plan.}}{38}{figure.caption.40}%
-\contentsline {figure}{\numberline {6.3}{\ignorespaces Bidirectional synchronization between the physical house and the digital twin.}}{39}{figure.caption.42}%
-\contentsline {figure}{\numberline {7.1}{\ignorespaces Average RPC command execution latency compared with the required threshold}}{41}{figure.caption.45}%
+\contentsline {figure}{\numberline {2.1}{\ignorespaces ESP32-S3-N16R8 based Ohstem Yolo UNO development board and pinout.}}{13}{figure.caption.18}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces OhStem AIoT Kit and its main hardware modules.}}{14}{figure.caption.19}%
+\contentsline {figure}{\numberline {2.3}{\ignorespaces Initial checks performed by the \texttt {setup.ps1} development-environment setup script.}}{19}{figure.caption.22}%
+\contentsline {figure}{\numberline {2.4}{\ignorespaces Dependency installation and environment preparation summary produced by \texttt {setup.ps1}.}}{20}{figure.caption.23}%
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Current layered architecture of the H.E.R.A multi-agent AI subsystem.}}{24}{figure.caption.24}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Detailed orchestrator pipeline block inside the H.E.R.A multi-agent AI subsystem.}}{25}{figure.caption.25}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Internal flow of the H.E.R.A tool-calling and runtime execution block.}}{26}{figure.caption.26}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces LangGraph execution topology of the H.E.R.A orchestrator.}}{27}{figure.caption.28}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Short-path optimization for read-only AI requests.}}{28}{figure.caption.30}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Safe tool execution path for effectful device-control requests.}}{31}{figure.caption.33}%
+\contentsline {figure}{\numberline {3.7}{\ignorespaces Initial prompt-level comparison used during model selection.}}{32}{figure.caption.35}%
+\contentsline {figure}{\numberline {3.8}{\ignorespaces Second prompt-level comparison used to validate response stability.}}{33}{figure.caption.36}%
+\contentsline {figure}{\numberline {3.9}{\ignorespaces End-to-end sequence for a device-control request.}}{36}{figure.caption.40}%
+\contentsline {figure}{\numberline {4.1}{\ignorespaces H.E.R.A. Control Center CLI interface demonstrating an RPC request for NeoPixel brightness adjustment.}}{39}{figure.caption.41}%
+\contentsline {figure}{\numberline {5.1}{\ignorespaces EERD of H.E.R.A}}{41}{figure.caption.42}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Relational Mapping of H.E.R.A}}{41}{figure.caption.43}%
+\contentsline {figure}{\numberline {6.1}{\ignorespaces House floor-plan asset used as the spatial base of the H.E.R.A digital twin.}}{42}{figure.caption.44}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Implemented H.E.R.A house view with live device and sensor markers overlaid on the floor plan.}}{43}{figure.caption.45}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces Bidirectional synchronization between the physical house and the digital twin.}}{44}{figure.caption.47}%
+\contentsline {figure}{\numberline {6.4}{\ignorespaces Login Interface}}{45}{figure.caption.48}%
+\contentsline {figure}{\numberline {6.5}{\ignorespaces H.E.R.A. Home Dashboard featuring the Interactive Floor Plan, Smart Scenes, and Multilingual AI Assistant.}}{46}{figure.caption.49}%
+\contentsline {figure}{\numberline {6.6}{\ignorespaces Analytic Page}}{47}{figure.caption.50}%
+\contentsline {figure}{\numberline {7.1}{\ignorespaces Average RPC command execution latency compared with the required threshold}}{49}{figure.caption.53}%

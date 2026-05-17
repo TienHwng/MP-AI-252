@@ -595,6 +595,43 @@ Reasons:
 - Device state is not faked on the frontend.
 - If a command fails or times out, the dashboard can show the real status.
 
+### 13.1 Dashboard Chat Response Streaming
+
+When a user sends a chat message through the dashboard assistant, the response should stream character-by-character rather than appearing as one large block. This improves perceived speed and creates a more conversational UX.
+
+**Streaming Response Pipeline**:
+
+```text
+User sends chat message via dashboard
+-> Dashboard sends POST /api/assistant/message?stream=true
+-> Backend orchestrator processes request
+-> Backend chunks response into 1-character segments
+-> Backend sends SSE (Server-Sent Events) stream
+-> Browser receives chunks via ReadableStream
+-> Frontend re-renders UI per chunk (1-char granularity)
+-> User sees characters appear naturally (~50 chars/sec)
+-> Backend sends [DONE] marker
+-> Dashboard saves full response to database
+-> Input re-enabled, user can send next message
+```
+
+**Key Implementation Details**:
+- Query parameter: `?stream=true` enables streaming
+- Response format: Server-Sent Events (SSE) with JSON chunks
+- Chunk size: 1 character for content, 3 for thinking
+- Timing: 20ms between content chunks (~50 chars/sec = comfortable reading pace)
+- CORS headers: Required for browser to accept SSE from cross-origin API
+- Pause support: AbortController allows user to pause mid-stream
+- Fallback: Non-streaming mode activates if SSE fails
+
+**Advantages**:
+- User sees response appearing immediately (first character visible in <100ms)
+- Feels faster than waiting for full response
+- User can pause long responses
+- Enables future voice-output integration
+
+For detailed implementation guide, see: **`STREAMING_RESPONSE_STRATEGY.md`**
+
 ## 14. Pipeline 9 - Telemetry Ingestion
 
 Telemetry pipeline:

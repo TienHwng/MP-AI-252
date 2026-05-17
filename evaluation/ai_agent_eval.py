@@ -1,6 +1,6 @@
 """Evaluate HERA AI agents through the local HTTP adapter.
 
-Start BE/HERA/api_server.py first. Run once with local Ollama settings and once
+Start backend/HERA/api_server.py first. Run once with local Ollama settings and once
 with cloud/OpenRouter settings, using --provider-label to separate the results.
 
 Example:

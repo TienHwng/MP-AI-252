@@ -216,11 +216,11 @@ void callback(char *topic, byte *payload, unsigned int length) {
 				}
 			}
 			else if (method == method_mini_fan.c_str()) {
-				// Turn fan on/off via boolean: true -> 1023, false -> 0
-				uint16_t spd = params ? fan_speed : 0;
+				// Boolean fan ON should use full PWM so the motor has enough starting torque.
+				int16_t spd = params ? FAN_PWM_MAX : 0;
 				if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
 					fan_speed      = spd;
-					is_mini_fan_on = params;
+					is_mini_fan_on = (spd > 0);
 					xSemaphoreGive(xFanStateSemaphore);
 				}
 				responseDoc["Fan_Status"] = params;
@@ -307,7 +307,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 		else {
 			int16_t val = doc["params"].as<int>();
 			if (val < 0)   val = 0;
-			if (val > 1023) val = 1023;
+			if (val > FAN_PWM_MAX) val = FAN_PWM_MAX;
 
 			if (xSemaphoreTake(xFanStateSemaphore, portMAX_DELAY) == pdTRUE) {
 				fan_speed      = (uint16_t)val;
@@ -472,7 +472,7 @@ void publish_telemetry(float temp, float hum, float light, float gas, float anom
 	JsonObject mini_fan = devices.createNestedObject("mini_fan");
 	mini_fan["status"] = is_mini_fan_on;
 	mini_fan["speed"] = fan_speed;
-	mini_fan["voltage"] = is_mini_fan_on ? (V_REF * fan_speed / 1023.0) : 0.0;
+	mini_fan["voltage"] = is_mini_fan_on ? (V_REF * fan_speed / FAN_PWM_MAX) : 0.0;
 	
 	JsonObject sensors = doc.createNestedObject("sensors");
 	JsonObject dht20 = sensors.createNestedObject("dht20");

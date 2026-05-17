@@ -21,7 +21,7 @@ boolean is_ws2812_on	= true;
 uint8_t ws2812_brightness	= 10;   // default brightness (0..255)
 
 boolean is_mini_fan_on	= false;
-int16_t fan_speed		= 500;      // default fan speed PWM duty (0..1023)
+int16_t fan_speed		= 0;        // default fan speed PWM duty (0..1023)
 
 boolean is_relay_on		= true;
 
